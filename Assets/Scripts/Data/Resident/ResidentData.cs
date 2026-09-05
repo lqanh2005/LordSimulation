@@ -1,12 +1,11 @@
 using System;
-using System.IO;
-using UnityEngine;
 
 public enum OriginRegion : byte { GreenZone = 0, YellowZone = 1, RedZone = 2 }
 public enum FactionType : byte { None = 0, Commoner = 1, Aristocrat = 2, Scholar = 3, Zealot = 4 }
 public enum ProfessionType : byte { None = 0, Farmer = 1, Miner = 2, Lumberjack = 3, Craftsman = 4, Doctor = 5 }
 public enum HealthStatus : byte { Healthy = 0, Incubating = 1, ActiveInfected = 2, Treated = 3 }
 public enum DiseaseType : byte { None = 0, RedFever = 1, LungParasite = 2, BloodPoison = 3 }
+public enum AgeGroupType : byte { Child = 0, Adult = 1, Elderly = 2 }
 
 [Flags]
 public enum SymptomFlags : byte
@@ -46,16 +45,24 @@ public struct ResidentData
     public byte endurance;  // Thể lực / Bền bỉ: 0 - 100
     public byte intellect;  // Trí lực: 0 - 100
 
-    public string AgeGroup => age < 18 ? "Child" : (age < 65 ? "Adult" : "Elderly");
-    public bool HasSymptom(SymptomFlags symptom) => (symptoms & symptom) != 0;
-    public byte GetRelevantSkill()=> professionType switch
+    public readonly AgeGroupType GetAgeGroup()
+    {
+        if (age < 18) return AgeGroupType.Child;
+        if (age < 65) return AgeGroupType.Adult;
+        return AgeGroupType.Elderly;
+    }
+
+    public readonly bool HasSymptom(SymptomFlags symptom) => (symptoms & symptom) != 0;
+
+    public readonly byte GetRelevantSkill() => professionType switch
     {
         ProfessionType.Farmer => strength,
         ProfessionType.Miner => endurance,
         ProfessionType.Lumberjack => endurance,
         ProfessionType.Craftsman => intellect,
         ProfessionType.Doctor => intellect,
-        _ => (byte)((strength+intellect+endurance)/3)
+        _ => (byte)((strength + intellect + endurance) / 3)
     };
-    public float WorkMultiplier => 0.5f + (GetRelevantSkill() / 100f) * 1.5f;
+
+    public readonly float WorkMultiplier => 0.5f + (GetRelevantSkill() / 100f) * 1.5f;
 }

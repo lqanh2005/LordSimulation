@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class EdictManager : MonoBehaviour
@@ -24,6 +25,9 @@ public class EdictManager : MonoBehaviour
 
     public ref EdictRuleData GetEdictRef(int index)
     {
+        if ((uint)index >= (uint)activeCount)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
         return ref allEdicts[index];
     }
 }

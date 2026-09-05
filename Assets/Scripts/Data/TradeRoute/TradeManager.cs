@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class TradeManager : MonoBehaviour
@@ -24,6 +25,9 @@ public class TradeManager : MonoBehaviour
 
     public ref TradeRouteData GetTradeRouteRef(int index)
     {
+        if ((uint)index >= (uint)activeCount)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
         return ref allTradeRoutes[index];
     }
 }

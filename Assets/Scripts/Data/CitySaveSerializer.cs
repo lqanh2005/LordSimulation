@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 
 public static class CitySaveSerializer
@@ -73,6 +74,8 @@ public static class CitySaveSerializer
 
         // 3. Buildings
         buildingCount = reader.ReadInt32();
+        if (buildingCount < 0 || buildingCount > buildings.Length)
+            throw new InvalidDataException($"[SaveSerializer] buildingCount ({buildingCount}) vượt giới hạn mảng ({buildings.Length}).");
         for (int i = 0; i < buildingCount; i++)
         {
             BuildingDataSerializer.ReadBuilding(reader, out buildings[i]);
@@ -80,6 +83,8 @@ public static class CitySaveSerializer
 
         // 4. Residents
         residentCount = reader.ReadInt32();
+        if (residentCount < 0 || residentCount > residents.Length)
+            throw new InvalidDataException($"[SaveSerializer] residentCount ({residentCount}) vượt giới hạn mảng ({residents.Length}).");
         for (int i = 0; i < residentCount; i++)
         {
             ResidentDataSerializer.ReadResident(reader, out residents[i]);
@@ -87,6 +92,8 @@ public static class CitySaveSerializer
 
         // 5. Edicts
         edictCount = reader.ReadInt32();
+        if (edictCount < 0 || edictCount > edicts.Length)
+            throw new InvalidDataException($"[SaveSerializer] edictCount ({edictCount}) vượt giới hạn mảng ({edicts.Length}).");
         for (int i = 0; i < edictCount; i++)
         {
             EdictDataSerializer.ReadEdict(reader, out edicts[i]);
@@ -94,6 +101,8 @@ public static class CitySaveSerializer
 
         // 6. Trade Routes
         tradeCount = reader.ReadInt32();
+        if (tradeCount < 0 || tradeCount > tradeRoutes.Length)
+            throw new InvalidDataException($"[SaveSerializer] tradeCount ({tradeCount}) vượt giới hạn mảng ({tradeRoutes.Length}).");
         for (int i = 0; i < tradeCount; i++)
         {
             TradeDataSerializer.ReadTradeRoute(reader, out tradeRoutes[i]);

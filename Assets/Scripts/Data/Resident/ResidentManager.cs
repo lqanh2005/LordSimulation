@@ -1,8 +1,9 @@
+using System;
 using UnityEngine;
 
 public class ResidentManager : MonoBehaviour
 {
-    public const int MAX_RESIDENTS = 65535;
+    public const int MAX_RESIDENTS = 10000;
 
     [Header("Dữ Liệu Mảng Tĩnh Lõi")]
     public ResidentData[] allResidents = new ResidentData[MAX_RESIDENTS];
@@ -27,6 +28,9 @@ public class ResidentManager : MonoBehaviour
     // Trả về tham chiếu trực tiếp ref để sửa dữ liệu 0 byte GC Alloc
     public ref ResidentData GetResidentRef(int index)
     {
+        if ((uint)index >= (uint)activeCount)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
         return ref allResidents[index];
     }
 

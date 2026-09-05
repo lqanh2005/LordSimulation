@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class BuildingManager : MonoBehaviour
@@ -25,6 +26,9 @@ public class BuildingManager : MonoBehaviour
 
     public ref BuildingData GetBuildingRef(int index)
     {
+        if ((uint)index >= (uint)activeCount)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
         return ref allBuildings[index];
     }
 
