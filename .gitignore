@@ -15,3 +15,4 @@
 *.userprefs
 
 .DS_Store
+.cursorignore

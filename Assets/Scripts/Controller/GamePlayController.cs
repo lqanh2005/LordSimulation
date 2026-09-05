@@ -23,6 +23,6 @@ public class GamePlayController : Singleton<GamePlayController>
 
     private void Init()
     {
-        throw new NotImplementedException();
+        GameController.Instance.saveLoadManager.LoadGame();
     }
 }

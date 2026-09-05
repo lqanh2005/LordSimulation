@@ -20,11 +20,12 @@ public class GameController : MonoBehaviour
     {
         Application.targetFrameRate = 60;
         Setup();
+
     }
 
     private void Setup()
     {
-        throw new NotImplementedException();
+        saveLoadManager.Init();
     }
     public void LoadScene(string sceneName)
     {
