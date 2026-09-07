@@ -41,6 +41,8 @@ public struct ResidentData
     public short assignedHouseID;  // ID của ngôi nhà được chỉ định
     public short assignedWorkID;  // ID của nơi làm việc được chỉ định
     public bool isAlive;  // Trạng thái sống/chết
+    public byte hungerMonths;  // Số tháng đói liên tục (0 = no)
+    public byte coldMonths;  // Số tháng lạnh liên tục (0 = no)
     public byte strength;   // Sức mạnh: 0 - 100
     public byte endurance;  // Thể lực / Bền bỉ: 0 - 100
     public byte intellect;  // Trí lực: 0 - 100

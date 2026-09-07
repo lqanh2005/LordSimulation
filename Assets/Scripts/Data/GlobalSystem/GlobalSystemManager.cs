@@ -5,7 +5,7 @@ public class GlobalSystemManager : MonoBehaviour
 {
     [Header("Cấu Hình Thời Gian Mô Phỏng")]
     [Tooltip("Thời gian thực (giây) cho 1 tháng in-game")]
-    [SerializeField] private float realSecondsPerMonth = 150f; // 2.5 phút thực = 1 tháng
+    [SerializeField] private float realSecondsPerMonth = 120f; // 2 phút thực = 1 tháng
 
     // Dữ liệu lõi toàn cầu (65 bytes)
     [SerializeField] private GlobalSystemData data;
@@ -15,6 +15,9 @@ public class GlobalSystemManager : MonoBehaviour
     public event Action<int> OnYearChanged;                    // year
     public event Action<WeatherEvent, float> OnWeatherChanged; // weather, temp
     public event Action OnResourcesChanged;                    // Khi vàng/kho thay đổi
+    public event Action<float> OnHungerResolved;               // hungryRate 0..1 sau khi trừ food
+
+    public float LastHungryRate { get; private set; }
 
     public void Init()
     {
@@ -150,8 +153,25 @@ public class GlobalSystemManager : MonoBehaviour
 
     private void ProcessMacroMonthlyConsumption()
     {
-        // Trừ điểm quyền lực duy trì các sắc lệnh đang bật
-        // (Phần này sẽ tương tác với EdictManager)
+        int foodPerCapita = data.CurrentSeason == SeasonType.Winter ? 2 : 1;
+        int needFood = data.totalPopulation * foodPerCapita;
+        int consumedFood = Mathf.Min(data.stockFood, needFood);
+        data.stockFood -= consumedFood;
+
+        int peopleFed = foodPerCapita > 0 ? consumedFood / foodPerCapita : 0;
+        int peopleHungry = Mathf.Max(0, data.totalPopulation - peopleFed);
+        LastHungryRate = data.totalPopulation > 0
+            ? (float)peopleHungry / data.totalPopulation
+            : 0f;
+
+        data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastHungryRate * 10f);
+        OnHungerResolved?.Invoke(LastHungryRate);
+
+        int coalNeed = data.CurrentSeason == SeasonType.Winter ? data.totalPopulation : 0;
+        if (coalNeed > 0 && !ConsumeCoal(coalNeed))
+        {
+            data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + 5f);
+        }
     }
 
     // ==========================================
@@ -166,13 +186,28 @@ public class GlobalSystemManager : MonoBehaviour
 
     public bool TryConsumeFood(int amount)
     {
-        if (data.stockFood >= amount)
-        {
-            data.stockFood -= amount;
-            OnResourcesChanged?.Invoke();
+        if (amount <= 0)
             return true;
-        }
-        return false;
+
+        if (data.stockFood < amount)
+            return false;
+
+        data.stockFood -= amount;
+        OnResourcesChanged?.Invoke();
+        return true;
+    }
+
+    public bool ConsumeCoal(int amount)
+    {
+        if (amount <= 0)
+            return true;
+
+        if (data.stockCoal < amount)
+            return false;
+
+        data.stockCoal -= amount;
+        OnResourcesChanged?.Invoke();
+        return true;
     }
 
     public void AddResource(ResourceType type, int amount)

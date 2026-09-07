@@ -32,6 +32,17 @@ public class BuildingManager : MonoBehaviour
         return ref allBuildings[index];
     }
 
+    public int FindBuildingIndexById(ushort buildingId)
+    {
+        for (int i = 0; i < activeCount; i++)
+        {
+            if (allBuildings[i].buildingID == buildingId)
+                return i;
+        }
+
+        return -1;
+    }
+
     // Hook tái dựng Prefab nhà cửa sau khi nạp file save
     public void RebuildVisualCity()
     {

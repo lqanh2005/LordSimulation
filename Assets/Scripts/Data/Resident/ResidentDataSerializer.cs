@@ -21,7 +21,9 @@ public static class ResidentDataSerializer
             writer.Write(residentData.assignedHouseID);
             writer.Write(residentData.assignedWorkID);
             writer.Write(residentData.isAlive);
-            writer.Write(residentData.strength);
+            writer.Write(residentData.hungerMonths);
+        writer.Write(residentData.coldMonths);
+        writer.Write(residentData.strength);
             writer.Write(residentData.endurance);
             writer.Write(residentData.intellect);
         
@@ -46,8 +48,10 @@ public static class ResidentDataSerializer
             residentData.assignedHouseID = reader.ReadInt16();
             residentData.assignedWorkID = reader.ReadInt16();
             residentData.isAlive = reader.ReadBoolean();
+            residentData.hungerMonths = reader.ReadByte();
+            residentData.coldMonths = reader.ReadByte();
             residentData.strength = reader.ReadByte();
             residentData.endurance = reader.ReadByte();
-    residentData.intellect = reader.ReadByte();
+            residentData.intellect = reader.ReadByte();
     }
 }

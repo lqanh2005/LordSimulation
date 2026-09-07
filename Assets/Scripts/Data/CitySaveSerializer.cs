@@ -4,7 +4,26 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    private const int SAVE_VERSION = 1;
+    public const int SaveVersion = 1;
+
+    public static void ValidateSaveCounts(
+        int residentCount, int residentCapacity,
+        int buildingCount, int buildingCapacity,
+        int edictCount, int edictCapacity,
+        int tradeCount, int tradeCapacity)
+    {
+        if (residentCount < 0 || residentCount > residentCapacity)
+            throw new InvalidDataException($"[SaveSerializer] residentCount ({residentCount}) vượt giới hạn mảng ({residentCapacity}).");
+
+        if (buildingCount < 0 || buildingCount > buildingCapacity)
+            throw new InvalidDataException($"[SaveSerializer] buildingCount ({buildingCount}) vượt giới hạn mảng ({buildingCapacity}).");
+
+        if (edictCount < 0 || edictCount > edictCapacity)
+            throw new InvalidDataException($"[SaveSerializer] edictCount ({edictCount}) vượt giới hạn mảng ({edictCapacity}).");
+
+        if (tradeCount < 0 || tradeCount > tradeCapacity)
+            throw new InvalidDataException($"[SaveSerializer] tradeCount ({tradeCount}) vượt giới hạn mảng ({tradeCapacity}).");
+    }
 
     // --- GHI TOÀN BỘ GAME (SAVE) ---
     public static void SerializeFullGame(
@@ -15,9 +34,15 @@ public static class CitySaveSerializer
         EdictRuleData[] edicts, int edictCount,
         TradeRouteData[] tradeRoutes, int tradeCount)
     {
+        ValidateSaveCounts(
+            residentCount, residents.Length,
+            buildingCount, buildings.Length,
+            edictCount, edicts.Length,
+            tradeCount, tradeRoutes.Length);
+
         // 1. Header & Version
         writer.Write(FILE_MAGIC);
-        writer.Write(SAVE_VERSION);
+        writer.Write(SaveVersion);
 
         // 2. Global State (65 bytes)
         GlobalDataSerializer.WriteGlobal(writer, in globalData);
@@ -67,6 +92,11 @@ public static class CitySaveSerializer
         if (magic != FILE_MAGIC)
         {
             throw new InvalidDataException("[SaveSerializer] Magic header không khớp hoặc file save bị lỗi!");
+        }
+
+        if (version != SaveVersion)
+        {
+            throw new InvalidDataException($"[SaveSerializer] Phiên bản save ({version}) không được hỗ trợ. Yêu cầu v{SaveVersion}.");
         }
 
         // 2. Global State
