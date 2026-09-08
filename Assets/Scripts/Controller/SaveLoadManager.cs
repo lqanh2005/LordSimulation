@@ -24,6 +24,7 @@ public class SaveLoadManager : MonoBehaviour
 
     private string _saveFilePath;
     private float _autoSaveTimer;
+    private bool _isSaving;
 
     public void Init()
     {
@@ -47,31 +48,53 @@ public class SaveLoadManager : MonoBehaviour
             SaveGame();
         }
     }
+
     public void SaveGame()
     {
+        if (_isSaving)
+        {
+            Debug.LogWarning("[SaveLoadManager] Đang lưu, bỏ qua yêu cầu trùng lặp.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_saveFilePath))
+        {
+            Debug.LogError("[SaveLoadManager] Chưa Init() — không thể lưu.");
+            OnSaveFailed?.Invoke("Save path not initialized");
+            return;
+        }
+
+        if (GamePlayController.Instance == null || GamePlayController.Instance.playerContain == null)
+        {
+            Debug.LogError("[SaveLoadManager] GamePlayController hoặc PlayerContain chưa sẵn sàng.");
+            OnSaveFailed?.Invoke("Gameplay not ready");
+            return;
+        }
+
         OnSaveStarted?.Invoke();
+        _isSaving = true;
 
         string tempPath = _saveFilePath + ".tmp";
         string backupPath = _saveFilePath + ".bak";
 
         try
         {
-            // 1. Gom con trỏ dữ liệu từ các Manager trong Scene
-            ref GlobalSystemData globalData = ref GamePlayController.Instance.playerContain.globalSystemManager.GetGlobalDataRef();
+            PlayerContain contain = GamePlayController.Instance.playerContain;
 
-            ResidentData[] residents = GamePlayController.Instance.playerContain.residentManager.allResidents;
-            int residentCount = GamePlayController.Instance.playerContain.residentManager.activeCount;
+            ref GlobalSystemData globalData = ref contain.globalSystemManager.GetGlobalDataRef();
 
-            BuildingData[] buildings = GamePlayController.Instance.playerContain.buildingManager.allBuildings;
-            int buildingCount = GamePlayController.Instance.playerContain.buildingManager.activeCount;
+            ResidentData[] residents = contain.residentManager.allResidents;
+            int residentCount = contain.residentManager.activeCount;
 
-            EdictRuleData[] edicts = GamePlayController.Instance.playerContain.edictManager.allEdicts;
-            int edictCount = GamePlayController.Instance.playerContain.edictManager.activeCount;
+            BuildingData[] buildings = contain.buildingManager.allBuildings;
+            int buildingCount = contain.buildingManager.activeCount;
 
-            TradeRouteData[] tradeRoutes = GamePlayController.Instance.playerContain.tradeManager.allTradeRoutes;
-            int tradeCount = GamePlayController.Instance.playerContain.tradeManager.activeCount;
+            EdictRuleData[] edicts = contain.edictManager.allEdicts;
+            int edictCount = contain.edictManager.activeCount;
 
-            // 2. Ghi nhị phân vào file tạm (.tmp)
+            TradeRouteData[] tradeRoutes = contain.tradeManager.allTradeRoutes;
+            int tradeCount = contain.tradeManager.activeCount;
+
             using (FileStream fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             using (BinaryWriter writer = new BinaryWriter(fs))
             {
@@ -85,7 +108,6 @@ public class SaveLoadManager : MonoBehaviour
                 );
             }
 
-            // 3. Cơ chế Atomic Swap: Hoán đổi file an toàn chống crash
             if (File.Exists(_saveFilePath))
             {
                 File.Replace(tempPath, _saveFilePath, backupPath);
@@ -100,12 +122,25 @@ public class SaveLoadManager : MonoBehaviour
         }
         catch (Exception ex)
         {
+            TryDeleteFile(tempPath);
             Debug.LogError($"[SaveLoadManager] Lỗi lưu game: {ex.Message}");
             OnSaveFailed?.Invoke(ex.Message);
         }
+        finally
+        {
+            _isSaving = false;
+        }
     }
+
     public void LoadGame()
     {
+        if (string.IsNullOrEmpty(_saveFilePath))
+        {
+            Debug.LogError("[SaveLoadManager] Chưa Init() — không thể nạp.");
+            OnLoadFailed?.Invoke("Save path not initialized");
+            return;
+        }
+
         if (!File.Exists(_saveFilePath))
         {
             Debug.LogWarning($"[SaveLoadManager] Không tìm thấy file save tại: {_saveFilePath}");
@@ -113,36 +148,47 @@ public class SaveLoadManager : MonoBehaviour
             return;
         }
 
+        if (GamePlayController.Instance == null || GamePlayController.Instance.playerContain == null)
+        {
+            Debug.LogError("[SaveLoadManager] GamePlayController hoặc PlayerContain chưa sẵn sàng.");
+            OnLoadFailed?.Invoke("Gameplay not ready");
+            return;
+        }
+
         OnLoadStarted?.Invoke();
 
         try
         {
-            // 1. Nạp thẳng dữ liệu nhị phân vào mảng tĩnh có sẵn của các Manager
+            PlayerContain contain = GamePlayController.Instance.playerContain;
+
             using (FileStream fs = new FileStream(_saveFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (BinaryReader reader = new BinaryReader(fs))
             {
                 CitySaveSerializer.DeserializeFullGame(
                     reader,
                     out GlobalSystemData globalData,
-                    GamePlayController.Instance.playerContain.residentManager.allResidents, out int residentCount,
-                    GamePlayController.Instance.playerContain.buildingManager.allBuildings, out int buildingCount,
-                    GamePlayController.Instance.playerContain.edictManager.allEdicts, out int edictCount,
-                    GamePlayController.Instance.playerContain.tradeManager.allTradeRoutes, out int tradeCount
+                    contain.residentManager.allResidents, out int residentCount,
+                    contain.buildingManager.allBuildings, out int buildingCount,
+                    contain.edictManager.allEdicts, out int edictCount,
+                    contain.tradeManager.allTradeRoutes, out int tradeCount
                 );
 
-                // 2. Cập nhật số lượng active cho từng Manager
-                GamePlayController.Instance.playerContain.globalSystemManager.SetGlobalData(globalData);
-                GamePlayController.Instance.playerContain.residentManager.activeCount = residentCount;
-                GamePlayController.Instance.playerContain.buildingManager.activeCount = buildingCount;
-                GamePlayController.Instance.playerContain.edictManager.activeCount = edictCount;
-                GamePlayController.Instance.playerContain.tradeManager.activeCount = tradeCount;
+                contain.globalSystemManager.SetGlobalData(globalData);
+                contain.residentManager.activeCount = residentCount;
+                contain.buildingManager.activeCount = buildingCount;
+                contain.edictManager.activeCount = edictCount;
+                contain.tradeManager.activeCount = tradeCount;
+
+                ClearInactiveSlots(contain.residentManager.allResidents, residentCount);
+                ClearInactiveSlots(contain.buildingManager.allBuildings, buildingCount);
+                ClearInactiveSlots(contain.edictManager.allEdicts, edictCount);
+                ClearInactiveSlots(contain.tradeManager.allTradeRoutes, tradeCount);
             }
 
-            // 3. Tái tạo lại hiển thị thị giác (Visual Views)
-            GamePlayController.Instance.playerContain.residentManager.RebindAllVisualAgents();
-            GamePlayController.Instance.playerContain.buildingManager.RebuildVisualCity();
+            contain.residentManager.RebindAllVisualAgents();
+            contain.buildingManager.RebuildVisualCity();
 
-            Debug.Log($"[SaveLoadManager] Nạp game thành công!");
+            Debug.Log("[SaveLoadManager] Nạp game thành công!");
             OnLoadCompleted?.Invoke();
         }
         catch (Exception ex)
@@ -152,14 +198,37 @@ public class SaveLoadManager : MonoBehaviour
         }
     }
 
-    public bool HasSaveFile() => File.Exists(_saveFilePath);
+    public bool HasSaveFile() => !string.IsNullOrEmpty(_saveFilePath) && File.Exists(_saveFilePath);
 
     public void DeleteSaveFile()
     {
-        if (File.Exists(_saveFilePath))
+        if (HasSaveFile())
         {
             File.Delete(_saveFilePath);
             Debug.Log("[SaveLoadManager] Đã xóa file save hiện tại.");
+        }
+    }
+
+    private static void ClearInactiveSlots<T>(T[] array, int activeCount) where T : struct
+    {
+        if (activeCount >= array.Length)
+            return;
+
+        Array.Clear(array, activeCount, array.Length - activeCount);
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            return;
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[SaveLoadManager] Không xóa được file tạm {path}: {ex.Message}");
         }
     }
 }

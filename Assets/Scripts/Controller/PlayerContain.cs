@@ -9,4 +9,11 @@ public class PlayerContain : MonoBehaviour
     public EdictManager edictManager;
     public GlobalSystemManager globalSystemManager;
     public TradeManager tradeManager;
+    public void Init()
+    {
+        residentManager.Init();
+        //buildingManager.Init();
+        //edictManager.Init();
+        //tradeManager.Init();
+    }
 }

@@ -15,13 +15,16 @@ public static class ResidentDataSerializer
             writer.Write((byte)residentData.healthStatus);
             writer.Write((byte)residentData.diseaseType);
             writer.Write(residentData.IncubationMonths);
+            writer.Write(residentData.recoveryMonths);
             writer.Write(residentData.happiness);
             writer.Write(residentData.bodyTemperature);
             writer.Write((byte)residentData.symptoms);
             writer.Write(residentData.assignedHouseID);
             writer.Write(residentData.assignedWorkID);
             writer.Write(residentData.isAlive);
-            writer.Write(residentData.strength);
+            writer.Write(residentData.hungerMonths);
+        writer.Write(residentData.coldMonths);
+        writer.Write(residentData.strength);
             writer.Write(residentData.endurance);
             writer.Write(residentData.intellect);
         
@@ -40,14 +43,17 @@ public static class ResidentDataSerializer
             residentData.healthStatus = (HealthStatus)reader.ReadByte();
             residentData.diseaseType = (DiseaseType)reader.ReadByte();
             residentData.IncubationMonths = reader.ReadByte();
+            residentData.recoveryMonths = reader.ReadByte();
             residentData.happiness = reader.ReadSingle();
             residentData.bodyTemperature = reader.ReadSingle();
             residentData.symptoms = (SymptomFlags)reader.ReadByte();
             residentData.assignedHouseID = reader.ReadInt16();
             residentData.assignedWorkID = reader.ReadInt16();
             residentData.isAlive = reader.ReadBoolean();
+            residentData.hungerMonths = reader.ReadByte();
+            residentData.coldMonths = reader.ReadByte();
             residentData.strength = reader.ReadByte();
             residentData.endurance = reader.ReadByte();
-    residentData.intellect = reader.ReadByte();
+            residentData.intellect = reader.ReadByte();
     }
 }

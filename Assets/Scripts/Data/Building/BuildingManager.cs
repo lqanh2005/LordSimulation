@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class BuildingManager : MonoBehaviour
@@ -25,7 +26,21 @@ public class BuildingManager : MonoBehaviour
 
     public ref BuildingData GetBuildingRef(int index)
     {
+        if ((uint)index >= (uint)activeCount)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
         return ref allBuildings[index];
+    }
+
+    public int FindBuildingIndexById(ushort buildingId)
+    {
+        for (int i = 0; i < activeCount; i++)
+        {
+            if (allBuildings[i].buildingID == buildingId)
+                return i;
+        }
+
+        return -1;
     }
 
     // Hook tái dựng Prefab nhà cửa sau khi nạp file save
