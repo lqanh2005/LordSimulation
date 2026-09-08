@@ -56,28 +56,23 @@ public class ResidentManager : MonoBehaviour
 
     private void SubscribeEvents()
     {
-        if (globalSystemManager == null)
-            return;
+        GameEvents.Unlisten(EventID.HungerResolved, OnHungerResolved);
+        GameEvents.Unlisten(EventID.ColderResolved, OnColderResolved);
+        GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
+        GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
 
-        globalSystemManager.OnHungerResolved -= ProcessMonthlyHunger;
-        globalSystemManager.OnHungerResolved += ProcessMonthlyHunger;
-        globalSystemManager.OnColderResolved -= ProcessMonthlyColder;
-        globalSystemManager.OnColderResolved += ProcessMonthlyColder;
-        globalSystemManager.OnDiseasePressure -= ProcessMonthlyDisease;
-        globalSystemManager.OnDiseasePressure += ProcessMonthlyDisease;
-        globalSystemManager.OnMonthChanged -= ProcessMonthlyAssignment;
-        globalSystemManager.OnMonthChanged += ProcessMonthlyAssignment;
+        GameEvents.Listen(EventID.HungerResolved, OnHungerResolved);
+        GameEvents.Listen(EventID.ColderResolved, OnColderResolved);
+        GameEvents.Listen(EventID.DiseasePressure, OnDiseasePressure);
+        GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
     }
 
     private void UnsubscribeEvents()
     {
-        if (globalSystemManager == null)
-            return;
-
-        globalSystemManager.OnHungerResolved -= ProcessMonthlyHunger;
-        globalSystemManager.OnColderResolved -= ProcessMonthlyColder;
-        globalSystemManager.OnDiseasePressure -= ProcessMonthlyDisease;
-        globalSystemManager.OnMonthChanged -= ProcessMonthlyAssignment;
+        GameEvents.Unlisten(EventID.HungerResolved, OnHungerResolved);
+        GameEvents.Unlisten(EventID.ColderResolved, OnColderResolved);
+        GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
+        GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
     }
 
     private void OnDestroy()
@@ -125,6 +120,27 @@ public class ResidentManager : MonoBehaviour
             throw new ArgumentOutOfRangeException(nameof(index));
 
         return ref allResidents[index];
+    }
+
+    private void OnHungerResolved(object param)
+    {
+        ProcessMonthlyHunger((float)param);
+    }
+
+    private void OnColderResolved(object param)
+    {
+        ProcessMonthlyColder((float)param);
+    }
+
+    private void OnDiseasePressure(object param)
+    {
+        ProcessMonthlyDisease((float)param);
+    }
+
+    private void OnMonthChanged(object param)
+    {
+        MonthChangedPayload payload = (MonthChangedPayload)param;
+        ProcessMonthlyAssignment(payload.year, payload.month, payload.season);
     }
 
     public void ProcessMonthlyHunger(float hungryRate)
@@ -233,6 +249,12 @@ public class ResidentManager : MonoBehaviour
 
         if (buildingManager == null)
             return;
+
+        ResidentProfessionSystem.ProcessMonthly(
+            allResidents,
+            activeCount,
+            buildingManager.allBuildings,
+            buildingManager.activeCount);
 
         ResidentAssignmentSystem.ProcessMonthly(
             allResidents,

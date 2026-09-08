@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 public class GlobalSystemManager : MonoBehaviour
@@ -9,15 +8,6 @@ public class GlobalSystemManager : MonoBehaviour
 
     // Dữ liệu lõi toàn cầu (65 bytes)
     [SerializeField] private GlobalSystemData data;
-
-    // --- CÁC SỰ KIỆN TOÀN CỤC (EVENTS CHO UI/SYSTEMS ĐĂNG KÝ) ---
-    public event Action<int, byte, SeasonType> OnMonthChanged; // year, month, season
-    public event Action<int> OnYearChanged;                    // year
-    public event Action<WeatherEvent, float> OnWeatherChanged; // weather, temp
-    public event Action OnResourcesChanged;                    // Khi vàng/kho thay đổi
-    public event Action<float> OnHungerResolved;               // hungryRate 0..1 sau khi trừ food
-    public event Action<float> OnColderResolved;               // coldRate 0..1 sau khi trừ heat
-    public event Action<float> OnDiseasePressure;              // áp lực bệnh môi trường 0..1
 
     public float LastHungryRate { get; private set; }
     public float LastColdRate { get; private set; }
@@ -89,9 +79,9 @@ public class GlobalSystemManager : MonoBehaviour
 
         // Cập nhật lại trạng thái thời gian và UI tức thì
         SetGameSpeed(data.currentGameSpeed);
-        OnMonthChanged?.Invoke(data.currentYear, data.currentMonth, data.CurrentSeason);
-        OnWeatherChanged?.Invoke(data.currentWeather, data.environmentTemperature);
-        OnResourcesChanged?.Invoke();
+        PostMonthChanged();
+        PostWeatherChanged();
+        GameEvents.Post(EventID.ResourcesChanged);
     }
 
     // ==========================================
@@ -105,7 +95,7 @@ public class GlobalSystemManager : MonoBehaviour
         {
             data.currentMonth = 1;
             data.currentYear++;
-            OnYearChanged?.Invoke(data.currentYear);
+            GameEvents.Post(EventID.YearChanged, data.currentYear);
         }
 
         // 1. Tính toán lại nhiệt độ môi trường theo Mùa
@@ -115,8 +105,8 @@ public class GlobalSystemManager : MonoBehaviour
         ProcessMacroMonthlyConsumption();
 
         // 3. Phát event thông báo sang tháng mới cho toàn bộ hệ thống
-        OnMonthChanged?.Invoke(data.currentYear, data.currentMonth, data.CurrentSeason);
-        OnResourcesChanged?.Invoke();
+        PostMonthChanged();
+        GameEvents.Post(EventID.ResourcesChanged);
     }
 
     private void UpdateSeasonalEnvironment()
@@ -143,7 +133,7 @@ public class GlobalSystemManager : MonoBehaviour
         }
 
         data.environmentTemperature = baseTemp;
-        OnWeatherChanged?.Invoke(data.currentWeather, data.environmentTemperature);
+        PostWeatherChanged();
     }
 
     private void ProcessMacroMonthlyConsumption()
@@ -160,7 +150,7 @@ public class GlobalSystemManager : MonoBehaviour
             : 0f;
 
         data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastHungryRate * 10f);
-        OnHungerResolved?.Invoke(LastHungryRate);
+        GameEvents.Post(EventID.HungerResolved, LastHungryRate);
 
         int coalPerCapita = data.CurrentSeason == SeasonType.Winter ? 1 : 0;
         int needCoal = data.totalPopulation * coalPerCapita;
@@ -173,10 +163,10 @@ public class GlobalSystemManager : MonoBehaviour
             ? (float)peopleCold / data.totalPopulation
             : 0f;
         data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastColdRate * 10f);
-        OnColderResolved?.Invoke(LastColdRate);
+        GameEvents.Post(EventID.ColderResolved, LastColdRate);
 
         LastDiseasePressure = CalculateDiseasePressure();
-        OnDiseasePressure?.Invoke(LastDiseasePressure);
+        GameEvents.Post(EventID.DiseasePressure, LastDiseasePressure);
     }
 
     private float CalculateDiseasePressure()
@@ -204,7 +194,7 @@ public class GlobalSystemManager : MonoBehaviour
     public void ModifyGold(int amount)
     {
         data.treasuryGold = Mathf.Max(0, data.treasuryGold + amount);
-        OnResourcesChanged?.Invoke();
+        GameEvents.Post(EventID.ResourcesChanged);
     }
 
     public bool TryConsumeFood(int amount)
@@ -216,7 +206,7 @@ public class GlobalSystemManager : MonoBehaviour
             return false;
 
         data.stockFood -= amount;
-        OnResourcesChanged?.Invoke();
+        GameEvents.Post(EventID.ResourcesChanged);
         return true;
     }
 
@@ -229,7 +219,7 @@ public class GlobalSystemManager : MonoBehaviour
             return false;
 
         data.stockCoal -= amount;
-        OnResourcesChanged?.Invoke();
+        GameEvents.Post(EventID.ResourcesChanged);
         return true;
     }
 
@@ -242,7 +232,7 @@ public class GlobalSystemManager : MonoBehaviour
             return false;
 
         data.stockMedicine -= amount;
-        OnResourcesChanged?.Invoke();
+        GameEvents.Post(EventID.ResourcesChanged);
         return true;
     }
 
@@ -256,7 +246,26 @@ public class GlobalSystemManager : MonoBehaviour
             case ResourceType.Iron: data.stockIron += amount; break;
             case ResourceType.Medicine: data.stockMedicine += amount; break;
         }
-        OnResourcesChanged?.Invoke();
+        GameEvents.Post(EventID.ResourcesChanged);
+    }
+
+    private void PostMonthChanged()
+    {
+        GameEvents.Post(EventID.MonthChanged, new MonthChangedPayload
+        {
+            year = data.currentYear,
+            month = data.currentMonth,
+            season = data.CurrentSeason
+        });
+    }
+
+    private void PostWeatherChanged()
+    {
+        GameEvents.Post(EventID.WeatherChanged, new WeatherChangedPayload
+        {
+            weather = data.currentWeather,
+            temperature = data.environmentTemperature
+        });
     }
 
     public void SetGameSpeed(GameSpeed speed)
