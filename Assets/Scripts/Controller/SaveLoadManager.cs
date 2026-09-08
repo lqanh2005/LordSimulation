@@ -13,15 +13,6 @@ public class SaveLoadManager : MonoBehaviour
     [Header("Tên Scene Gameplay")]
     [SerializeField] private string gameplaySceneName = "GameplayScene";
 
-    // Events thông báo trạng thái để UI / Audio phản hồi
-    public event Action OnSaveStarted;
-    public event Action OnSaveCompleted;
-    public event Action<string> OnSaveFailed;
-
-    public event Action OnLoadStarted;
-    public event Action OnLoadCompleted;
-    public event Action<string> OnLoadFailed;
-
     private string _saveFilePath;
     private float _autoSaveTimer;
     private bool _isSaving;
@@ -60,18 +51,18 @@ public class SaveLoadManager : MonoBehaviour
         if (string.IsNullOrEmpty(_saveFilePath))
         {
             Debug.LogError("[SaveLoadManager] Chưa Init() — không thể lưu.");
-            OnSaveFailed?.Invoke("Save path not initialized");
+            GameEvents.Post(EventID.SaveFailed, "Save path not initialized");
             return;
         }
 
         if (GamePlayController.Instance == null || GamePlayController.Instance.playerContain == null)
         {
             Debug.LogError("[SaveLoadManager] GamePlayController hoặc PlayerContain chưa sẵn sàng.");
-            OnSaveFailed?.Invoke("Gameplay not ready");
+            GameEvents.Post(EventID.SaveFailed, "Gameplay not ready");
             return;
         }
 
-        OnSaveStarted?.Invoke();
+        GameEvents.Post(EventID.SaveStarted);
         _isSaving = true;
 
         string tempPath = _saveFilePath + ".tmp";
@@ -118,13 +109,13 @@ public class SaveLoadManager : MonoBehaviour
             }
 
             Debug.Log($"[SaveLoadManager] Lưu game thành công vào: {_saveFilePath}");
-            OnSaveCompleted?.Invoke();
+            GameEvents.Post(EventID.SaveCompleted);
         }
         catch (Exception ex)
         {
             TryDeleteFile(tempPath);
             Debug.LogError($"[SaveLoadManager] Lỗi lưu game: {ex.Message}");
-            OnSaveFailed?.Invoke(ex.Message);
+            GameEvents.Post(EventID.SaveFailed, ex.Message);
         }
         finally
         {
@@ -137,25 +128,25 @@ public class SaveLoadManager : MonoBehaviour
         if (string.IsNullOrEmpty(_saveFilePath))
         {
             Debug.LogError("[SaveLoadManager] Chưa Init() — không thể nạp.");
-            OnLoadFailed?.Invoke("Save path not initialized");
+            GameEvents.Post(EventID.LoadFailed, "Save path not initialized");
             return;
         }
 
         if (!File.Exists(_saveFilePath))
         {
             Debug.LogWarning($"[SaveLoadManager] Không tìm thấy file save tại: {_saveFilePath}");
-            OnLoadFailed?.Invoke("File not found");
+            GameEvents.Post(EventID.LoadFailed, "File not found");
             return;
         }
 
         if (GamePlayController.Instance == null || GamePlayController.Instance.playerContain == null)
         {
             Debug.LogError("[SaveLoadManager] GamePlayController hoặc PlayerContain chưa sẵn sàng.");
-            OnLoadFailed?.Invoke("Gameplay not ready");
+            GameEvents.Post(EventID.LoadFailed, "Gameplay not ready");
             return;
         }
 
-        OnLoadStarted?.Invoke();
+        GameEvents.Post(EventID.LoadStarted);
 
         try
         {
@@ -189,12 +180,12 @@ public class SaveLoadManager : MonoBehaviour
             contain.buildingManager.RebuildVisualCity();
 
             Debug.Log("[SaveLoadManager] Nạp game thành công!");
-            OnLoadCompleted?.Invoke();
+            GameEvents.Post(EventID.LoadCompleted);
         }
         catch (Exception ex)
         {
             Debug.LogError($"[SaveLoadManager] Lỗi nạp game: {ex.Message}");
-            OnLoadFailed?.Invoke(ex.Message);
+            GameEvents.Post(EventID.LoadFailed, ex.Message);
         }
     }
 
