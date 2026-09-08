@@ -6,6 +6,7 @@ public class ResidentManager : MonoBehaviour
 {
     public const int MAX_RESIDENTS = 10000;
     private const byte HungerMonthsBeforeDeathRisk = 2;
+    private const byte ColdMonthsBeforeDeathRisk = 2;
 
     [Header("Dữ Liệu Mảng Tĩnh Lõi")]
     public ResidentData[] allResidents = new ResidentData[MAX_RESIDENTS];
@@ -22,6 +23,11 @@ public class ResidentManager : MonoBehaviour
     [Header("Đói / Chết đói")]
     [SerializeField] [Range(0f, 1f)] private float starveDeathChance = 0.1f;
     [SerializeField] private float hungerHappinessPenalty = 0.1f;
+    [SerializeField] private float coldHappinessPenalty = 0.1f;
+
+    [Header("Bệnh mẫu — RedFever")]
+    [SerializeField] [Range(0f, 1f)] private float diseaseSpreadFactor = 0.15f;
+    [SerializeField] [Range(0f, 1f)] private float naturalRecoveryChance = 0.08f;
 
     [Header("Grid → World")]
     [SerializeField] private Vector2 gridOrigin;
@@ -29,7 +35,7 @@ public class ResidentManager : MonoBehaviour
 
     private readonly List<ResidentBase> _activeVisuals = new List<ResidentBase>();
 
-    private void Awake()
+    public void Init()
     {
         ResolveDependencies();
 
@@ -40,35 +46,38 @@ public class ResidentManager : MonoBehaviour
     private void OnEnable()
     {
         ResolveDependencies();
-        SubscribeHunger();
-    }
-
-    private void Start()
-    {
-        ResolveDependencies();
-        SubscribeHunger();
+        SubscribeEvents();
     }
 
     private void OnDisable()
     {
-        UnsubscribeHunger();
+        UnsubscribeEvents();
     }
 
-    private void SubscribeHunger()
+    private void SubscribeEvents()
     {
         if (globalSystemManager == null)
             return;
 
         globalSystemManager.OnHungerResolved -= ProcessMonthlyHunger;
         globalSystemManager.OnHungerResolved += ProcessMonthlyHunger;
+        globalSystemManager.OnColderResolved -= ProcessMonthlyColder;
+        globalSystemManager.OnColderResolved += ProcessMonthlyColder;
+        globalSystemManager.OnDiseasePressure -= ProcessMonthlyDisease;
+        globalSystemManager.OnDiseasePressure += ProcessMonthlyDisease;
+        globalSystemManager.OnMonthChanged -= ProcessMonthlyAssignment;
+        globalSystemManager.OnMonthChanged += ProcessMonthlyAssignment;
     }
 
-    private void UnsubscribeHunger()
+    private void UnsubscribeEvents()
     {
         if (globalSystemManager == null)
             return;
 
         globalSystemManager.OnHungerResolved -= ProcessMonthlyHunger;
+        globalSystemManager.OnColderResolved -= ProcessMonthlyColder;
+        globalSystemManager.OnDiseasePressure -= ProcessMonthlyDisease;
+        globalSystemManager.OnMonthChanged -= ProcessMonthlyAssignment;
     }
 
     private void OnDestroy()
@@ -100,6 +109,12 @@ public class ResidentManager : MonoBehaviour
         allResidents[index] = newResident;
         allResidents[index].isAlive = true;
         allResidents[index].hungerMonths = 0;
+        allResidents[index].coldMonths = 0;
+        allResidents[index].diseaseType = DiseaseType.None;
+        allResidents[index].healthStatus = HealthStatus.Healthy;
+        allResidents[index].IncubationMonths = 0;
+        allResidents[index].recoveryMonths = 0;
+        allResidents[index].symptoms = SymptomFlags.None;
         activeCount++;
         return index;
     }
@@ -160,10 +175,74 @@ public class ResidentManager : MonoBehaviour
         RefreshMetricsCache();
         SyncAllVisualAgents();
     }
-    public void ProcessMonthlyColder()
+    public void ProcessMonthlyColder(float coldRate)
     {
-
+        coldRate = Mathf.Clamp01(coldRate);
+        int aliveBefore = 0;
+        int deaths = 0;
+        for(int i = 0; i < activeCount; i++)
+        {
+            ref ResidentData r = ref allResidents[i];
+            if(!r.isAlive)
+                continue;
+            aliveBefore++;
+            bool coldThisMonth = coldRate > 0f && UnityEngine.Random.value < coldRate;
+            if (coldThisMonth)
+            {
+                if(r.coldMonths < byte.MaxValue)
+                    r.coldMonths++;
+                r.happiness = Mathf.Max(0f, r.happiness - coldHappinessPenalty);
+            }
+            else r.coldMonths = 0;
+            if(r.coldMonths >= ColdMonthsBeforeDeathRisk && UnityEngine.Random.value < starveDeathChance)
+            {
+                r.isAlive = false;
+                r.coldMonths = 0;
+                deaths++;
+            }
+        }
+        if(globalSystemManager != null && aliveBefore > 0 && deaths > 0)
+        {
+            ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
+            float sampleDeathRate = (float)deaths / aliveBefore;
+            int macroDeaths = Mathf.RoundToInt(global.totalPopulation * sampleDeathRate);
+            global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
+        }
+        RefreshMetricsCache();
+        SyncAllVisualAgents();
     }
+
+    public void ProcessMonthlyDisease(float diseasePressure)
+    {
+        ResidentDiseaseSystem.ProcessMonthly(
+            allResidents,
+            activeCount,
+            diseasePressure,
+            diseaseSpreadFactor,
+            naturalRecoveryChance,
+            globalSystemManager);
+
+        RefreshMetricsCache();
+        SyncAllVisualAgents();
+    }
+
+    public void ProcessMonthlyAssignment(int year, byte month, SeasonType season)
+    {
+        if (buildingManager == null)
+            ResolveDependencies();
+
+        if (buildingManager == null)
+            return;
+
+        ResidentAssignmentSystem.ProcessMonthly(
+            allResidents,
+            activeCount,
+            buildingManager.allBuildings,
+            buildingManager.activeCount);
+
+        SyncAllVisualAgents();
+    }
+
     public void RefreshMetricsCache()
     {
         if (globalSystemManager == null)

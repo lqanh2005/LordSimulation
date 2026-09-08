@@ -15,6 +15,7 @@ public static class ResidentDataSerializer
             writer.Write((byte)residentData.healthStatus);
             writer.Write((byte)residentData.diseaseType);
             writer.Write(residentData.IncubationMonths);
+            writer.Write(residentData.recoveryMonths);
             writer.Write(residentData.happiness);
             writer.Write(residentData.bodyTemperature);
             writer.Write((byte)residentData.symptoms);
@@ -42,6 +43,7 @@ public static class ResidentDataSerializer
             residentData.healthStatus = (HealthStatus)reader.ReadByte();
             residentData.diseaseType = (DiseaseType)reader.ReadByte();
             residentData.IncubationMonths = reader.ReadByte();
+            residentData.recoveryMonths = reader.ReadByte();
             residentData.happiness = reader.ReadSingle();
             residentData.bodyTemperature = reader.ReadSingle();
             residentData.symptoms = (SymptomFlags)reader.ReadByte();

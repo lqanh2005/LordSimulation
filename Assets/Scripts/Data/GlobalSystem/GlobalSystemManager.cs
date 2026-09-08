@@ -16,17 +16,12 @@ public class GlobalSystemManager : MonoBehaviour
     public event Action<WeatherEvent, float> OnWeatherChanged; // weather, temp
     public event Action OnResourcesChanged;                    // Khi vàng/kho thay đổi
     public event Action<float> OnHungerResolved;               // hungryRate 0..1 sau khi trừ food
+    public event Action<float> OnColderResolved;               // coldRate 0..1 sau khi trừ heat
+    public event Action<float> OnDiseasePressure;              // áp lực bệnh môi trường 0..1
 
     public float LastHungryRate { get; private set; }
-
-    public void Init()
-    {
-        // Khởi tạo mặc định nếu là ván chơi mới (New Game)
-        if (data.currentYear == 0)
-        {
-            InitializeNewGame();
-        }
-    }
+    public float LastColdRate { get; private set; }
+    public float LastDiseasePressure { get; private set; }
 
     private void Update()
     {
@@ -55,7 +50,7 @@ public class GlobalSystemManager : MonoBehaviour
     // KHỞI TẠO VÀ LƯU/NẠP DỮ LIỆU
     // ==========================================
 
-    private void InitializeNewGame()
+    public void InitializeNewGame()
     {
         data = new GlobalSystemData
         {
@@ -167,11 +162,39 @@ public class GlobalSystemManager : MonoBehaviour
         data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastHungryRate * 10f);
         OnHungerResolved?.Invoke(LastHungryRate);
 
-        int coalNeed = data.CurrentSeason == SeasonType.Winter ? data.totalPopulation : 0;
-        if (coalNeed > 0 && !ConsumeCoal(coalNeed))
-        {
-            data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + 5f);
-        }
+        int coalPerCapita = data.CurrentSeason == SeasonType.Winter ? 1 : 0;
+        int needCoal = data.totalPopulation * coalPerCapita;
+        int consumedCoal = Mathf.Min(data.stockCoal, needCoal);
+        data.stockCoal -= consumedCoal;
+
+        int peopleWarm = coalPerCapita > 0 ? consumedCoal / coalPerCapita : data.totalPopulation;
+        int peopleCold = Mathf.Max(0, data.totalPopulation - peopleWarm);
+        LastColdRate = data.totalPopulation > 0
+            ? (float)peopleCold / data.totalPopulation
+            : 0f;
+        data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastColdRate * 10f);
+        OnColderResolved?.Invoke(LastColdRate);
+
+        LastDiseasePressure = CalculateDiseasePressure();
+        OnDiseasePressure?.Invoke(LastDiseasePressure);
+    }
+
+    private float CalculateDiseasePressure()
+    {
+        float pressure = 0.015f;
+
+        if (data.CurrentSeason == SeasonType.Winter)
+            pressure += 0.02f;
+
+        if (data.currentWeather == WeatherEvent.Blizzard)
+            pressure += 0.025f;
+        else if (data.currentWeather == WeatherEvent.ToxicFog)
+            pressure += 0.05f;
+
+        pressure += LastHungryRate * 0.03f;
+        pressure += LastColdRate * 0.03f;
+
+        return Mathf.Clamp01(pressure);
     }
 
     // ==========================================
@@ -206,6 +229,19 @@ public class GlobalSystemManager : MonoBehaviour
             return false;
 
         data.stockCoal -= amount;
+        OnResourcesChanged?.Invoke();
+        return true;
+    }
+
+    public bool TryConsumeMedicine(int amount)
+    {
+        if (amount <= 0)
+            return true;
+
+        if (data.stockMedicine < amount)
+            return false;
+
+        data.stockMedicine -= amount;
         OnResourcesChanged?.Invoke();
         return true;
     }

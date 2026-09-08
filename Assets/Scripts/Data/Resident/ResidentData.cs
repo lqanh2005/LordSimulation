@@ -35,6 +35,7 @@ public struct ResidentData
     public HealthStatus healthStatus;
     public DiseaseType diseaseType;
     public byte IncubationMonths;  // Số tháng ủ bệnh
+    public byte recoveryMonths;  // Số tháng đang điều trị / hồi phục
     public float happiness;  // Mức độ hạnh phúc: 0.0 - 1.0
     public float bodyTemperature;  // Nhiệt độ cơ thể: 35.0 - 42.0
     public SymptomFlags symptoms;  // Các triệu chứng hiện tại
