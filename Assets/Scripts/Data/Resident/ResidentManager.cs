@@ -19,6 +19,7 @@ public class ResidentManager : MonoBehaviour
     [SerializeField] private GlobalSystemManager globalSystemManager;
     [SerializeField] private int maxVisualAgents = 200;
     [SerializeField] private int poolPreloadCount = 32;
+    [SerializeField] private float commuteSpeed = 2.5f;
 
     [Header("Đói / Chết đói")]
     [SerializeField] [Range(0f, 1f)] private float starveDeathChance = 0.1f;
@@ -168,8 +169,7 @@ public class ResidentManager : MonoBehaviour
             global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
         }
 
-        RefreshMetricsCache();
-        SyncAllVisualAgents();
+        RefreshVisualPopulation();
     }
 
     private void OnHungerResolved(object param)
@@ -238,8 +238,7 @@ public class ResidentManager : MonoBehaviour
             global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
         }
 
-        RefreshMetricsCache();
-        SyncAllVisualAgents();
+        RefreshVisualPopulation();
     }
     public void ProcessMonthlyColder(float coldRate)
     {
@@ -274,8 +273,7 @@ public class ResidentManager : MonoBehaviour
             int macroDeaths = Mathf.RoundToInt(global.totalPopulation * sampleDeathRate);
             global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
         }
-        RefreshMetricsCache();
-        SyncAllVisualAgents();
+        RefreshVisualPopulation();
     }
 
     public void ProcessMonthlyDisease(float diseasePressure)
@@ -288,8 +286,7 @@ public class ResidentManager : MonoBehaviour
             naturalRecoveryChance,
             globalSystemManager);
 
-        RefreshMetricsCache();
-        SyncAllVisualAgents();
+        RefreshVisualPopulation();
     }
 
     public void ProcessMonthlyAssignment(int year, byte month, SeasonType season)
@@ -333,9 +330,15 @@ public class ResidentManager : MonoBehaviour
             season,
             globalSystemManager);
 
-        RefreshMetricsCache();
+        RefreshVisualPopulation();
+    }
+
+    private void RefreshVisualPopulation()
+    {
         SyncAllVisualAgents();
+        CompactDeadResidents();
         FillMissingVisualAgents();
+        RefreshMetricsCache();
     }
 
     public void RefreshMetricsCache()
@@ -372,6 +375,7 @@ public class ResidentManager : MonoBehaviour
 
     public void RebindAllVisualAgents()
     {
+        CompactDeadResidents();
         ClearAllVisualAgents();
 
         if (residentPrefab == null)
@@ -381,15 +385,8 @@ public class ResidentManager : MonoBehaviour
         }
 
         ResolveDependencies();
-
-        int spawned = 0;
-        for (int i = 0; i < activeCount && spawned < maxVisualAgents; i++)
-        {
-            if (TrySpawnVisual(i, in allResidents[i]))
-                spawned++;
-        }
-
-        Debug.Log($"[ResidentManager] Đã bind {spawned}/{activeCount} visual agent(s).");
+        FillMissingVisualAgents();
+        Debug.Log($"[ResidentManager] Đã bind {_activeVisuals.Count}/{activeCount} visual agent(s).");
     }
 
     public void SyncAllVisualAgents()
@@ -403,8 +400,13 @@ public class ResidentManager : MonoBehaviour
                 continue;
             }
 
-            if (!view.IsBound)
+            if (!view.IsBound || (uint)view.DataIndex >= (uint)activeCount)
+            {
+                view.Unbind();
+                SimplePool2.Despawn(view.gameObject);
+                _activeVisuals.RemoveAt(i);
                 continue;
+            }
 
             ref ResidentData data = ref GetResidentRef(view.DataIndex);
             if (!data.isAlive)
@@ -435,12 +437,59 @@ public class ResidentManager : MonoBehaviour
                 _visualBoundFlags[view.DataIndex] = true;
         }
 
-        for (int i = 0; i < activeCount && _activeVisuals.Count < maxVisualAgents; i++)
+        for (int priority = 3; priority >= 0 && _activeVisuals.Count < maxVisualAgents; priority--)
         {
-            if (_visualBoundFlags[i] || !allResidents[i].isAlive)
+            for (int i = 0; i < activeCount && _activeVisuals.Count < maxVisualAgents; i++)
+            {
+                if (_visualBoundFlags[i] || !allResidents[i].isAlive)
+                    continue;
+                if (VisualFillPriority(in allResidents[i]) != priority)
+                    continue;
+
+                if (TrySpawnVisual(i, in allResidents[i]))
+                    _visualBoundFlags[i] = true;
+            }
+        }
+    }
+
+    private static int VisualFillPriority(in ResidentData resident)
+    {
+        if (resident.healthStatus == HealthStatus.ActiveInfected)
+            return 3;
+        if (resident.assignedWorkID >= 0)
+            return 2;
+        if (resident.assignedHouseID >= 0)
+            return 1;
+        return 0;
+    }
+
+    private void CompactDeadResidents()
+    {
+        int write = 0;
+        for (int read = 0; read < activeCount; read++)
+        {
+            if (!allResidents[read].isAlive)
                 continue;
 
-            TrySpawnVisual(i, in allResidents[i]);
+            if (write != read)
+            {
+                allResidents[write] = allResidents[read];
+                RemapVisualDataIndex(read, write);
+            }
+
+            write++;
+        }
+
+        activeCount = write;
+    }
+
+    private void RemapVisualDataIndex(int from, int to)
+    {
+        for (int i = 0; i < _activeVisuals.Count; i++)
+        {
+            ResidentBase view = _activeVisuals[i];
+            if (view != null && view.DataIndex == from)
+                view.RebindIndex(to);
         }
     }
 
@@ -449,7 +498,7 @@ public class ResidentManager : MonoBehaviour
         if (residentPrefab == null || !resident.isAlive || _activeVisuals.Count >= maxVisualAgents)
             return false;
 
-        Vector3 worldPosition = ResolveAgentPosition(in resident);
+        Vector3 worldPosition = ResolveCommuteTarget(in resident);
         ResidentBase view = SimplePool2.Spawn(residentPrefab, worldPosition, Quaternion.identity);
 
         if (visualRoot != null)
@@ -475,33 +524,94 @@ public class ResidentManager : MonoBehaviour
         _activeVisuals.Clear();
     }
 
-    private Vector3 ResolveAgentPosition(in ResidentData data)
+    private void Update()
     {
-        if (buildingManager != null)
-        {
-            if (data.assignedWorkID >= 0)
-            {
-                int workIndex = buildingManager.FindBuildingIndexById((ushort)data.assignedWorkID);
-                if (workIndex >= 0)
-                {
-                    ref BuildingData work = ref buildingManager.GetBuildingRef(workIndex);
-                    return GridToWorld(work.coordX, work.coordY);
-                }
-            }
+        TickVisualCommutes();
+    }
 
-            if (data.assignedHouseID >= 0)
+    private void TickVisualCommutes()
+    {
+        if (_activeVisuals.Count == 0)
+            return;
+
+        float step = commuteSpeed * Time.deltaTime;
+        if (step <= 0f)
+            return;
+
+        for (int i = 0; i < _activeVisuals.Count; i++)
+        {
+            ResidentBase view = _activeVisuals[i];
+            if (view == null || !view.IsBound)
+                continue;
+            if ((uint)view.DataIndex >= (uint)activeCount)
+                continue;
+
+            ref ResidentData data = ref GetResidentRef(view.DataIndex);
+            if (!data.isAlive)
+                continue;
+
+            view.TickCommute(ResolveCommuteTarget(in data), step);
+        }
+    }
+
+    private Vector3 ResolveCommuteTarget(in ResidentData data)
+    {
+        Vector3 home = ResolveHouseWorld(in data) + SlotOffset(data.residentID, 0);
+        if (data.healthStatus == HealthStatus.ActiveInfected || data.assignedWorkID < 0)
+            return home;
+
+        float progress = 0.5f;
+        if (globalSystemManager != null)
+            progress = globalSystemManager.GetGlobalDataRef().timeTickProgress;
+
+        if (progress >= 0.5f && progress < 0.95f)
+            return home;
+
+        return ResolveWorkWorld(in data) + SlotOffset(data.residentID, 1);
+    }
+
+    private Vector3 ResolveHouseWorld(in ResidentData data)
+    {
+        if (buildingManager != null && data.assignedHouseID >= 0)
+        {
+            int houseIndex = buildingManager.FindBuildingIndexById((ushort)data.assignedHouseID);
+            if (houseIndex >= 0)
             {
-                int houseIndex = buildingManager.FindBuildingIndexById((ushort)data.assignedHouseID);
-                if (houseIndex >= 0)
-                {
-                    ref BuildingData house = ref buildingManager.GetBuildingRef(houseIndex);
-                    return GridToWorld(house.coordX, house.coordY);
-                }
+                ref BuildingData house = ref buildingManager.GetBuildingRef(houseIndex);
+                return GridToWorld(house.coordX, house.coordY);
             }
         }
 
-        int fallbackX = data.residentID % 20;
-        int fallbackY = (data.residentID / 20) % 20;
+        return FallbackWorld(data.residentID);
+    }
+
+    private Vector3 ResolveWorkWorld(in ResidentData data)
+    {
+        if (buildingManager != null && data.assignedWorkID >= 0)
+        {
+            int workIndex = buildingManager.FindBuildingIndexById((ushort)data.assignedWorkID);
+            if (workIndex >= 0)
+            {
+                ref BuildingData work = ref buildingManager.GetBuildingRef(workIndex);
+                return GridToWorld(work.coordX, work.coordY);
+            }
+        }
+
+        return ResolveHouseWorld(in data);
+    }
+
+    private static Vector3 SlotOffset(int residentId, int slot)
+    {
+        int seed = residentId * 3 + slot;
+        float x = (seed % 7 - 3) * 0.18f;
+        float y = ((seed / 7) % 5 - 2) * 0.12f;
+        return new Vector3(x, y, 0f);
+    }
+
+    private Vector3 FallbackWorld(int residentId)
+    {
+        int fallbackX = residentId % 20;
+        int fallbackY = (residentId / 20) % 20;
         return GridToWorld((ushort)fallbackX, (ushort)fallbackY);
     }
 

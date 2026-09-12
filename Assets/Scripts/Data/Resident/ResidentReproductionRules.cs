@@ -31,13 +31,20 @@ public static class ResidentReproductionRules
         return resident.happiness >= MinHappiness;
     }
 
-    public static float GetBirthChance(in ResidentData resident, SeasonType season)
+    public static bool CanBeMother(in ResidentData resident) =>
+        CanReproduce(in resident) && resident.gender == GenderType.Female;
+
+    public static bool CanBeFather(in ResidentData resident) =>
+        CanReproduce(in resident) && resident.gender == GenderType.Male;
+
+    public static float GetBirthChance(in ResidentData mother, in ResidentData father, SeasonType season)
     {
         float chance = BaseMonthlyChance
-            + resident.happiness * 0.004f
-            + (resident.wealth / 100f) * 0.003f;
+            + ((mother.happiness + father.happiness) * 0.5f) * 0.004f
+            + ((mother.wealth + father.wealth) * 0.5f / 100f) * 0.003f;
 
-        chance *= resident.factionType switch
+        FactionType faction = mother.factionType;
+        chance *= faction switch
         {
             FactionType.Aristocrat => 0.7f,
             FactionType.Commoner => 1.1f,
@@ -45,7 +52,7 @@ public static class ResidentReproductionRules
             _ => 1f
         };
 
-        chance *= resident.originRegion switch
+        chance *= mother.originRegion switch
         {
             OriginRegion.GreenZone => 1.1f,
             OriginRegion.RedZone => 0.85f,
@@ -64,19 +71,25 @@ public static class ResidentReproductionRules
         return chance > MaxMonthlyChance ? MaxMonthlyChance : chance;
     }
 
-    public static ResidentData CreateChild(in ResidentData parent, int residentId)
+    public static ResidentData CreateChild(in ResidentData mother, in ResidentData father, int residentId)
     {
-        byte wealth = (byte)(parent.wealth / 4);
+        GenderType gender = Random.value < 0.5f ? GenderType.Male : GenderType.Female;
+        byte wealth = (byte)((mother.wealth + father.wealth) / 8);
+        FactionType faction = father.factionType == FactionType.None
+            ? mother.factionType
+            : father.factionType;
+        if (faction == FactionType.None)
+            faction = FactionType.Commoner;
+
         return new ResidentData
         {
             residentID = residentId,
-            firstNameID = (ushort)Random.Range(0, NameDatabase.FirstNames.Length),
-            lastNameID = parent.lastNameID,
+            firstNameID = NameDatabase.RollFirstNameId(gender),
+            lastNameID = father.lastNameID,
             age = 0,
-            originRegion = parent.originRegion,
-            factionType = parent.factionType == FactionType.None
-                ? FactionType.Commoner
-                : parent.factionType,
+            gender = gender,
+            originRegion = mother.originRegion,
+            factionType = faction,
             wealth = wealth,
             professionType = ProfessionType.Student,
             healthStatus = HealthStatus.Healthy,
@@ -86,20 +99,21 @@ public static class ResidentReproductionRules
             happiness = 0.6f,
             bodyTemperature = ResidentDiseaseRules.NormalBodyTemperature,
             symptoms = SymptomFlags.None,
-            assignedHouseID = parent.assignedHouseID,
+            assignedHouseID = mother.assignedHouseID,
             assignedWorkID = ResidentAssignmentRules.UnassignedId,
             isAlive = true,
             hungerMonths = 0,
             coldMonths = 0,
-            strength = InheritStat(parent.strength),
-            endurance = InheritStat(parent.endurance),
-            intellect = InheritStat(parent.intellect)
+            strength = InheritStat(mother.strength, father.strength),
+            endurance = InheritStat(mother.endurance, father.endurance),
+            intellect = InheritStat(mother.intellect, father.intellect)
         };
     }
 
-    private static byte InheritStat(byte parentStat)
+    private static byte InheritStat(byte motherStat, byte fatherStat)
     {
-        int next = parentStat + Random.Range(-8, 9);
+        int mid = (motherStat + fatherStat) / 2;
+        int next = mid + Random.Range(-8, 9);
         if (next < 10)
             next = 10;
         else if (next > 100)

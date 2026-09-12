@@ -4,7 +4,7 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 1;
+    public const int SaveVersion = 2;
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,
@@ -94,9 +94,9 @@ public static class CitySaveSerializer
             throw new InvalidDataException("[SaveSerializer] Magic header không khớp hoặc file save bị lỗi!");
         }
 
-        if (version != SaveVersion)
+        if (version < 1 || version > SaveVersion)
         {
-            throw new InvalidDataException($"[SaveSerializer] Phiên bản save ({version}) không được hỗ trợ. Yêu cầu v{SaveVersion}.");
+            throw new InvalidDataException($"[SaveSerializer] Phiên bản save ({version}) không được hỗ trợ. Yêu cầu v1–v{SaveVersion}.");
         }
 
         // 2. Global State
@@ -117,7 +117,7 @@ public static class CitySaveSerializer
             throw new InvalidDataException($"[SaveSerializer] residentCount ({residentCount}) vượt giới hạn mảng ({residents.Length}).");
         for (int i = 0; i < residentCount; i++)
         {
-            ResidentDataSerializer.ReadResident(reader, out residents[i]);
+            ResidentDataSerializer.ReadResident(reader, out residents[i], version);
         }
 
         // 5. Edicts

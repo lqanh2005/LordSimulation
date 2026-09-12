@@ -6,6 +6,7 @@ public enum ProfessionType : byte { None = 0, Farmer = 1, Miner = 2, Lumberjack 
 public enum HealthStatus : byte { Healthy = 0, Incubating = 1, ActiveInfected = 2, Treated = 3 }
 public enum DiseaseType : byte { None = 0, RedFever = 1, LungParasite = 2, BloodPoison = 3 }
 public enum AgeGroupType : byte { Child = 0, Adult = 1, Elderly = 2 }
+public enum GenderType : byte { Male = 0, Female = 1 }
 
 [Flags]
 public enum SymptomFlags : byte
@@ -28,6 +29,7 @@ public struct ResidentData
     public ushort firstNameID;  // ID của tên đầu tiên
     public ushort lastNameID;
     public byte age;
+    public GenderType gender;
     public OriginRegion originRegion;
     public FactionType factionType;
     public byte wealth;   // Tài sản: 0 - 100

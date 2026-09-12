@@ -2,6 +2,8 @@ using UnityEngine;
 
 public static class ResidentReproductionSystem
 {
+    private static readonly bool[] Claimed = new bool[ResidentManager.MAX_RESIDENTS];
+
     public static int ProcessMonthly(
         ResidentData[] residents,
         ref int residentCount,
@@ -20,29 +22,39 @@ public static class ResidentReproductionSystem
 
         for (int i = 0; i < parentCount; i++)
         {
+            Claimed[i] = false;
             if (residents[i].isAlive)
                 aliveBefore++;
         }
 
         for (int i = 0; i < parentCount && residentCount < maxResidents; i++)
         {
-            ref ResidentData parent = ref residents[i];
-            if (!ResidentReproductionRules.CanReproduce(in parent))
+            if (Claimed[i] || !ResidentReproductionRules.CanBeMother(in residents[i]))
                 continue;
 
-            float chance = ResidentReproductionRules.GetBirthChance(in parent, season);
+            int fatherIndex = FindFather(residents, parentCount, i);
+            if (fatherIndex < 0)
+                continue;
+
+            Claimed[i] = true;
+            Claimed[fatherIndex] = true;
+
+            float chance = ResidentReproductionRules.GetBirthChance(
+                in residents[i], in residents[fatherIndex], season);
             if (chance <= 0f || Random.value >= chance)
                 continue;
 
             int houseIndex = -1;
-            if (buildings != null && parent.assignedHouseID >= 0)
-                houseIndex = FindBuildingIndexById(buildings, buildingCount, (ushort)parent.assignedHouseID);
+            if (buildings != null && residents[i].assignedHouseID >= 0)
+                houseIndex = FindBuildingIndexById(
+                    buildings, buildingCount, (ushort)residents[i].assignedHouseID);
 
             if (houseIndex >= 0 && !ResidentAssignmentRules.HasHousingSlot(in buildings[houseIndex]))
                 continue;
 
             int newId = NextResidentId(residents, residentCount);
-            ResidentData child = ResidentReproductionRules.CreateChild(in parent, newId);
+            ResidentData child = ResidentReproductionRules.CreateChild(
+                in residents[i], in residents[fatherIndex], newId);
             if (houseIndex < 0)
                 child.assignedHouseID = ResidentAssignmentRules.UnassignedId;
 
@@ -65,6 +77,22 @@ public static class ResidentReproductionSystem
         }
 
         return births;
+    }
+
+    private static int FindFather(ResidentData[] residents, int parentCount, int motherIndex)
+    {
+        short houseId = residents[motherIndex].assignedHouseID;
+        for (int i = 0; i < parentCount; i++)
+        {
+            if (i == motherIndex || Claimed[i])
+                continue;
+            if (residents[i].assignedHouseID != houseId)
+                continue;
+            if (ResidentReproductionRules.CanBeFather(in residents[i]))
+                return i;
+        }
+
+        return -1;
     }
 
     private static int NextResidentId(ResidentData[] residents, int residentCount)
