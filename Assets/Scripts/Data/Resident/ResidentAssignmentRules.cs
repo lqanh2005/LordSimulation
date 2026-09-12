@@ -13,6 +13,9 @@ public static class ResidentAssignmentRules
         BuildingType.Mine => true,
         BuildingType.Clinic => true,
         BuildingType.Furnace => true,
+        BuildingType.School => true,
+        BuildingType.GuardPost => true,
+        BuildingType.LumberCamp => true,
         _ => false
     };
 
@@ -22,7 +25,10 @@ public static class ResidentAssignmentRules
         ProfessionType.Miner => BuildingType.Mine,
         ProfessionType.Doctor => BuildingType.Clinic,
         ProfessionType.Craftsman => BuildingType.Furnace,
-        ProfessionType.Lumberjack => BuildingType.None,
+        ProfessionType.Student => BuildingType.School,
+        ProfessionType.Teacher => BuildingType.School,
+        ProfessionType.Guard => BuildingType.GuardPost,
+        ProfessionType.Lumberjack => BuildingType.LumberCamp,
         _ => BuildingType.None
     };
 
@@ -32,6 +38,8 @@ public static class ResidentAssignmentRules
         BuildingType.Mine => ProfessionType.Miner,
         BuildingType.Clinic => ProfessionType.Doctor,
         BuildingType.Furnace => ProfessionType.Craftsman,
+        BuildingType.GuardPost => ProfessionType.Guard,
+        BuildingType.LumberCamp => ProfessionType.Lumberjack,
         _ => ProfessionType.None
     };
 
@@ -44,22 +52,38 @@ public static class ResidentAssignmentRules
         if (!resident.isAlive)
             return false;
 
-        AgeGroupType ageGroup = resident.GetAgeGroup();
-        if (ageGroup == AgeGroupType.Child || ageGroup == AgeGroupType.Elderly)
+        if (resident.GetAgeGroup() != AgeGroupType.Adult)
             return false;
 
         if (resident.healthStatus == HealthStatus.ActiveInfected)
             return false;
 
-        return resident.professionType != ProfessionType.None
-            && GetPreferredWorkplace(resident.professionType) != BuildingType.None;
+        if (resident.professionType == ProfessionType.None
+            || resident.professionType == ProfessionType.Student)
+            return false;
+
+        return GetPreferredWorkplace(resident.professionType) != BuildingType.None;
+    }
+
+    public static bool CanStudy(in ResidentData resident)
+    {
+        if (!resident.isAlive)
+            return false;
+
+        if (resident.GetAgeGroup() != AgeGroupType.Child)
+            return false;
+
+        if (resident.healthStatus == HealthStatus.ActiveInfected)
+            return false;
+
+        return resident.professionType == ProfessionType.Student;
     }
 
     public static bool NeedsHousing(in ResidentData resident) =>
         resident.isAlive && resident.assignedHouseID < 0;
 
     public static bool NeedsWorkplace(in ResidentData resident) =>
-        CanWork(in resident) && resident.assignedWorkID < 0;
+        (CanWork(in resident) || CanStudy(in resident)) && resident.assignedWorkID < 0;
 
     public static bool IsBuildingAcceptingResidents(in BuildingData building) =>
         building.buildingState == BuildingState.Active
@@ -89,13 +113,32 @@ public static class ResidentAssignmentRules
         return building.buildingType == BuildingType.House;
     }
 
+    public static bool HasStudentSlot(in BuildingData building) =>
+        building.buildingType == BuildingType.School
+        && IsBuildingAcceptingResidents(in building)
+        && building.currentOccupancy < building.maxOccupancy;
+
     public static bool IsValidWorkplaceForResident(in ResidentData resident, in BuildingData building)
     {
-        if (!CanWork(in resident) || !HasWorkSlot(in building))
+        BuildingType preferred = GetPreferredWorkplace(resident.professionType);
+        if (preferred == BuildingType.None || building.buildingType != preferred)
             return false;
 
-        BuildingType preferred = GetPreferredWorkplace(resident.professionType);
-        return preferred != BuildingType.None && building.buildingType == preferred;
+        if (CanStudy(in resident))
+            return HasStudentSlot(in building);
+
+        if (CanWork(in resident))
+            return HasWorkSlot(in building);
+
+        return false;
+    }
+
+    public static void OccupyWorkplaceSlot(ref BuildingData building, in ResidentData resident)
+    {
+        if (resident.professionType == ProfessionType.Student)
+            building.currentOccupancy++;
+        else
+            building.currentWorkers++;
     }
 
     public static int HousingPriority(in ResidentData resident, in BuildingData building)
@@ -103,13 +146,15 @@ public static class ResidentAssignmentRules
         if (!IsValidHousingForResident(in resident, in building))
             return -1;
 
+        int bonus = ResidentSocialRules.GetHousingPriorityBonus(in resident);
+
         if (NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.QuarantineWard)
             return 100;
 
         if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.House)
-            return 80;
+            return 80 + bonus;
 
-        return 40;
+        return 40 + bonus;
     }
 
     public static void ClearHousingAssignment(ref ResidentData resident) =>

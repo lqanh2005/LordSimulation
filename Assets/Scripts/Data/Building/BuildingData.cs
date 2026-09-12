@@ -2,7 +2,7 @@ using System;
 
 public enum BuildingType : byte
 {
-    None = 0, House = 1, QuarantineWard = 2, Farm = 3, Mine = 4, Clinic = 5, Furnace = 6
+    None = 0, House = 1, QuarantineWard = 2, Farm = 3, Mine = 4, Clinic = 5, Furnace = 6, School = 7, GuardPost = 8, LumberCamp = 9
 }
 public enum BuildingState : byte
 {

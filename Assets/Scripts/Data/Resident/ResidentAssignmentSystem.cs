@@ -42,7 +42,9 @@ public static class ResidentAssignmentSystem
                 continue;
             }
 
-            if (!ResidentAssignmentRules.CanWork(in r) && r.assignedWorkID >= 0)
+            if (!ResidentAssignmentRules.CanWork(in r)
+                && !ResidentAssignmentRules.CanStudy(in r)
+                && r.assignedWorkID >= 0)
                 ResidentAssignmentRules.ClearWorkAssignment(ref r);
 
             if (r.assignedHouseID >= 0)
@@ -67,7 +69,7 @@ public static class ResidentAssignmentSystem
                 }
                 else
                 {
-                    buildings[workIndex].currentWorkers++;
+                    ResidentAssignmentRules.OccupyWorkplaceSlot(ref buildings[workIndex], in r);
                 }
             }
         }
@@ -90,7 +92,8 @@ public static class ResidentAssignmentSystem
 
     private static bool IsStillValidWorkplace(in ResidentData resident, in BuildingData building)
     {
-        if (!ResidentAssignmentRules.CanWork(in resident))
+        if (!ResidentAssignmentRules.CanWork(in resident)
+            && !ResidentAssignmentRules.CanStudy(in resident))
             return false;
 
         if (!ResidentAssignmentRules.IsBuildingAcceptingResidents(in building))
@@ -138,7 +141,7 @@ public static class ResidentAssignmentSystem
                 continue;
 
             ResidentAssignmentRules.AssignWorkplace(ref r, buildings[workIndex].buildingID);
-            buildings[workIndex].currentWorkers++;
+            ResidentAssignmentRules.OccupyWorkplaceSlot(ref buildings[workIndex], in r);
         }
     }
 

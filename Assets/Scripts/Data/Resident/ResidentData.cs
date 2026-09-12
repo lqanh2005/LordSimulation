@@ -2,7 +2,7 @@ using System;
 
 public enum OriginRegion : byte { GreenZone = 0, YellowZone = 1, RedZone = 2 }
 public enum FactionType : byte { None = 0, Commoner = 1, Aristocrat = 2, Scholar = 3, Zealot = 4 }
-public enum ProfessionType : byte { None = 0, Farmer = 1, Miner = 2, Lumberjack = 3, Craftsman = 4, Doctor = 5 }
+public enum ProfessionType : byte { None = 0, Farmer = 1, Miner = 2, Lumberjack = 3, Craftsman = 4, Doctor = 5, Student = 6, Teacher = 7, Guard = 8 }
 public enum HealthStatus : byte { Healthy = 0, Incubating = 1, ActiveInfected = 2, Treated = 3 }
 public enum DiseaseType : byte { None = 0, RedFever = 1, LungParasite = 2, BloodPoison = 3 }
 public enum AgeGroupType : byte { Child = 0, Adult = 1, Elderly = 2 }
@@ -64,6 +64,9 @@ public struct ResidentData
         ProfessionType.Lumberjack => endurance,
         ProfessionType.Craftsman => intellect,
         ProfessionType.Doctor => intellect,
+        ProfessionType.Student => intellect,
+        ProfessionType.Teacher => intellect,
+        ProfessionType.Guard => strength,
         _ => (byte)((strength + intellect + endurance) / 3)
     };
 

@@ -5,7 +5,7 @@ public class ResidentBase : MonoBehaviour
     [Header("Visual")]
     [SerializeField] private SpriteRenderer spriteRenderer;
 
-    [Tooltip("Index theo ProfessionType: None, Farmer, Miner, Lumberjack, Craftsman, Doctor")]
+    [Tooltip("Index theo ProfessionType: None, Farmer, Miner, Lumberjack, Craftsman, Doctor, Student, Teacher, Guard")]
     [SerializeField] private Sprite[] professionSprites;
 
     [Header("Màu theo trạng thái sức khỏe")]

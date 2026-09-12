@@ -34,6 +34,7 @@ public class ResidentManager : MonoBehaviour
     [SerializeField] private float cellSize = 1f;
 
     private readonly List<ResidentBase> _activeVisuals = new List<ResidentBase>();
+    private readonly bool[] _visualBoundFlags = new bool[MAX_RESIDENTS];
 
     public void Init()
     {
@@ -59,11 +60,13 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Unlisten(EventID.HungerResolved, OnHungerResolved);
         GameEvents.Unlisten(EventID.ColderResolved, OnColderResolved);
         GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
+        GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
 
         GameEvents.Listen(EventID.HungerResolved, OnHungerResolved);
         GameEvents.Listen(EventID.ColderResolved, OnColderResolved);
         GameEvents.Listen(EventID.DiseasePressure, OnDiseasePressure);
+        GameEvents.Listen(EventID.YearChanged, OnYearChanged);
         GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
     }
 
@@ -72,6 +75,7 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Unlisten(EventID.HungerResolved, OnHungerResolved);
         GameEvents.Unlisten(EventID.ColderResolved, OnColderResolved);
         GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
+        GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
     }
 
@@ -110,6 +114,9 @@ public class ResidentManager : MonoBehaviour
         allResidents[index].IncubationMonths = 0;
         allResidents[index].recoveryMonths = 0;
         allResidents[index].symptoms = SymptomFlags.None;
+        ResidentSocialRules.EnsureFaction(ref allResidents[index]);
+        if (allResidents[index].professionType == ProfessionType.None)
+            allResidents[index].professionType = ResidentProfessionRules.GetInitialProfession(in allResidents[index]);
         activeCount++;
         return index;
     }
@@ -120,6 +127,49 @@ public class ResidentManager : MonoBehaviour
             throw new ArgumentOutOfRangeException(nameof(index));
 
         return ref allResidents[index];
+    }
+
+    private void OnYearChanged(object param)
+    {
+        ProcessYearlyAging();
+    }
+
+    private void ProcessYearlyAging()
+    {
+        int aliveBefore = 0;
+        int deaths = 0;
+
+        for (int i = 0; i < activeCount; i++)
+        {
+            ref ResidentData r = ref allResidents[i];
+            if (!r.isAlive)
+                continue;
+
+            aliveBefore++;
+            if (r.age < byte.MaxValue)
+                r.age++;
+
+            if (ResidentAgingRules.ShouldRetire(in r))
+                ResidentAgingRules.Retire(ref r);
+
+            float deathChance = ResidentAgingRules.GetOldAgeDeathChance(in r);
+            if (deathChance <= 0f || UnityEngine.Random.value >= deathChance)
+                continue;
+
+            ResidentAgingRules.DieOfAge(ref r);
+            deaths++;
+        }
+
+        if (globalSystemManager != null && aliveBefore > 0 && deaths > 0)
+        {
+            ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
+            float sampleDeathRate = (float)deaths / aliveBefore;
+            int macroDeaths = Mathf.RoundToInt(global.totalPopulation * sampleDeathRate);
+            global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
+        }
+
+        RefreshMetricsCache();
+        SyncAllVisualAgents();
     }
 
     private void OnHungerResolved(object param)
@@ -262,7 +312,30 @@ public class ResidentManager : MonoBehaviour
             buildingManager.allBuildings,
             buildingManager.activeCount);
 
+        ResidentProfessionEffectSystem.ProcessMonthly(
+            allResidents,
+            activeCount,
+            buildingManager.allBuildings,
+            buildingManager.activeCount,
+            globalSystemManager);
+
+        ResidentSocialSystem.ProcessMonthly(
+            allResidents,
+            activeCount,
+            globalSystemManager);
+
+        ResidentReproductionSystem.ProcessMonthly(
+            allResidents,
+            ref activeCount,
+            MAX_RESIDENTS,
+            buildingManager.allBuildings,
+            buildingManager.activeCount,
+            season,
+            globalSystemManager);
+
+        RefreshMetricsCache();
         SyncAllVisualAgents();
+        FillMissingVisualAgents();
     }
 
     public void RefreshMetricsCache()
@@ -312,19 +385,8 @@ public class ResidentManager : MonoBehaviour
         int spawned = 0;
         for (int i = 0; i < activeCount && spawned < maxVisualAgents; i++)
         {
-            ref ResidentData resident = ref allResidents[i];
-            if (!resident.isAlive)
-                continue;
-
-            Vector3 worldPosition = ResolveAgentPosition(in resident);
-            ResidentBase view = SimplePool2.Spawn(residentPrefab, worldPosition, Quaternion.identity);
-
-            if (visualRoot != null)
-                view.transform.SetParent(visualRoot, true);
-
-            view.Bind(i, in resident, worldPosition);
-            _activeVisuals.Add(view);
-            spawned++;
+            if (TrySpawnVisual(i, in allResidents[i]))
+                spawned++;
         }
 
         Debug.Log($"[ResidentManager] Đã bind {spawned}/{activeCount} visual agent(s).");
@@ -355,6 +417,47 @@ public class ResidentManager : MonoBehaviour
 
             view.SyncFromData(in data);
         }
+    }
+
+    private void FillMissingVisualAgents()
+    {
+        if (residentPrefab == null || _activeVisuals.Count >= maxVisualAgents)
+            return;
+
+        Array.Clear(_visualBoundFlags, 0, activeCount);
+        for (int i = 0; i < _activeVisuals.Count; i++)
+        {
+            ResidentBase view = _activeVisuals[i];
+            if (view == null || !view.IsBound)
+                continue;
+
+            if ((uint)view.DataIndex < (uint)activeCount)
+                _visualBoundFlags[view.DataIndex] = true;
+        }
+
+        for (int i = 0; i < activeCount && _activeVisuals.Count < maxVisualAgents; i++)
+        {
+            if (_visualBoundFlags[i] || !allResidents[i].isAlive)
+                continue;
+
+            TrySpawnVisual(i, in allResidents[i]);
+        }
+    }
+
+    private bool TrySpawnVisual(int index, in ResidentData resident)
+    {
+        if (residentPrefab == null || !resident.isAlive || _activeVisuals.Count >= maxVisualAgents)
+            return false;
+
+        Vector3 worldPosition = ResolveAgentPosition(in resident);
+        ResidentBase view = SimplePool2.Spawn(residentPrefab, worldPosition, Quaternion.identity);
+
+        if (visualRoot != null)
+            view.transform.SetParent(visualRoot, true);
+
+        view.Bind(index, in resident, worldPosition);
+        _activeVisuals.Add(view);
+        return true;
     }
 
     private void ClearAllVisualAgents()

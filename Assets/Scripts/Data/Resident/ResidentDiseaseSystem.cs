@@ -42,6 +42,16 @@ public static class ResidentDiseaseSystem
         if (global != null)
             medicineLeft = Mathf.Max(0, global.GetGlobalDataRef().stockMedicine);
 
+        float doctorPower = 0f;
+        for (int i = 0; i < activeCount; i++)
+        {
+            if (ResidentProfessionEffectRules.IsWorkingDoctor(in residents[i]))
+                doctorPower += residents[i].WorkMultiplier;
+        }
+
+        float doctorCoverage = ResidentProfessionEffectRules.GetDoctorCoverage(
+            doctorPower, activeInfectedCount);
+
         int remainingPatients = activeInfectedCount;
         int deaths = 0;
 
@@ -54,9 +64,13 @@ public static class ResidentDiseaseSystem
             switch (r.healthStatus)
             {
                 case HealthStatus.Healthy:
-                    if (infectChance > 0f && Random.value < infectChance)
+                {
+                    float personalChance = infectChance
+                        * ResidentSocialRules.GetInfectionChanceMultiplier(r.originRegion);
+                    if (personalChance > 0f && Random.value < personalChance)
                         ResidentDiseaseRules.Infect(ref r, ResidentDiseaseRules.RollRandomDisease());
                     break;
+                }
 
                 case HealthStatus.Incubating:
                     TickIncubation(ref r);
@@ -67,7 +81,9 @@ public static class ResidentDiseaseSystem
                     bool cured = false;
                     if (remainingPatients > 0 && medicineLeft > 0)
                     {
-                        float cureChance = (float)medicineLeft / remainingPatients;
+                        float cureChance = ResidentProfessionEffectRules.ScaleMedicineCureChance(
+                            (float)medicineLeft / remainingPatients,
+                            doctorCoverage);
                         remainingPatients--;
                         if (Random.value < cureChance && global != null && global.TryConsumeMedicine(1))
                         {
@@ -81,7 +97,7 @@ public static class ResidentDiseaseSystem
                         remainingPatients--;
                     }
 
-                    if (!cured && TickActiveInfection(ref r, naturalRecoveryChance))
+                    if (!cured && TickActiveInfection(ref r, naturalRecoveryChance, doctorCoverage))
                         deaths++;
                     break;
                 }
@@ -112,12 +128,14 @@ public static class ResidentDiseaseSystem
             ResidentDiseaseRules.ActivateDisease(ref r);
     }
 
-    private static bool TickActiveInfection(ref ResidentData r, float naturalRecoveryChance)
+    private static bool TickActiveInfection(ref ResidentData r, float naturalRecoveryChance, float doctorCoverage)
     {
         DiseaseType type = r.diseaseType;
         r.happiness = Mathf.Max(0f, r.happiness - ResidentDiseaseRules.GetHappinessPenalty(type));
 
-        float deathChance = ResidentDiseaseRules.GetDeathChance(type);
+        float deathChance = ResidentProfessionEffectRules.ScaleDeathChance(
+            ResidentDiseaseRules.GetDeathChance(type),
+            doctorCoverage);
         if (r.hungerMonths > 0)
             deathChance += HungerDeathBonus;
         if (r.coldMonths > 0)
