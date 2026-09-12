@@ -9,11 +9,14 @@ public class PlayerContain : MonoBehaviour
     public EdictManager edictManager;
     public GlobalSystemManager globalSystemManager;
     public TradeManager tradeManager;
+    public ImmigrationManager immigrationManager;
     public void Init()
     {
         residentManager.Init();
-        //buildingManager.Init();
-        //edictManager.Init();
-        //tradeManager.Init();
+        if (immigrationManager == null)
+            immigrationManager = GetComponentInChildren<ImmigrationManager>(true);
+        if (immigrationManager == null)
+            immigrationManager = gameObject.AddComponent<ImmigrationManager>();
+        immigrationManager.Init();
     }
 }

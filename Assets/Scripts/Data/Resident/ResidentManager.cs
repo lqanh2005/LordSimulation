@@ -110,16 +110,30 @@ public class ResidentManager : MonoBehaviour
         allResidents[index].isAlive = true;
         allResidents[index].hungerMonths = 0;
         allResidents[index].coldMonths = 0;
-        allResidents[index].diseaseType = DiseaseType.None;
-        allResidents[index].healthStatus = HealthStatus.Healthy;
-        allResidents[index].IncubationMonths = 0;
-        allResidents[index].recoveryMonths = 0;
-        allResidents[index].symptoms = SymptomFlags.None;
+        if (allResidents[index].bodyTemperature <= 0f)
+            allResidents[index].bodyTemperature = ResidentDiseaseRules.NormalBodyTemperature;
         ResidentSocialRules.EnsureFaction(ref allResidents[index]);
         if (allResidents[index].professionType == ProfessionType.None)
             allResidents[index].professionType = ResidentProfessionRules.GetInitialProfession(in allResidents[index]);
         activeCount++;
         return index;
+    }
+
+    public int PeekMaxResidentId()
+    {
+        int maxId = 0;
+        for (int i = 0; i < activeCount; i++)
+        {
+            if (allResidents[i].residentID > maxId)
+                maxId = allResidents[i].residentID;
+        }
+
+        return maxId;
+    }
+
+    public void NotifyPopulationChanged()
+    {
+        RefreshVisualPopulation();
     }
 
     public ref ResidentData GetResidentRef(int index)
@@ -371,6 +385,7 @@ public class ResidentManager : MonoBehaviour
             : 0;
 
         globalSystemManager.UpdateMetricsCache(pop, scaledInfected, avgHappiness);
+        GameEvents.Post(EventID.PopulationChanged, pop);
     }
 
     public void RebindAllVisualAgents()

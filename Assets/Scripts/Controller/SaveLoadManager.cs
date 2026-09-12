@@ -95,7 +95,9 @@ public class SaveLoadManager : MonoBehaviour
                     residents, residentCount,
                     buildings, buildingCount,
                     edicts, edictCount,
-                    tradeRoutes, tradeCount
+                    tradeRoutes, tradeCount,
+                    contain.immigrationManager.waitingApplicants,
+                    contain.immigrationManager.waitingCount
                 );
             }
 
@@ -147,11 +149,12 @@ public class SaveLoadManager : MonoBehaviour
         }
 
         GameEvents.Post(EventID.LoadStarted);
+        PlayerContain contain = GamePlayController.Instance.playerContain;
+        if (contain.immigrationManager != null)
+            contain.immigrationManager.SetSuppressArrivals(true);
 
         try
         {
-            PlayerContain contain = GamePlayController.Instance.playerContain;
-
             using (FileStream fs = new FileStream(_saveFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (BinaryReader reader = new BinaryReader(fs))
             {
@@ -161,7 +164,8 @@ public class SaveLoadManager : MonoBehaviour
                     contain.residentManager.allResidents, out int residentCount,
                     contain.buildingManager.allBuildings, out int buildingCount,
                     contain.edictManager.allEdicts, out int edictCount,
-                    contain.tradeManager.allTradeRoutes, out int tradeCount
+                    contain.tradeManager.allTradeRoutes, out int tradeCount,
+                    contain.immigrationManager.waitingApplicants, out int immigrantCount
                 );
 
                 contain.globalSystemManager.SetGlobalData(globalData);
@@ -169,15 +173,18 @@ public class SaveLoadManager : MonoBehaviour
                 contain.buildingManager.activeCount = buildingCount;
                 contain.edictManager.activeCount = edictCount;
                 contain.tradeManager.activeCount = tradeCount;
+                contain.immigrationManager.waitingCount = immigrantCount;
 
                 ClearInactiveSlots(contain.residentManager.allResidents, residentCount);
                 ClearInactiveSlots(contain.buildingManager.allBuildings, buildingCount);
                 ClearInactiveSlots(contain.edictManager.allEdicts, edictCount);
                 ClearInactiveSlots(contain.tradeManager.allTradeRoutes, tradeCount);
+                ClearInactiveSlots(contain.immigrationManager.waitingApplicants, immigrantCount);
             }
 
             contain.residentManager.RebindAllVisualAgents();
             contain.buildingManager.RebuildVisualCity();
+            contain.immigrationManager.RefreshAfterLoad();
 
             Debug.Log("[SaveLoadManager] Nạp game thành công!");
             GameEvents.Post(EventID.LoadCompleted);
@@ -186,6 +193,11 @@ public class SaveLoadManager : MonoBehaviour
         {
             Debug.LogError($"[SaveLoadManager] Lỗi nạp game: {ex.Message}");
             GameEvents.Post(EventID.LoadFailed, ex.Message);
+        }
+        finally
+        {
+            if (contain.immigrationManager != null)
+                contain.immigrationManager.SetSuppressArrivals(false);
         }
     }
 

@@ -82,6 +82,24 @@ public static class ResidentAssignmentRules
     public static bool NeedsHousing(in ResidentData resident) =>
         resident.isAlive && resident.assignedHouseID < 0;
 
+    public static bool IsHousedInQuarantine(
+        in ResidentData resident,
+        BuildingData[] buildings,
+        int buildingCount)
+    {
+        if (resident.assignedHouseID < 0 || buildings == null)
+            return false;
+
+        for (int i = 0; i < buildingCount; i++)
+        {
+            if (buildings[i].buildingID != (ushort)resident.assignedHouseID)
+                continue;
+            return buildings[i].buildingType == BuildingType.QuarantineWard;
+        }
+
+        return false;
+    }
+
     public static bool NeedsWorkplace(in ResidentData resident) =>
         (CanWork(in resident) || CanStudy(in resident)) && resident.assignedWorkID < 0;
 

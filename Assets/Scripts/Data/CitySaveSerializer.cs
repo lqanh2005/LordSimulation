@@ -4,13 +4,14 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 2;
+    public const int SaveVersion = 3;
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,
         int buildingCount, int buildingCapacity,
         int edictCount, int edictCapacity,
-        int tradeCount, int tradeCapacity)
+        int tradeCount, int tradeCapacity,
+        int immigrantCount, int immigrantCapacity)
     {
         if (residentCount < 0 || residentCount > residentCapacity)
             throw new InvalidDataException($"[SaveSerializer] residentCount ({residentCount}) vượt giới hạn mảng ({residentCapacity}).");
@@ -23,6 +24,9 @@ public static class CitySaveSerializer
 
         if (tradeCount < 0 || tradeCount > tradeCapacity)
             throw new InvalidDataException($"[SaveSerializer] tradeCount ({tradeCount}) vượt giới hạn mảng ({tradeCapacity}).");
+
+        if (immigrantCount < 0 || immigrantCount > immigrantCapacity)
+            throw new InvalidDataException($"[SaveSerializer] immigrantCount ({immigrantCount}) vượt giới hạn mảng ({immigrantCapacity}).");
     }
 
     // --- GHI TOÀN BỘ GAME (SAVE) ---
@@ -32,13 +36,15 @@ public static class CitySaveSerializer
         ResidentData[] residents, int residentCount,
         BuildingData[] buildings, int buildingCount,
         EdictRuleData[] edicts, int edictCount,
-        TradeRouteData[] tradeRoutes, int tradeCount)
+        TradeRouteData[] tradeRoutes, int tradeCount,
+        ResidentData[] immigrants, int immigrantCount)
     {
         ValidateSaveCounts(
             residentCount, residents.Length,
             buildingCount, buildings.Length,
             edictCount, edicts.Length,
-            tradeCount, tradeRoutes.Length);
+            tradeCount, tradeRoutes.Length,
+            immigrantCount, immigrants.Length);
 
         // 1. Header & Version
         writer.Write(FILE_MAGIC);
@@ -74,6 +80,10 @@ public static class CitySaveSerializer
         {
             TradeDataSerializer.WriteTradeRoute(writer, in tradeRoutes[i]);
         }
+
+        writer.Write(immigrantCount);
+        for (int i = 0; i < immigrantCount; i++)
+            ResidentDataSerializer.WriteResident(writer, in immigrants[i]);
     }
 
     // --- ĐỌC TOÀN BỘ GAME (LOAD) ---
@@ -83,7 +93,8 @@ public static class CitySaveSerializer
         ResidentData[] residents, out int residentCount,
         BuildingData[] buildings, out int buildingCount,
         EdictRuleData[] edicts, out int edictCount,
-        TradeRouteData[] tradeRoutes, out int tradeCount)
+        TradeRouteData[] tradeRoutes, out int tradeCount,
+        ResidentData[] immigrants, out int immigrantCount)
     {
         // 1. Kiểm tra tính toàn vẹn Header
         string magic = reader.ReadString();
@@ -137,5 +148,15 @@ public static class CitySaveSerializer
         {
             TradeDataSerializer.ReadTradeRoute(reader, out tradeRoutes[i]);
         }
+
+        immigrantCount = 0;
+        if (version < 3)
+            return;
+
+        immigrantCount = reader.ReadInt32();
+        if (immigrantCount < 0 || immigrantCount > immigrants.Length)
+            throw new InvalidDataException($"[SaveSerializer] immigrantCount ({immigrantCount}) vượt giới hạn mảng ({immigrants.Length}).");
+        for (int i = 0; i < immigrantCount; i++)
+            ResidentDataSerializer.ReadResident(reader, out immigrants[i], version);
     }
 }

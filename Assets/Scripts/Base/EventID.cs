@@ -12,13 +12,16 @@ public enum EventID
     HungerResolved = 201,
     ColderResolved = 202,
     DiseasePressure = 203,
+    PopulationChanged = 204,
 
     SaveStarted = 300,
     SaveCompleted = 301,
     SaveFailed = 302,
     LoadStarted = 303,
     LoadCompleted = 304,
-    LoadFailed = 305
+    LoadFailed = 305,
+
+    ImmigrationQueueChanged = 400
 }
 
 public struct MonthChangedPayload

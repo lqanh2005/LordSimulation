@@ -191,9 +191,47 @@ public class GlobalSystemManager : MonoBehaviour
     // CÁC HÀM TIỆN ÍCH TƯƠNG TÁC TÀI NGUYÊN (API)
     // ==========================================
 
+    public void ModifyReputation(float amount)
+    {
+        data.reputation = Mathf.Clamp(
+            data.reputation + amount,
+            ImmigrationRules.MinReputation,
+            ImmigrationRules.MaxReputation);
+        GameEvents.Post(EventID.ResourcesChanged);
+    }
+
     public void ModifyGold(int amount)
     {
         data.treasuryGold = Mathf.Max(0, data.treasuryGold + amount);
+        GameEvents.Post(EventID.ResourcesChanged);
+    }
+
+    public void ConsumeAvailable(ResourceType type, int amount)
+    {
+        if (amount <= 0)
+            return;
+
+        switch (type)
+        {
+            case ResourceType.Food:
+                data.stockFood = Mathf.Max(0, data.stockFood - amount);
+                break;
+            case ResourceType.Coal:
+                data.stockCoal = Mathf.Max(0, data.stockCoal - amount);
+                break;
+            case ResourceType.Wood:
+                data.stockWood = Mathf.Max(0, data.stockWood - amount);
+                break;
+            case ResourceType.Iron:
+                data.stockIron = Mathf.Max(0, data.stockIron - amount);
+                break;
+            case ResourceType.Medicine:
+                data.stockMedicine = Mathf.Max(0, data.stockMedicine - amount);
+                break;
+            default:
+                return;
+        }
+
         GameEvents.Post(EventID.ResourcesChanged);
     }
 

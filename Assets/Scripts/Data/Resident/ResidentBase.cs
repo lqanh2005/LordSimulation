@@ -169,7 +169,7 @@ public class ResidentBase : MonoBehaviour
     {
         if (symptoms == SymptomFlags.None)
         {
-            OverlayBuilder.Append("Khoe");
+            OverlayBuilder.Append("Healthy");
             return;
         }
 
@@ -189,14 +189,14 @@ public class ResidentBase : MonoBehaviour
 
     private static string SymptomLabel(SymptomFlags flag) => flag switch
     {
-        SymptomFlags.Fever => "Sot",
-        SymptomFlags.Cough => "Ho",
-        SymptomFlags.Fatigue => "Met",
-        SymptomFlags.Rash => "Ban",
-        SymptomFlags.Nausea => "Buon non",
-        SymptomFlags.Headache => "Dau dau",
-        SymptomFlags.ShortnessOfBreath => "Kho tho",
-        SymptomFlags.Dizziness => "Chong mat",
+        SymptomFlags.Fever => "Fever",
+        SymptomFlags.Cough => "Cough",
+        SymptomFlags.Fatigue => "Fatigue",
+        SymptomFlags.Rash => "Rash",
+        SymptomFlags.Nausea => "Nausea",
+        SymptomFlags.Headache => "Headache",
+        SymptomFlags.ShortnessOfBreath => "Short of breath",
+        SymptomFlags.Dizziness => "Dizziness",
         _ => ""
     };
 

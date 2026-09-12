@@ -42,8 +42,9 @@ public static class ResidentAssignmentSystem
                 continue;
             }
 
-            if (!ResidentAssignmentRules.CanWork(in r)
-                && !ResidentAssignmentRules.CanStudy(in r)
+            if ((!ResidentAssignmentRules.CanWork(in r)
+                    && !ResidentAssignmentRules.CanStudy(in r)
+                    || ResidentAssignmentRules.IsHousedInQuarantine(in r, buildings, buildingCount))
                 && r.assignedWorkID >= 0)
                 ResidentAssignmentRules.ClearWorkAssignment(ref r);
 
@@ -133,6 +134,8 @@ public static class ResidentAssignmentSystem
         for (int i = 0; i < residentCount; i++)
         {
             ref ResidentData r = ref residents[i];
+            if (ResidentAssignmentRules.IsHousedInQuarantine(in r, buildings, buildingCount))
+                continue;
             if (!ResidentAssignmentRules.NeedsWorkplace(in r))
                 continue;
 
