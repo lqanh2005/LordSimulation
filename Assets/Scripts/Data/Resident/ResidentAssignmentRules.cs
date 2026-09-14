@@ -45,7 +45,8 @@ public static class ResidentAssignmentRules
 
     public static bool NeedsQuarantineHousing(in ResidentData resident) =>
         resident.healthStatus == HealthStatus.ActiveInfected
-        || resident.healthStatus == HealthStatus.Incubating;
+        || resident.healthStatus == HealthStatus.Incubating
+        || resident.healthStatus == HealthStatus.Treated;
 
     public static bool CanWork(in ResidentData resident)
     {
@@ -55,7 +56,8 @@ public static class ResidentAssignmentRules
         if (resident.GetAgeGroup() != AgeGroupType.Adult)
             return false;
 
-        if (resident.healthStatus == HealthStatus.ActiveInfected)
+        if (resident.healthStatus == HealthStatus.ActiveInfected
+            || resident.healthStatus == HealthStatus.Treated)
             return false;
 
         if (resident.professionType == ProfessionType.None
@@ -73,11 +75,20 @@ public static class ResidentAssignmentRules
         if (resident.GetAgeGroup() != AgeGroupType.Child)
             return false;
 
-        if (resident.healthStatus == HealthStatus.ActiveInfected)
+        if (resident.healthStatus == HealthStatus.ActiveInfected
+            || resident.healthStatus == HealthStatus.Treated)
             return false;
 
         return resident.professionType == ProfessionType.Student;
     }
+
+    public static bool NeedsClinicCare(in ResidentData resident) =>
+        resident.isAlive
+        && (resident.healthStatus == HealthStatus.ActiveInfected
+            || resident.healthStatus == HealthStatus.Treated);
+
+    public static bool IsClinicPatient(in ResidentData resident) =>
+        NeedsClinicCare(in resident);
 
     public static bool NeedsHousing(in ResidentData resident) =>
         resident.isAlive && resident.assignedHouseID < 0;
@@ -101,7 +112,8 @@ public static class ResidentAssignmentRules
     }
 
     public static bool NeedsWorkplace(in ResidentData resident) =>
-        (CanWork(in resident) || CanStudy(in resident)) && resident.assignedWorkID < 0;
+        (CanWork(in resident) || CanStudy(in resident) || NeedsClinicCare(in resident))
+        && resident.assignedWorkID < 0;
 
     public static bool IsBuildingAcceptingResidents(in BuildingData building) =>
         building.buildingState == BuildingState.Active
@@ -136,8 +148,47 @@ public static class ResidentAssignmentRules
         && IsBuildingAcceptingResidents(in building)
         && building.currentOccupancy < building.maxOccupancy;
 
+    public static int GetClinicPatientCapacity(in BuildingData building)
+    {
+        if (building.maxOccupancy > 0)
+            return building.maxOccupancy;
+
+        int cap = building.maxWorkers * 4;
+        if (cap < 8)
+            cap = 8;
+        if (cap > byte.MaxValue)
+            cap = byte.MaxValue;
+        return cap;
+    }
+
+    public static bool HasPatientSlot(in BuildingData building) =>
+        building.buildingType == BuildingType.Clinic
+        && IsBuildingAcceptingResidents(in building)
+        && building.currentOccupancy < GetClinicPatientCapacity(in building);
+
+    public static bool IsAssignedToClinic(
+        in ResidentData resident,
+        BuildingData[] buildings,
+        int buildingCount)
+    {
+        if (resident.assignedWorkID < 0 || buildings == null)
+            return false;
+
+        for (int i = 0; i < buildingCount; i++)
+        {
+            if (buildings[i].buildingID != (ushort)resident.assignedWorkID)
+                continue;
+            return buildings[i].buildingType == BuildingType.Clinic;
+        }
+
+        return false;
+    }
+
     public static bool IsValidWorkplaceForResident(in ResidentData resident, in BuildingData building)
     {
+        if (NeedsClinicCare(in resident))
+            return HasPatientSlot(in building);
+
         BuildingType preferred = GetPreferredWorkplace(resident.professionType);
         if (preferred == BuildingType.None || building.buildingType != preferred)
             return false;
@@ -153,7 +204,7 @@ public static class ResidentAssignmentRules
 
     public static void OccupyWorkplaceSlot(ref BuildingData building, in ResidentData resident)
     {
-        if (resident.professionType == ProfessionType.Student)
+        if (IsClinicPatient(in resident) || resident.professionType == ProfessionType.Student)
             building.currentOccupancy++;
         else
             building.currentWorkers++;

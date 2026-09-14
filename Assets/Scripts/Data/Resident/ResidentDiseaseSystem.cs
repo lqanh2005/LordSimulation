@@ -5,10 +5,23 @@ public static class ResidentDiseaseSystem
     private const float MaxMonthlyInfectChance = 0.08f;
     private const float HungerDeathBonus = 0.02f;
     private const float ColdDeathBonus = 0.02f;
+    private const float HouseContactChance = 0.22f;
+    private const float WorkContactChance = 0.16f;
+    private const float MaxContactChance = 0.45f;
+
+    private static readonly DiseaseType[] ContactByBuildingId = new DiseaseType[ushort.MaxValue + 1];
+    private static readonly bool[] ContactDirty = new bool[ushort.MaxValue + 1];
+    private static readonly ushort[] DirtyBuildingIds = new ushort[BuildingManager.MAX_BUILDINGS];
+    private static int dirtyCount;
+
+    private static readonly float[] ClinicDoctorPower = new float[BuildingManager.MAX_BUILDINGS];
+    private static readonly int[] ClinicPatientCount = new int[BuildingManager.MAX_BUILDINGS];
 
     public static int ProcessMonthly(
         ResidentData[] residents,
         int activeCount,
+        BuildingData[] buildings,
+        int buildingCount,
         float diseasePressure,
         float spreadFactor,
         float naturalRecoveryChance,
@@ -16,9 +29,10 @@ public static class ResidentDiseaseSystem
     {
         diseasePressure = Mathf.Clamp01(diseasePressure);
 
+        ClearContactMarks();
+
         int alive = 0;
         int carrierCount = 0;
-        int activeInfectedCount = 0;
         for (int i = 0; i < activeCount; i++)
         {
             ref ResidentData r = ref residents[i];
@@ -26,11 +40,13 @@ public static class ResidentDiseaseSystem
                 continue;
 
             alive++;
-            if (r.healthStatus == HealthStatus.ActiveInfected)
-                activeInfectedCount++;
-            if (r.healthStatus == HealthStatus.ActiveInfected
-                || r.healthStatus == HealthStatus.Incubating)
-                carrierCount++;
+            if (r.healthStatus != HealthStatus.ActiveInfected
+                && r.healthStatus != HealthStatus.Incubating)
+                continue;
+
+            carrierCount++;
+            MarkContactBuilding(r.assignedHouseID, r.diseaseType);
+            MarkContactBuilding(r.assignedWorkID, r.diseaseType);
         }
 
         float infectedRate = alive > 0 ? (float)carrierCount / alive : 0f;
@@ -38,21 +54,8 @@ public static class ResidentDiseaseSystem
             MaxMonthlyInfectChance,
             diseasePressure * 0.5f + infectedRate * spreadFactor * 0.5f);
 
-        int medicineLeft = 0;
-        if (global != null)
-            medicineLeft = Mathf.Max(0, global.GetGlobalDataRef().stockMedicine);
+        CacheClinicCoverage(residents, activeCount, buildings, buildingCount);
 
-        float doctorPower = 0f;
-        for (int i = 0; i < activeCount; i++)
-        {
-            if (ResidentProfessionEffectRules.IsWorkingDoctor(in residents[i]))
-                doctorPower += residents[i].WorkMultiplier;
-        }
-
-        float doctorCoverage = ResidentProfessionEffectRules.GetDoctorCoverage(
-            doctorPower, activeInfectedCount);
-
-        int remainingPatients = activeInfectedCount;
         int deaths = 0;
 
         for (int i = 0; i < activeCount; i++)
@@ -64,43 +67,20 @@ public static class ResidentDiseaseSystem
             switch (r.healthStatus)
             {
                 case HealthStatus.Healthy:
-                {
-                    float personalChance = infectChance
-                        * ResidentSocialRules.GetInfectionChanceMultiplier(r.originRegion);
-                    if (personalChance > 0f && Random.value < personalChance)
-                        ResidentDiseaseRules.Infect(ref r, ResidentDiseaseRules.RollRandomDisease());
+                    TryInfectHealthy(ref r, infectChance);
                     break;
-                }
 
                 case HealthStatus.Incubating:
                     TickIncubation(ref r);
                     break;
 
                 case HealthStatus.ActiveInfected:
-                {
-                    bool cured = false;
-                    if (remainingPatients > 0 && medicineLeft > 0)
-                    {
-                        float cureChance = ResidentProfessionEffectRules.ScaleMedicineCureChance(
-                            (float)medicineLeft / remainingPatients,
-                            doctorCoverage);
-                        remainingPatients--;
-                        if (Random.value < cureChance && global != null && global.TryConsumeMedicine(1))
-                        {
-                            medicineLeft--;
-                            ResidentDiseaseRules.BeginTreatment(ref r);
-                            cured = true;
-                        }
-                    }
-                    else if (remainingPatients > 0)
-                    {
-                        remainingPatients--;
-                    }
-
-                    if (!cured && TickActiveInfection(ref r, naturalRecoveryChance, doctorCoverage))
+                    if (TickActiveInfection(
+                        ref r,
+                        naturalRecoveryChance,
+                        GetClinicCoverage(in r, buildings, buildingCount)))
                         deaths++;
                     break;
-                }
 
                 case HealthStatus.Treated:
                     TickTreatment(ref r);
@@ -117,6 +97,43 @@ public static class ResidentDiseaseSystem
         }
 
         return deaths;
+    }
+
+    private static void TryInfectHealthy(ref ResidentData r, float cityChance)
+    {
+        float originMult = ResidentSocialRules.GetInfectionChanceMultiplier(r.originRegion);
+        float chance = cityChance * originMult;
+        DiseaseType contactType = DiseaseType.None;
+
+        if (r.assignedHouseID >= 0)
+        {
+            DiseaseType houseType = ContactByBuildingId[(ushort)r.assignedHouseID];
+            if (houseType != DiseaseType.None)
+            {
+                chance += HouseContactChance * originMult;
+                contactType = houseType;
+            }
+        }
+
+        if (r.assignedWorkID >= 0)
+        {
+            DiseaseType workType = ContactByBuildingId[(ushort)r.assignedWorkID];
+            if (workType != DiseaseType.None)
+            {
+                chance += WorkContactChance * originMult;
+                contactType = workType;
+            }
+        }
+
+        if (chance > MaxContactChance)
+            chance = MaxContactChance;
+
+        if (chance <= 0f || Random.value >= chance)
+            return;
+
+        ResidentDiseaseRules.Infect(
+            ref r,
+            contactType != DiseaseType.None ? contactType : ResidentDiseaseRules.RollRandomDisease());
     }
 
     private static void TickIncubation(ref ResidentData r)
@@ -161,5 +178,96 @@ public static class ResidentDiseaseSystem
 
         if (r.recoveryMonths >= ResidentDiseaseRules.GetRecoveryLength(r.diseaseType))
             ResidentDiseaseRules.ClearDisease(ref r);
+    }
+
+    private static void MarkContactBuilding(short buildingId, DiseaseType type)
+    {
+        if (buildingId < 0 || type == DiseaseType.None)
+            return;
+
+        ushort id = (ushort)buildingId;
+        if (ContactDirty[id])
+            return;
+
+        ContactDirty[id] = true;
+        ContactByBuildingId[id] = type;
+        if (dirtyCount < DirtyBuildingIds.Length)
+            DirtyBuildingIds[dirtyCount++] = id;
+    }
+
+    private static void ClearContactMarks()
+    {
+        for (int i = 0; i < dirtyCount; i++)
+        {
+            ushort id = DirtyBuildingIds[i];
+            ContactByBuildingId[id] = DiseaseType.None;
+            ContactDirty[id] = false;
+        }
+
+        dirtyCount = 0;
+    }
+
+    private static void CacheClinicCoverage(
+        ResidentData[] residents,
+        int activeCount,
+        BuildingData[] buildings,
+        int buildingCount)
+    {
+        for (int i = 0; i < buildingCount; i++)
+        {
+            ClinicDoctorPower[i] = 0f;
+            ClinicPatientCount[i] = 0;
+        }
+
+        if (buildings == null || buildingCount <= 0)
+            return;
+
+        for (int i = 0; i < activeCount; i++)
+        {
+            ref ResidentData r = ref residents[i];
+            if (!r.isAlive || r.assignedWorkID < 0)
+                continue;
+
+            int index = FindBuildingIndexById(buildings, buildingCount, (ushort)r.assignedWorkID);
+            if (index < 0 || buildings[index].buildingType != BuildingType.Clinic)
+                continue;
+
+            if (ResidentProfessionEffectRules.IsWorkingDoctor(in r))
+                ClinicDoctorPower[index] += r.WorkMultiplier;
+
+            if (r.healthStatus == HealthStatus.ActiveInfected)
+                ClinicPatientCount[index]++;
+        }
+    }
+
+    private static float GetClinicCoverage(
+        in ResidentData resident,
+        BuildingData[] buildings,
+        int buildingCount)
+    {
+        if (buildings == null || resident.assignedWorkID < 0)
+            return 0f;
+
+        int index = FindBuildingIndexById(buildings, buildingCount, (ushort)resident.assignedWorkID);
+        if (index < 0 || buildings[index].buildingType != BuildingType.Clinic)
+            return 0f;
+
+        return ResidentProfessionEffectRules.GetDoctorCoverage(
+            ClinicDoctorPower[index],
+            ClinicPatientCount[index]);
+    }
+
+    private static int FindBuildingIndexById(
+        BuildingData[] buildings,
+        int buildingCount,
+        ushort buildingId)
+    {
+        for (int i = 0; i < buildingCount; i++)
+        {
+            if (buildings[i].buildingID == buildingId)
+                return i;
+        }
+
+        return -1;
     }
 }

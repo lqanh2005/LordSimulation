@@ -42,10 +42,11 @@ public static class ResidentAssignmentSystem
                 continue;
             }
 
-            if ((!ResidentAssignmentRules.CanWork(in r)
+            if (r.assignedWorkID >= 0
+                && !ResidentAssignmentRules.NeedsClinicCare(in r)
+                && (!ResidentAssignmentRules.CanWork(in r)
                     && !ResidentAssignmentRules.CanStudy(in r)
-                    || ResidentAssignmentRules.IsHousedInQuarantine(in r, buildings, buildingCount))
-                && r.assignedWorkID >= 0)
+                    || ResidentAssignmentRules.IsHousedInQuarantine(in r, buildings, buildingCount)))
                 ResidentAssignmentRules.ClearWorkAssignment(ref r);
 
             if (r.assignedHouseID >= 0)
@@ -93,11 +94,14 @@ public static class ResidentAssignmentSystem
 
     private static bool IsStillValidWorkplace(in ResidentData resident, in BuildingData building)
     {
-        if (!ResidentAssignmentRules.CanWork(in resident)
-            && !ResidentAssignmentRules.CanStudy(in resident))
+        if (!ResidentAssignmentRules.IsBuildingAcceptingResidents(in building))
             return false;
 
-        if (!ResidentAssignmentRules.IsBuildingAcceptingResidents(in building))
+        if (ResidentAssignmentRules.NeedsClinicCare(in resident))
+            return building.buildingType == BuildingType.Clinic;
+
+        if (!ResidentAssignmentRules.CanWork(in resident)
+            && !ResidentAssignmentRules.CanStudy(in resident))
             return false;
 
         BuildingType preferred = ResidentAssignmentRules.GetPreferredWorkplace(resident.professionType);
@@ -134,7 +138,8 @@ public static class ResidentAssignmentSystem
         for (int i = 0; i < residentCount; i++)
         {
             ref ResidentData r = ref residents[i];
-            if (ResidentAssignmentRules.IsHousedInQuarantine(in r, buildings, buildingCount))
+            if (ResidentAssignmentRules.IsHousedInQuarantine(in r, buildings, buildingCount)
+                && !ResidentAssignmentRules.NeedsClinicCare(in r))
                 continue;
             if (!ResidentAssignmentRules.NeedsWorkplace(in r))
                 continue;

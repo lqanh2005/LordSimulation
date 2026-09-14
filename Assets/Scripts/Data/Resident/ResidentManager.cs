@@ -292,9 +292,14 @@ public class ResidentManager : MonoBehaviour
 
     public void ProcessMonthlyDisease(float diseasePressure)
     {
+        if (buildingManager == null)
+            ResolveDependencies();
+
         ResidentDiseaseSystem.ProcessMonthly(
             allResidents,
             activeCount,
+            buildingManager != null ? buildingManager.allBuildings : null,
+            buildingManager != null ? buildingManager.activeCount : 0,
             diseasePressure,
             diseaseSpreadFactor,
             naturalRecoveryChance,
@@ -572,7 +577,7 @@ public class ResidentManager : MonoBehaviour
     private Vector3 ResolveCommuteTarget(in ResidentData data)
     {
         Vector3 home = ResolveHouseWorld(in data) + SlotOffset(data.residentID, 0);
-        if (data.healthStatus == HealthStatus.ActiveInfected || data.assignedWorkID < 0)
+        if (data.assignedWorkID < 0)
             return home;
 
         float progress = 0.5f;

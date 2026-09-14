@@ -3,6 +3,9 @@ using UnityEngine;
 public static class ResidentProfessionEffectSystem
 {
     private static readonly float[] TeacherPowerByBuilding = new float[BuildingManager.MAX_BUILDINGS];
+    private static readonly float[] DoctorPowerByBuilding = new float[BuildingManager.MAX_BUILDINGS];
+    private static readonly int[] DoctorTokensByBuilding = new int[BuildingManager.MAX_BUILDINGS];
+    private static readonly int[] DoctorCountByBuilding = new int[BuildingManager.MAX_BUILDINGS];
 
     public static void ProcessMonthly(
         ResidentData[] residents,
@@ -14,7 +17,7 @@ public static class ResidentProfessionEffectSystem
         if (residents == null)
             return;
 
-        ApplyDoctorCare(residents, residentCount, global);
+        ApplyDoctorCare(residents, residentCount, buildings, buildingCount, global);
         ApplySchooling(residents, residentCount, buildings, buildingCount);
         ApplyGuardPatrol(residents, residentCount, global);
     }
@@ -22,11 +25,19 @@ public static class ResidentProfessionEffectSystem
     private static void ApplyDoctorCare(
         ResidentData[] residents,
         int residentCount,
+        BuildingData[] buildings,
+        int buildingCount,
         GlobalSystemManager global)
     {
-        int doctorCount = 0;
-        int careTokens = 0;
-        float powerSum = 0f;
+        if (buildings == null || buildingCount <= 0)
+            return;
+
+        for (int i = 0; i < buildingCount; i++)
+        {
+            DoctorPowerByBuilding[i] = 0f;
+            DoctorTokensByBuilding[i] = 0;
+            DoctorCountByBuilding[i] = 0;
+        }
 
         for (int i = 0; i < residentCount; i++)
         {
@@ -34,24 +45,38 @@ public static class ResidentProfessionEffectSystem
             if (!ResidentProfessionEffectRules.IsWorkingDoctor(in doctor))
                 continue;
 
-            doctorCount++;
-            powerSum += doctor.WorkMultiplier;
-            careTokens += ResidentProfessionEffectRules.GetDoctorCareTokens(in doctor);
+            int clinicIndex = FindBuildingIndexById(
+                buildings, buildingCount, (ushort)doctor.assignedWorkID);
+            if (clinicIndex < 0 || buildings[clinicIndex].buildingType != BuildingType.Clinic)
+                continue;
+
+            DoctorCountByBuilding[clinicIndex]++;
+            DoctorPowerByBuilding[clinicIndex] += doctor.WorkMultiplier;
+            DoctorTokensByBuilding[clinicIndex] += ResidentProfessionEffectRules.GetDoctorCareTokens(in doctor);
         }
 
-        if (careTokens <= 0)
-            return;
-
-        float treatChance = ResidentProfessionEffectRules.GetUnmedicatedTreatChance(
-            doctorCount > 0 ? powerSum / doctorCount : 0f);
-
-        for (int i = 0; i < residentCount && careTokens > 0; i++)
+        for (int i = 0; i < residentCount; i++)
         {
             ref ResidentData patient = ref residents[i];
             if (!patient.isAlive || patient.healthStatus != HealthStatus.ActiveInfected)
                 continue;
+            if (patient.assignedWorkID < 0)
+                continue;
 
-            careTokens--;
+            int clinicIndex = FindBuildingIndexById(
+                buildings, buildingCount, (ushort)patient.assignedWorkID);
+            if (clinicIndex < 0 || buildings[clinicIndex].buildingType != BuildingType.Clinic)
+                continue;
+
+            int tokens = DoctorTokensByBuilding[clinicIndex];
+            if (tokens <= 0)
+                continue;
+
+            DoctorTokensByBuilding[clinicIndex] = tokens - 1;
+
+            int doctorCount = DoctorCountByBuilding[clinicIndex];
+            float treatChance = ResidentProfessionEffectRules.GetUnmedicatedTreatChance(
+                doctorCount > 0 ? DoctorPowerByBuilding[clinicIndex] / doctorCount : 0f);
 
             bool treated = false;
             if (global != null && global.TryConsumeMedicine(1))

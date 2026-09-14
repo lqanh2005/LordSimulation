@@ -52,7 +52,8 @@ public static class ResidentProfessionRules
         if (resident.GetAgeGroup() != AgeGroupType.Adult)
             return false;
 
-        if (resident.healthStatus == HealthStatus.ActiveInfected)
+        if (resident.healthStatus == HealthStatus.ActiveInfected
+            || resident.healthStatus == HealthStatus.Treated)
             return false;
 
         return true;
