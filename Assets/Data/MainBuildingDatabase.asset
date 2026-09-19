@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a464e877595993144a9b7e932df5b8fe, type: 3}
+  m_Name: MainBuildingDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingDatabase
+  allConfigs:
+  - type: 1
+    displayName: NhaDan
+    size: 1
+    costWood: 50
+    costGold: 100
+    visualPrefab: {fileID: 4266857400868516723, guid: cf14471cf5c76e14e81cfc8ff71197db, type: 3}
+  - type: 3
+    displayName: farm
+    size: 2
+    costWood: 90
+    costGold: 1000
+    visualPrefab: {fileID: 2689643035951253611, guid: 093e7ad8b6d804a409ef320826bde164, type: 3}
+  - type: 6
+    displayName: furnace
+    size: 3
+    costWood: 1
+    costGold: 12212
+    visualPrefab: {fileID: 6641003679118375568, guid: 34016351a2d8abc44b68a899fbda5f9a, type: 3}
