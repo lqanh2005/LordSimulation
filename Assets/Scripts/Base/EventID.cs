@@ -6,7 +6,7 @@ public enum EventID
 
     MonthChanged = 100,
     YearChanged = 101,
-    WeatherChanged = 102,
+    OnWeatherChanged = 102,
 
     ResourcesChanged = 200,
     HungerResolved = 201,

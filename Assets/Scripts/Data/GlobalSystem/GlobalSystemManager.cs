@@ -299,7 +299,7 @@ public class GlobalSystemManager : MonoBehaviour
 
     private void PostWeatherChanged()
     {
-        GameEvents.Post(EventID.WeatherChanged, new WeatherChangedPayload
+        GameEvents.Post(EventID.OnWeatherChanged, new WeatherChangedPayload
         {
             weather = data.currentWeather,
             temperature = data.environmentTemperature

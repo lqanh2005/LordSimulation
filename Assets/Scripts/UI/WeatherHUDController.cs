@@ -27,12 +27,9 @@ public class WeatherHUDController : MonoBehaviour
 
         if (globalSystemManager != null)
         {
-            globalSystemManager.Init();
+            GameEvents.Unlisten(EventID.OnWeatherChanged, OnWeatherChanged);
+            GameEvents.Listen(EventID.OnWeatherChanged, OnWeatherChanged);
 
-            // Đăng ký lắng nghe sự kiện thời tiết & nhiệt độ thay đổi
-            globalSystemManager.OnWeatherChanged += HandleWeatherChanged;
-
-            // Cập nhật giao diện lần đầu khi mở game
             ref GlobalSystemData data = ref globalSystemManager.GetGlobalDataRef();
             HandleWeatherChanged(data.currentWeather, data.environmentTemperature);
         }
@@ -40,10 +37,13 @@ public class WeatherHUDController : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (globalSystemManager != null)
-        {
-            globalSystemManager.OnWeatherChanged -= HandleWeatherChanged;
-        }
+        GameEvents.Unlisten(EventID.OnWeatherChanged, OnWeatherChanged);
+    }
+
+    private void OnWeatherChanged(object param)
+    {
+        WeatherChangedPayload payload = (WeatherChangedPayload)param;
+        HandleWeatherChanged(payload.weather, payload.temperature);
     }
 
     // ==========================================

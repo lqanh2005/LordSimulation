@@ -37,13 +37,11 @@ public class TopBarHUDController : MonoBehaviour
 
         if (globalSystemManager != null)
         {
-            globalSystemManager.Init();
+            GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
+            GameEvents.Unlisten(EventID.ResourcesChanged, OnResourcesChanged);
+            GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
+            GameEvents.Listen(EventID.ResourcesChanged, OnResourcesChanged);
 
-            // Đăng ký sự kiện từ GlobalSystemManager
-            globalSystemManager.OnMonthChanged += HandleMonthChanged;
-            globalSystemManager.OnResourcesChanged += HandleResourcesChanged;
-
-            // Làm mới giao diện lần đầu
             RefreshAllUI();
         }
         else
@@ -54,16 +52,20 @@ public class TopBarHUDController : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (globalSystemManager != null)
-        {
-            globalSystemManager.OnMonthChanged -= HandleMonthChanged;
-            globalSystemManager.OnResourcesChanged -= HandleResourcesChanged;
-        }
+        GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
+        GameEvents.Unlisten(EventID.ResourcesChanged, OnResourcesChanged);
     }
 
-    // ==========================================
-    // CÁC HÀM XỬ LÝ SỰ KIỆN (EVENT HANDLERS)
-    // ==========================================
+    private void OnMonthChanged(object param)
+    {
+        MonthChangedPayload payload = (MonthChangedPayload)param;
+        HandleMonthChanged(payload.year, payload.month, payload.season);
+    }
+
+    private void OnResourcesChanged(object param)
+    {
+        UpdateResourceDisplay();
+    }
 
     private void HandleMonthChanged(int year, byte month, SeasonType season)
     {
@@ -93,11 +95,6 @@ public class TopBarHUDController : MonoBehaviour
                 _ => null
             };
         }
-    }
-
-    private void HandleResourcesChanged()
-    {
-        UpdateResourceDisplay();
     }
 
     // ==========================================
