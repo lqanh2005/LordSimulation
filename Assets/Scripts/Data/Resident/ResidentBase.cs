@@ -34,7 +34,7 @@ public class ResidentBase : MonoBehaviour
     [SerializeField] private float elderlyScale = 0.9f;
 
     [Header("Overlay")]
-    [SerializeField] private Vector3 overlayOffset = new Vector3(0f, 0.55f, 0f);
+    [SerializeField] private Vector3 overlayOffset = new Vector3(0f, 1.22f, 0f);
     [SerializeField] private Color overlayColor = new Color(1f, 0.95f, 0.8f);
 
     public int DataIndex { get; private set; } = -1;
@@ -42,6 +42,12 @@ public class ResidentBase : MonoBehaviour
     public bool IsBound => DataIndex >= 0;
 
     private TextMesh _overlay;
+
+    private void Awake()
+    {
+        if (spriteRenderer == null)
+            spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+    }
 
     private void Reset()
     {
@@ -97,10 +103,13 @@ public class ResidentBase : MonoBehaviour
     {
         Vector3 current = transform.position;
         Vector3 next = Vector3.MoveTowards(current, target, step);
+        next.z = 0f;
         transform.position = next;
 
         if (spriteRenderer == null)
             return;
+
+        spriteRenderer.sortingOrder = 50 - Mathf.RoundToInt(next.y * 40f);
 
         float dx = target.x - current.x;
         if (dx > 0.02f)

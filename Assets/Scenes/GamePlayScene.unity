@@ -316199,6 +316199,7 @@ MonoBehaviour:
   poolPreloadCount: 32
   starveDeathChance: 0.1
   hungerHappinessPenalty: 0.1
+  isometricGrid: {fileID: 0}
   gridOrigin: {x: 0, y: 0}
   cellSize: 1
 --- !u!1660057539 &9223372036854775807

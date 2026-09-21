@@ -89,6 +89,18 @@ public class PlacementManager : MonoBehaviour
         }
     }
 
+    public bool PlaceAt(Vector3Int originCell3D, BuildingType type)
+    {
+        if (database == null)
+            return false;
+
+        BuildingConfig config = database.GetConfig(type);
+        if (config == null)
+            return false;
+
+        return TryPlaceBuilding(originCell3D, config);
+    }
+
     private bool CheckAreaAvailable(Vector2Int origin, int size)
     {
         for (int x = 0; x < size; x++)
@@ -108,15 +120,14 @@ public class PlacementManager : MonoBehaviour
         return true;
     }
 
-    void TryPlaceBuilding(Vector3Int originCell3D, BuildingConfig config)
+    bool TryPlaceBuilding(Vector3Int originCell3D, BuildingConfig config)
     {
         Vector2Int checkOrigin = new Vector2Int(originCell3D.x, originCell3D.y);
 
-        // Kiểm tra an toàn trước khi đặt
         if (!CheckAreaAvailable(checkOrigin, config.size))
         {
             Debug.LogWarning("[Quy Hoạch] Vướng đất rồi, không thể xây đè!");
-            return;
+            return false;
         }
 
         ref GlobalSystemData globalData = ref globalSystemManager.GetGlobalDataRef();
@@ -124,7 +135,7 @@ public class PlacementManager : MonoBehaviour
         if (globalData.stockWood < config.costWood || globalData.treasuryGold < config.costGold)
         {
             Debug.LogWarning($"[Tài Chính] Nghèo! Cần {config.costWood} Gỗ và {config.costGold} Vàng.");
-            return;
+            return false;
         }
 
         globalData.stockWood -= config.costWood;
@@ -168,6 +179,9 @@ public class PlacementManager : MonoBehaviour
             }
 
             Debug.Log($"[Xây Dựng] Đã cook {config.displayName} thành công!");
+            return true;
         }
+
+        return false;
     }
 }

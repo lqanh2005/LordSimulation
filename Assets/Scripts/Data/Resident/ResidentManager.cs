@@ -31,6 +31,7 @@ public class ResidentManager : MonoBehaviour
     [SerializeField] [Range(0f, 1f)] private float naturalRecoveryChance = 0.08f;
 
     [Header("Grid → World")]
+    [SerializeField] private Grid isometricGrid;
     [SerializeField] private Vector2 gridOrigin;
     [SerializeField] private float cellSize = 1f;
 
@@ -116,7 +117,50 @@ public class ResidentManager : MonoBehaviour
         if (allResidents[index].professionType == ProfessionType.None)
             allResidents[index].professionType = ResidentProfessionRules.GetInitialProfession(in allResidents[index]);
         activeCount++;
+        TrySpawnVisual(index, in allResidents[index]);
         return index;
+    }
+
+    public void ConfigureVisualWorld(
+        Grid grid,
+        Transform root,
+        ResidentBase prefab,
+        BuildingManager buildings,
+        GlobalSystemManager global,
+        float commute = -1f)
+    {
+        isometricGrid = grid;
+        visualRoot = root;
+        residentPrefab = prefab;
+        buildingManager = buildings;
+        globalSystemManager = global;
+        if (commute > 0f)
+            commuteSpeed = commute;
+    }
+
+    public Vector3 GetBuildingWorldPosition(in BuildingData building)
+    {
+        int size = Mathf.Max(1, building.sizeFootprint);
+        return CellToWorld(building.coordX, building.coordY, size);
+    }
+
+    public Vector3 CellToWorld(int cellX, int cellY, int size = 1)
+    {
+        size = Mathf.Max(1, size);
+        if (isometricGrid != null)
+        {
+            Vector3Int origin = new Vector3Int(cellX, cellY, 0);
+            Vector3Int top = origin + new Vector3Int(size - 1, size - 1, 0);
+            Vector3 world = (isometricGrid.GetCellCenterWorld(origin) + isometricGrid.GetCellCenterWorld(top)) * 0.5f;
+            world.z = 0f;
+            return world;
+        }
+
+        return new Vector3(
+            gridOrigin.x + cellX * cellSize,
+            gridOrigin.y + cellY * cellSize,
+            0f
+        );
     }
 
     public int PeekMaxResidentId()
@@ -598,7 +642,7 @@ public class ResidentManager : MonoBehaviour
             if (houseIndex >= 0)
             {
                 ref BuildingData house = ref buildingManager.GetBuildingRef(houseIndex);
-                return GridToWorld(house.coordX, house.coordY);
+                return GetBuildingWorldPosition(in house);
             }
         }
 
@@ -613,7 +657,7 @@ public class ResidentManager : MonoBehaviour
             if (workIndex >= 0)
             {
                 ref BuildingData work = ref buildingManager.GetBuildingRef(workIndex);
-                return GridToWorld(work.coordX, work.coordY);
+                return GetBuildingWorldPosition(in work);
             }
         }
 
@@ -632,15 +676,6 @@ public class ResidentManager : MonoBehaviour
     {
         int fallbackX = residentId % 20;
         int fallbackY = (residentId / 20) % 20;
-        return GridToWorld((ushort)fallbackX, (ushort)fallbackY);
-    }
-
-    private Vector3 GridToWorld(ushort coordX, ushort coordY)
-    {
-        return new Vector3(
-            gridOrigin.x + coordX * cellSize,
-            gridOrigin.y + coordY * cellSize,
-            0f
-        );
+        return CellToWorld(fallbackX, fallbackY);
     }
 }
