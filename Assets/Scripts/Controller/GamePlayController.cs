@@ -23,10 +23,10 @@ public class GamePlayController : Singleton<GamePlayController>
 
     private void Init()
     {
-        playerContain.Init();
-        if (GameController.Instance.saveLoadManager.HasSaveFile())
-            GameController.Instance.saveLoadManager.LoadGame();
-        else
-            playerContain.globalSystemManager.InitializeNewGame();
+        // playerContain.Init();
+        // if (GameController.Instance.saveLoadManager.HasSaveFile())
+        //     GameController.Instance.saveLoadManager.LoadGame();
+        // else
+        //     playerContain.globalSystemManager.InitializeNewGame();
     }
 }

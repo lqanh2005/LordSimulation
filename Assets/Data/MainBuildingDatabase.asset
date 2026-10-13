@@ -31,3 +31,9 @@ MonoBehaviour:
     costWood: 1
     costGold: 12212
     visualPrefab: {fileID: 6641003679118375568, guid: 34016351a2d8abc44b68a899fbda5f9a, type: 3}
+  - type: 10
+    displayName: "L\u1EC1u t\u1EA1m"
+    size: 1
+    costWood: 10
+    costGold: 0
+    visualPrefab: {fileID: 5810923347621001, guid: 3500cf605fb4413992f00da3f037be35, type: 3}

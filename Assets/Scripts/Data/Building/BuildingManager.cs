@@ -9,6 +9,9 @@ public class BuildingManager : MonoBehaviour
     public BuildingData[] allBuildings = new BuildingData[MAX_BUILDINGS];
     public int activeCount = 0;
 
+    [Header("Hiển Thị")]
+    public PlacementManager placementManager;
+
     public int AddBuilding(in BuildingData newBuilding)
     {
         if (activeCount >= MAX_BUILDINGS)
@@ -46,6 +49,17 @@ public class BuildingManager : MonoBehaviour
     // Hook tái dựng Prefab nhà cửa sau khi nạp file save
     public void RebuildVisualCity()
     {
+        if (placementManager == null)
+        {
+            placementManager = FindFirstObjectByType<PlacementManager>();
+        }
+
+        if (placementManager != null)
+        {
+            placementManager.RebuildVisuals();
+        }
+
+
         Debug.Log($"[BuildingManager] Đã tái tạo {activeCount} công trình lên lưới Grid.");
     }
 }

@@ -21,7 +21,26 @@ public enum EventID
     LoadCompleted = 304,
     LoadFailed = 305,
 
-    ImmigrationQueueChanged = 400
+    ImmigrationQueueChanged = 400,
+
+    BuildingPlaced = 500,
+    BuildingPlaceFailed = 501
+}
+
+public enum BuildingPlaceFailReason : byte
+{
+    None = 0,
+    Blocked = 1,
+    NotEnoughResources = 2,
+    CapacityFull = 3
+}
+
+public struct BuildingPlaceFailedPayload
+{
+    public BuildingType type;
+    public BuildingPlaceFailReason reason;
+    public int missingWood;
+    public int missingGold;
 }
 
 public struct MonthChangedPayload
