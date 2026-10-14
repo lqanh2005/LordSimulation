@@ -16,7 +16,7 @@ public class GamePlayController : Singleton<GamePlayController>
     public GameState State;
     public PlayerContain playerContain;
     public GameScene scene;
-    private void Awake()
+    protected override void OnAwake()
     {
         Init();
     }

@@ -6,7 +6,10 @@ public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour
 {
     public static T Instance;
     public bool m_DontDestroyOnLoad = true;
-    private void Awake()
+
+    public static bool HasInstance => Instance != null;
+
+    protected void Awake()
     {
         if (Instance == null)
         {
@@ -26,14 +29,21 @@ public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour
         }
         OnAwake();
     }
-    void OnDestroy()
+
+    protected void OnDestroy()
     {
         if (Instance == this)
         {
             Instance = null;
         }
+        OnDestroyed();
     }
+
     protected virtual void OnAwake()
+    {
+    }
+
+    protected virtual void OnDestroyed()
     {
     }
 }

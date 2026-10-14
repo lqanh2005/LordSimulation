@@ -4,7 +4,7 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 3;
+    public const int SaveVersion = 4;
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,
@@ -137,7 +137,7 @@ public static class CitySaveSerializer
             throw new InvalidDataException($"[SaveSerializer] edictCount ({edictCount}) vượt giới hạn mảng ({edicts.Length}).");
         for (int i = 0; i < edictCount; i++)
         {
-            EdictDataSerializer.ReadEdict(reader, out edicts[i]);
+            EdictDataSerializer.ReadEdict(reader, out edicts[i], version);
         }
 
         // 6. Trade Routes

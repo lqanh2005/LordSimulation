@@ -152,6 +152,8 @@ public class SaveLoadManager : MonoBehaviour
         PlayerContain contain = GamePlayController.Instance.playerContain;
         if (contain.immigrationManager != null)
             contain.immigrationManager.SetSuppressArrivals(true);
+        if (contain.edictManager != null)
+            contain.edictManager.SetSuppressEffects(true);
 
         try
         {
@@ -185,6 +187,7 @@ public class SaveLoadManager : MonoBehaviour
             contain.residentManager.RebindAllVisualAgents();
             contain.buildingManager.RebuildVisualCity();
             contain.immigrationManager.RefreshAfterLoad();
+            contain.edictManager.RefreshAfterLoad();
 
             Debug.Log("[SaveLoadManager] Nạp game thành công!");
             GameEvents.Post(EventID.LoadCompleted);
@@ -198,6 +201,8 @@ public class SaveLoadManager : MonoBehaviour
         {
             if (contain.immigrationManager != null)
                 contain.immigrationManager.SetSuppressArrivals(false);
+            if (contain.edictManager != null)
+                contain.edictManager.SetSuppressEffects(false);
         }
     }
 

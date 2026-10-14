@@ -20,10 +20,7 @@ public class WeatherHUDController : MonoBehaviour
 
     private void Start()
     {
-        if (globalSystemManager == null)
-        {
-            globalSystemManager = FindObjectOfType<GlobalSystemManager>();
-        }
+        globalSystemManager = HUDLocator.ResolveGlobalSystem(globalSystemManager);
 
         if (globalSystemManager != null)
         {

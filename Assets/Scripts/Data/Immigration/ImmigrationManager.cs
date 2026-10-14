@@ -270,19 +270,16 @@ public class ImmigrationManager : MonoBehaviour
         if (edictManager == null || globalSystemManager == null)
             return ImmigrationRules.DefaultTariffPercent;
 
-        if (!EdictRules.TryGetSuggestedAction(
+        if (!EdictRules.TryResolveImmigration(
                 edictManager.allEdicts,
                 edictManager.activeCount,
                 in applicant,
                 in globalSystemManager.GetGlobalDataRef(),
-                out _,
-                out int edictIndex))
+                out RuleActionData action,
+                out _))
             return ImmigrationRules.DefaultTariffPercent;
 
-        if (edictIndex < 0)
-            return ImmigrationRules.DefaultTariffPercent;
-
-        float tariff = edictManager.GetEdictRef(edictIndex).tariffPercent;
+        float tariff = EdictRules.GetTariffPercent(in action);
         return tariff > 0f ? tariff : ImmigrationRules.DefaultTariffPercent;
     }
 

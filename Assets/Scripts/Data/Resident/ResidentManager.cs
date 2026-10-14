@@ -17,6 +17,7 @@ public class ResidentManager : MonoBehaviour
     [SerializeField] private Transform visualRoot;
     [SerializeField] private BuildingManager buildingManager;
     [SerializeField] private GlobalSystemManager globalSystemManager;
+    [SerializeField] private EdictManager edictManager;
     [SerializeField] private int maxVisualAgents = 200;
     [SerializeField] private int poolPreloadCount = 32;
     [SerializeField] private float commuteSpeed = 2.5f;
@@ -96,6 +97,8 @@ public class ResidentManager : MonoBehaviour
             buildingManager = contain.buildingManager;
         if (globalSystemManager == null)
             globalSystemManager = contain.globalSystemManager;
+        if (edictManager == null)
+            edictManager = contain.edictManager;
     }
 
     public int AddResident(in ResidentData newResident)
@@ -371,6 +374,15 @@ public class ResidentManager : MonoBehaviour
             activeCount,
             buildingManager.allBuildings,
             buildingManager.activeCount);
+
+        ResidentProductionSystem.ProcessMonthly(
+            allResidents,
+            activeCount,
+            buildingManager.allBuildings,
+            buildingManager.activeCount,
+            season,
+            globalSystemManager,
+            edictManager);
 
         ResidentProfessionEffectSystem.ProcessMonthly(
             allResidents,

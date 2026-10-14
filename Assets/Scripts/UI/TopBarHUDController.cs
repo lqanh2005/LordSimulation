@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,13 +28,18 @@ public class TopBarHUDController : MonoBehaviour
     [Header("Chỉ Số Dân Sinh (Ở Giữa TopBar)")]
     [SerializeField] private TMP_Text txtPopulation;       // "Dân: 120"
     [SerializeField] private TMP_Text txtHappiness;        // "Vui: 75%"
+    [SerializeField] private TMP_Text txtInfection;        // "Dịch bệnh: 3%"
+
+    [Header("Thanh Đo Bạo Loạn")]
+    [SerializeField] private Image imgRiotFill;            // Image Type = Filled
+    [SerializeField] private Slider sliderRiot;            // Dùng thay Image nếu thích
+    [SerializeField] private TMP_Text txtRiot;             // "Bạo loạn: 35%"
+    [SerializeField] private Gradient riotGradient = CreateDefaultRiotGradient();
+    [SerializeField, Range(0f, 100f)] private float riotWarningThreshold = 70f;
 
     private void Start()
     {
-        if (globalSystemManager == null)
-        {
-            globalSystemManager = FindObjectOfType<GlobalSystemManager>();
-        }
+        globalSystemManager = HUDLocator.ResolveGlobalSystem(globalSystemManager);
 
         if (globalSystemManager != null)
         {
@@ -110,7 +116,7 @@ public class TopBarHUDController : MonoBehaviour
         // 1. Cập nhật ngày tháng và icon mùa
         HandleMonthChanged(data.currentYear, data.currentMonth, data.CurrentSeason);
 
-        // 2. Cập nhật tài nguyên & dân sinh
+        // 2. Cập nhật tài nguyên, dân sinh & bạo loạn
         UpdateResourceDisplay();
     }
 
@@ -129,8 +135,66 @@ public class TopBarHUDController : MonoBehaviour
         if (txtMedicine != null) txtMedicine.text = FormatNumber(data.stockMedicine);
 
         // Cập nhật chỉ số dân sinh
-        if (txtPopulation != null) txtPopulation.text = $"{data.totalPopulation}";
+        if (txtPopulation != null) txtPopulation.text = FormatNumber(data.totalPopulation);
         if (txtHappiness != null) txtHappiness.text = $"{data.overallHappiness:F0}%";
+        if (txtInfection != null)
+        {
+            float infectedPercent = data.totalPopulation > 0 ? data.totalInfected * 100f / data.totalPopulation : 0f;
+            txtInfection.text = $"{infectedPercent:F0}%";
+        }
+
+        UpdateRiotMeter(data.riotRiskMeter);
+    }
+
+    private void UpdateRiotMeter(float riotRisk)
+    {
+        float percent = Mathf.Clamp(riotRisk, 0f, 100f);
+        float normalized = percent / 100f;
+        Color color = riotGradient != null ? riotGradient.Evaluate(normalized) : Color.white;
+
+        if (imgRiotFill != null)
+        {
+            imgRiotFill.fillAmount = normalized;
+            imgRiotFill.color = color;
+        }
+
+        if (sliderRiot != null)
+        {
+            sliderRiot.minValue = 0f;
+            sliderRiot.maxValue = 1f;
+            sliderRiot.SetValueWithoutNotify(normalized);
+
+            if (sliderRiot.fillRect != null && sliderRiot.fillRect.TryGetComponent(out Image fill))
+            {
+                fill.color = color;
+            }
+        }
+
+        if (txtRiot != null)
+        {
+            string value = $"{percent:F0}%";
+            txtRiot.text = percent >= riotWarningThreshold
+                ? $"<color=#{ColorUtility.ToHtmlStringRGB(color)}>{value}</color>"
+                : value;
+        }
+    }
+
+    private static Gradient CreateDefaultRiotGradient()
+    {
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new[]
+            {
+                new GradientColorKey(new Color(0.30f, 0.80f, 0.35f), 0f),
+                new GradientColorKey(new Color(0.95f, 0.80f, 0.20f), 0.5f),
+                new GradientColorKey(new Color(0.90f, 0.25f, 0.20f), 1f)
+            },
+            new[]
+            {
+                new GradientAlphaKey(1f, 0f),
+                new GradientAlphaKey(1f, 1f)
+            });
+        return gradient;
     }
 
     // ==========================================
@@ -138,14 +202,17 @@ public class TopBarHUDController : MonoBehaviour
     // ==========================================
     public static string FormatNumber(int value)
     {
-        if (value >= 1_000_000)
+        long abs = Math.Abs((long)value);
+        string sign = value < 0 ? "-" : string.Empty;
+
+        if (abs >= 999_950)
         {
-            return (value / 1_000_000f).ToString("0.#") + "M";
+            return sign + (abs / 1_000_000f).ToString("0.#", CultureInfo.InvariantCulture) + "M";
         }
-        if (value >= 1_000)
+        if (abs >= 1_000)
         {
-            return (value / 1_000f).ToString("0.#") + "K";
+            return sign + (abs / 1_000f).ToString("0.#", CultureInfo.InvariantCulture) + "K";
         }
-        return value.ToString();
+        return value.ToString(CultureInfo.InvariantCulture);
     }
 }

@@ -24,7 +24,10 @@ public enum EventID
     ImmigrationQueueChanged = 400,
 
     BuildingPlaced = 500,
-    BuildingPlaceFailed = 501
+    BuildingPlaceFailed = 501,
+
+    EdictsChanged = 600,
+    EdictTriggered = 601
 }
 
 public enum BuildingPlaceFailReason : byte
