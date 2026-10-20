@@ -13,4 +13,16 @@ public static class HUDLocator
 
         return Object.FindFirstObjectByType<GlobalSystemManager>();
     }
+
+    public static EdictManager ResolveEdictManager(EdictManager fallback)
+    {
+        PlayerContain contain = Object.FindFirstObjectByType<PlayerContain>();
+        if (contain != null && contain.edictManager != null)
+            return contain.edictManager;
+
+        if (fallback != null && fallback.isActiveAndEnabled)
+            return fallback;
+
+        return Object.FindFirstObjectByType<EdictManager>();
+    }
 }

@@ -107,6 +107,38 @@ public static class EdictRuleCatalog
         };
     }
 
+    public static string GetBuildingName(BuildingType type)
+    {
+        return type switch
+        {
+            BuildingType.House => "nhà ở",
+            BuildingType.QuarantineWard => "khu cách ly",
+            BuildingType.Farm => "nông nghiệp",
+            BuildingType.Mine => "khai mỏ",
+            BuildingType.Clinic => "y tế",
+            BuildingType.Furnace => "lò sưởi",
+            BuildingType.School => "giáo dục",
+            BuildingType.GuardPost => "trạm gác",
+            BuildingType.LumberCamp => "khai thác gỗ",
+            BuildingType.Tent => "lều tạm",
+            _ => type.ToString()
+        };
+    }
+
+    public static string GetResourceName(ResourceType type)
+    {
+        return type switch
+        {
+            ResourceType.Food => "lương thực",
+            ResourceType.Wood => "gỗ",
+            ResourceType.Iron => "sắt",
+            ResourceType.Coal => "than",
+            ResourceType.Medicine => "thuốc men",
+            ResourceType.Machinery => "máy móc",
+            _ => type.ToString()
+        };
+    }
+
     public static int GetParamLabels(RuleActionType type, out string param0Label, out string param1Label)
     {
         param0Label = null;
@@ -158,8 +190,8 @@ public static class EdictRuleCatalog
             RuleActionType.ImmigrationAdmit when action.param0 > 0f => $"Cho nhập cư (thuế {FormatNumber(action.param0)}%)",
             RuleActionType.ImmigrationQuarantine => $"Cách ly {FormatNumber(action.param0)} tháng",
             RuleActionType.ImmigrationEscort => $"Áp giải tới bàn thẩm vấn (-{FormatNumber(action.param0)} quyền lực)",
-            RuleActionType.BoostProduction => $"{(action.param1 >= 0f ? "Tăng" : "Giảm")} sản xuất {(BuildingType)(byte)action.param0} {FormatNumber(System.Math.Abs(action.param1))}%",
-            RuleActionType.AddResourceMonthly => $"{(action.param1 >= 0f ? "Thêm" : "Tiêu thụ")} {FormatNumber(System.Math.Abs(action.param1))} {(ResourceType)(byte)action.param0} mỗi tháng",
+            RuleActionType.BoostProduction => $"{(action.param1 >= 0f ? "Tăng" : "Giảm")} sản xuất {GetBuildingName((BuildingType)(byte)action.param0)} {FormatNumber(System.Math.Abs(action.param1))}%",
+            RuleActionType.AddResourceMonthly => $"{(action.param1 >= 0f ? "Thêm" : "Tiêu thụ")} {FormatNumber(System.Math.Abs(action.param1))} {GetResourceName((ResourceType)(byte)action.param0)} mỗi tháng",
             RuleActionType.ModifyGoldMonthly => $"{(action.param0 >= 0f ? "Thu" : "Chi")} {FormatNumber(System.Math.Abs(action.param0))} vàng mỗi tháng",
             RuleActionType.ModifyReputation => $"{(action.param0 >= 0f ? "Tăng" : "Giảm")} uy tín {FormatNumber(System.Math.Abs(action.param0))}",
             RuleActionType.ReduceRiotRisk => $"Giảm nguy cơ bạo loạn {FormatNumber(action.param0)}",

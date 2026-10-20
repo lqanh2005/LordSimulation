@@ -25,6 +25,16 @@ public class TopBarHUDController : MonoBehaviour
     [SerializeField] private TMP_Text txtIron;             // Sắt (Iron)
     [SerializeField] private TMP_Text txtMedicine;         // Thuốc men (Medicine)
 
+    [Header("Sản Lượng Tháng Trước (+12/th)")]
+    [SerializeField] private TMP_Text txtGoldRate;
+    [SerializeField] private TMP_Text txtFoodRate;
+    [SerializeField] private TMP_Text txtCoalRate;
+    [SerializeField] private TMP_Text txtWoodRate;
+    [SerializeField] private TMP_Text txtIronRate;
+    [SerializeField] private TMP_Text txtMedicineRate;
+    [SerializeField] private Color rateColor = new Color32(0x4C, 0xAF, 0x50, 0xFF);
+    [SerializeField] private Color zeroRateColor = new Color32(0x9A, 0x9A, 0x9A, 0xFF);
+
     [Header("Chỉ Số Dân Sinh (Ở Giữa TopBar)")]
     [SerializeField] private TMP_Text txtPopulation;       // "Dân: 120"
     [SerializeField] private TMP_Text txtHappiness;        // "Vui: 75%"
@@ -134,6 +144,13 @@ public class TopBarHUDController : MonoBehaviour
         if (txtIron != null) txtIron.text = FormatNumber(data.stockIron);
         if (txtMedicine != null) txtMedicine.text = FormatNumber(data.stockMedicine);
 
+        UpdateRate(txtGoldRate, 0f);
+        UpdateRate(txtFoodRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Food));
+        UpdateRate(txtCoalRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Coal));
+        UpdateRate(txtWoodRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Wood));
+        UpdateRate(txtIronRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Iron));
+        UpdateRate(txtMedicineRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Medicine));
+
         // Cập nhật chỉ số dân sinh
         if (txtPopulation != null) txtPopulation.text = FormatNumber(data.totalPopulation);
         if (txtHappiness != null) txtHappiness.text = $"{data.overallHappiness:F0}%";
@@ -144,6 +161,15 @@ public class TopBarHUDController : MonoBehaviour
         }
 
         UpdateRiotMeter(data.riotRiskMeter);
+    }
+
+    private void UpdateRate(TMP_Text text, float amount)
+    {
+        if (text == null) return;
+
+        int rounded = Mathf.RoundToInt(amount);
+        text.text = rounded > 0 ? $"+{FormatNumber(rounded)}/th" : "0/th";
+        text.color = rounded > 0 ? rateColor : zeroRateColor;
     }
 
     private void UpdateRiotMeter(float riotRisk)

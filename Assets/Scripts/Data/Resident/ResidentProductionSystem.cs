@@ -8,6 +8,13 @@ public static class ResidentProductionSystem
     private static readonly int[] BuildingIndexById = CreateIndexLookup();
     private static readonly float[] PendingByResource = new float[ResourceSlots];
     private static readonly float[] CarryByResource = new float[ResourceSlots];
+    private static readonly float[] LastOutputByResource = new float[ResourceSlots];
+
+    public static float GetLastMonthOutput(ResourceType type)
+    {
+        int index = (int)type;
+        return index >= 0 && index < ResourceSlots ? LastOutputByResource[index] : 0f;
+    }
 
     public static void ProcessMonthly(
         ResidentData[] residents,
@@ -18,6 +25,9 @@ public static class ResidentProductionSystem
         GlobalSystemManager global,
         EdictManager edicts)
     {
+        for (int i = 0; i < ResourceSlots; i++)
+            LastOutputByResource[i] = 0f;
+
         if (residents == null || buildings == null || global == null || buildingCount <= 0)
             return;
 
@@ -89,6 +99,9 @@ public static class ResidentProductionSystem
 
             building.outputStored = (ushort)Mathf.Min(ushort.MaxValue, Mathf.RoundToInt(primaryAmount));
         }
+
+        for (int i = 0; i < ResourceSlots; i++)
+            LastOutputByResource[i] = PendingByResource[i];
 
         for (int i = 0; i < ResourceSlots; i++)
         {

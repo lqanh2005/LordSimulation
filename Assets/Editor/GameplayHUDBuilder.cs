@@ -25,14 +25,30 @@ public static class GameplayHUDBuilder
     private static readonly Color ReminderColor = new Color32(0xFF, 0xF4, 0xDC, 0xFF);
     private static readonly Color WarningColor = new Color32(0xFD, 0xE0, 0xE0, 0xFF);
 
+    private static readonly Color OverlayColor = new Color(0f, 0f, 0f, 0.45f);
+    private static readonly Color PopupHeaderColor = new Color32(0x58, 0x68, 0x74, 0xFF);
+    private static readonly Color PopupSectionColor = new Color32(0xDC, 0xE1, 0xE5, 0xFF);
+    private static readonly Color PopupSectionHeaderColor = new Color32(0xC3, 0xCD, 0xD3, 0xFF);
+    private static readonly Color FieldColor = new Color32(0xEF, 0xEF, 0xEF, 0xFF);
+    private static readonly Color ChipColor = new Color32(0xC9, 0xC9, 0xC9, 0xFF);
+    private static readonly Color ChipActiveColor = new Color32(0xAF, 0xAF, 0xAF, 0xFF);
+    private static readonly Color CardColor = new Color32(0xC8, 0xC8, 0xC8, 0xFF);
+    private static readonly Color DeleteColor = new Color32(0x9A, 0x9A, 0x9A, 0xFF);
+    private static readonly Color ToggleOnColor = new Color32(0x7C, 0xB0, 0x7F, 0xFF);
+
     private static Sprite panelSprite;
     private static Sprite circleSprite;
+
+    private static void LoadSprites()
+    {
+        panelSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+        circleSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+    }
 
     [MenuItem("Tools/LordSimulation/Build Gameplay HUD")]
     public static void Build()
     {
-        panelSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-        circleSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+        LoadSprites();
 
         if (!TryOpenGameplayScene(out Scene scene))
             return;
@@ -62,9 +78,171 @@ public static class GameplayHUDBuilder
         BuildRightMenu(parent);
         BuildBottomBar(parent);
 
+        EdictPopupController edictPopup = BuildEdictPopup(parent);
+        WireButton<EdictPopupController>(parent, EdictButtonName, edictPopup.Show);
+
+        PauseMenuController pauseMenu = BuildPauseMenu(parent);
+        WireButton<PauseMenuController>(parent, PauseButtonName, pauseMenu.Show);
+
         Selection.activeGameObject = root;
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
+    }
+
+    private const string EdictPopupName = "EdictPopup";
+    private const string EdictButtonName = "Btn_Luật";
+
+    [MenuItem("Tools/LordSimulation/Add Edict Popup To Existing HUD")]
+    public static void AddEdictPopupToExistingHUD()
+    {
+        LoadSprites();
+
+        if (!TryOpenGameplayScene(out Scene scene))
+            return;
+
+        GameObject root = FindRoot(scene, RootName);
+        if (root == null)
+        {
+            EditorUtility.DisplayDialog("Edict Popup", "Không tìm thấy GameplayHUD trong GamePlayScene. Hãy chạy Build Gameplay HUD trước.", "OK");
+            return;
+        }
+
+        Transform old = root.transform.Find(EdictPopupName);
+        if (old != null)
+            Undo.DestroyObjectImmediate(old.gameObject);
+
+        EdictPopupController popup = BuildEdictPopup(root.transform);
+        Undo.RegisterCreatedObjectUndo(popup.gameObject, "Add Edict Popup");
+
+        if (!WireButton<EdictPopupController>(root.transform, EdictButtonName, popup.Show))
+            EditorUtility.DisplayDialog("Edict Popup", $"Không tìm thấy nút {EdictButtonName}. Popup đã được tạo, hãy tự gắn EdictPopupController.Show vào nút mở.", "OK");
+
+        EnsureEventSystem(scene);
+
+        Selection.activeGameObject = popup.gameObject;
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+    }
+
+    private const string PauseMenuName = "PauseMenu";
+    private const string PauseButtonName = "Btn_Cài đặt";
+
+    [MenuItem("Tools/LordSimulation/Add Pause Menu To Existing HUD")]
+    public static void AddPauseMenuToExistingHUD()
+    {
+        LoadSprites();
+
+        if (!TryOpenGameplayScene(out Scene scene))
+            return;
+
+        GameObject root = FindRoot(scene, RootName);
+        if (root == null)
+        {
+            EditorUtility.DisplayDialog("Pause Menu", "Không tìm thấy GameplayHUD trong GamePlayScene. Hãy chạy Build Gameplay HUD trước.", "OK");
+            return;
+        }
+
+        Transform old = root.transform.Find(PauseMenuName);
+        if (old != null)
+            Undo.DestroyObjectImmediate(old.gameObject);
+
+        PauseMenuController menu = BuildPauseMenu(root.transform);
+        Undo.RegisterCreatedObjectUndo(menu.gameObject, "Add Pause Menu");
+
+        if (!WireButton<PauseMenuController>(root.transform, PauseButtonName, menu.Show))
+            EditorUtility.DisplayDialog("Pause Menu", $"Không tìm thấy nút {PauseButtonName}. Menu vẫn mở được bằng phím Esc.", "OK");
+
+        EnsureEventSystem(scene);
+
+        Selection.activeGameObject = menu.gameObject;
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+    }
+
+    private static bool WireButton<T>(Transform hudRoot, string buttonName, UnityAction action) where T : Object
+    {
+        Transform buttonTransform = hudRoot.Find(buttonName);
+        Button button = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null;
+        if (button == null)
+            return false;
+
+        Undo.RecordObject(button, "Wire Popup Button");
+        for (int i = button.onClick.GetPersistentEventCount() - 1; i >= 0; i--)
+        {
+            Object target = button.onClick.GetPersistentTarget(i);
+            if (target == null || target is T)
+                UnityEventTools.RemovePersistentListener(button.onClick, i);
+        }
+
+        UnityEventTools.AddPersistentListener(button.onClick, action);
+        EditorUtility.SetDirty(button);
+        return true;
+    }
+
+    private static readonly string[] ResourceFields = { "txtWood", "txtIron", "txtFood", "txtCoal", "txtGold", "txtMedicine" };
+
+    [MenuItem("Tools/LordSimulation/Add Resource Rates To Existing HUD")]
+    public static void AddResourceRatesToExistingHUD()
+    {
+        if (!TryOpenGameplayScene(out Scene scene))
+            return;
+
+        TopBarHUDController topBar = FindInScene<TopBarHUDController>(scene);
+        if (topBar == null)
+        {
+            EditorUtility.DisplayDialog("Resource Rates", "Không tìm thấy TopBarHUDController trong GamePlayScene.", "OK");
+            return;
+        }
+
+        SerializedObject topBarSo = new SerializedObject(topBar);
+        int added = 0;
+
+        foreach (string field in ResourceFields)
+        {
+            TMP_Text value = topBarSo.FindProperty(field).objectReferenceValue as TMP_Text;
+            SerializedProperty rateProperty = topBarSo.FindProperty(field + "Rate");
+            if (value == null || rateProperty == null)
+                continue;
+
+            Transform oldRate = value.transform.parent.Find(RateObjectName);
+            if (oldRate != null)
+                Undo.DestroyObjectImmediate(oldRate.gameObject);
+
+            TextMeshProUGUI rate = CreateRateText(value);
+            Undo.RegisterCreatedObjectUndo(rate.gameObject, "Add Resource Rates");
+            rateProperty.objectReferenceValue = rate;
+            added++;
+        }
+
+        topBarSo.ApplyModifiedProperties();
+
+        if (added == 0)
+        {
+            EditorUtility.DisplayDialog("Resource Rates", "TopBarHUDController chưa gắn ô tài nguyên nào.", "OK");
+            return;
+        }
+
+        Selection.activeGameObject = topBar.gameObject;
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+    }
+
+    private const string RateObjectName = "Txt_Rate";
+
+    private static TextMeshProUGUI CreateRateText(TMP_Text value)
+    {
+        RectTransform valueRect = value.rectTransform;
+        TextMeshProUGUI rate = CreateText(RateObjectName, valueRect.parent, "0/th", Mathf.Max(11f, value.fontSize * 0.58f), HeaderColor, TextAlignmentOptions.BottomRight);
+
+        RectTransform rateRect = rate.rectTransform;
+        rateRect.anchorMin = valueRect.anchorMin;
+        rateRect.anchorMax = valueRect.anchorMax;
+        rateRect.pivot = new Vector2(1f, valueRect.pivot.y);
+        float rightEdge = valueRect.anchoredPosition.x + valueRect.sizeDelta.x * (1f - valueRect.pivot.x);
+        rateRect.anchoredPosition = new Vector2(rightEdge, valueRect.anchoredPosition.y);
+        rateRect.sizeDelta = new Vector2(Mathf.Min(64f, valueRect.sizeDelta.x), valueRect.sizeDelta.y);
+        rateRect.SetSiblingIndex(valueRect.GetSiblingIndex() + 1);
+        return rate;
     }
 
     [MenuItem("Tools/LordSimulation/Add Season Ring To Existing HUD")]
@@ -363,6 +541,7 @@ public static class GameplayHUDBuilder
             Place(value.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 1f), new Vector2(58f, 0f), new Vector2(itemWidth - 62f, 30f));
 
             SetRef(topBar, resources[i].field, value);
+            SetRef(topBar, resources[i].field + "Rate", CreateRateText(value));
         }
     }
 
@@ -499,6 +678,445 @@ public static class GameplayHUDBuilder
             TextMeshProUGUI label = CreateText("Label", btn, labels[i], 14f, TextColor, TextAlignmentOptions.Center);
             Place(label.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 6f), new Vector2(buttonSize, 20f));
         }
+    }
+
+    // ==========================================
+    // POPUP: LUẬT (TẠO LUẬT + LUẬT ĐANG HOẠT ĐỘNG)
+    // ==========================================
+    private const float PopupWidth = 1280f;
+    private const float PopupHeight = 620f;
+    private const float PopupHeaderHeight = 88f;
+    private const float SectionTop = 104f;
+    private const float SectionHeight = 488f;
+    private const float SectionHeaderHeight = 70f;
+    private const float RuleRowHeight = 51f;
+
+    private static EdictPopupController BuildEdictPopup(Transform parent)
+    {
+        RectTransform overlay = CreateRect(EdictPopupName, parent);
+        Stretch(overlay);
+        AddImage(overlay, OverlayColor, null);
+        EdictPopupController popup = overlay.gameObject.AddComponent<EdictPopupController>();
+
+        RectTransform window = CreateRect("Window", overlay);
+        Place(window, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(PopupWidth, PopupHeight));
+        AddImage(window, Color.white, null);
+
+        RectTransform header = CreateRect("Header", window);
+        Place(header, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(PopupWidth, PopupHeaderHeight));
+        AddImage(header, PopupHeaderColor, null);
+
+        TextMeshProUGUI title = CreateText("Txt_Title", header, "Luật", 34f, Color.white, TextAlignmentOptions.Center);
+        Stretch(title.rectTransform);
+
+        RectTransform close = CreateRect("Btn_Close", header);
+        Place(close, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-18f, 0f), new Vector2(56f, 56f));
+        Image closeImage = AddImage(close, new Color(1f, 1f, 1f, 0f), null);
+        Button btnClose = close.gameObject.AddComponent<Button>();
+        btnClose.targetGraphic = closeImage;
+        TextMeshProUGUI closeLabel = CreateText("Label", close, "X", 34f, Color.white, TextAlignmentOptions.Center);
+        Stretch(closeLabel.rectTransform);
+
+        BuildEdictCreateSection(window, popup);
+        BuildEdictListSection(window, popup);
+
+        SetRef(popup, "btnClose", btnClose);
+        overlay.gameObject.SetActive(false);
+        return popup;
+    }
+
+    private static void BuildEdictCreateSection(Transform window, EdictPopupController popup)
+    {
+        const float width = 698f;
+        RectTransform section = CreateSection("CreateRulePanel", window, "Tạo luật mới", 32f, width);
+
+        RectTransform content = CreateScrollContent("Body", section, new Vector2(0f, -SectionHeaderHeight), new Vector2(width, 310f), new RectOffset(0, 0, 26, 10), 40f);
+
+        RectTransform conditions = CreateRect("Conditions", content);
+        AddVerticalLayout(conditions, 14f);
+        EdictConditionRowView firstRow = BuildConditionRow(conditions);
+
+        RectTransform linkRow = CreateLayoutRow("LinkRow", content, RuleRowHeight);
+        Button btnAnd = CreateChipButton("Btn_And", linkRow, "And", ChipActiveColor, 31f, 81f);
+        Button btnOr = CreateChipButton("Btn_Or", linkRow, "Or", ChipColor, 112f, 80f);
+        Button btnAdd = CreateChipButton("Btn_AddCondition", linkRow, "+ Thêm điều kiện", FieldColor, 216f, 449f, 16f);
+
+        RectTransform thenRow = CreateLayoutRow("ThenRow", content, RuleRowHeight);
+        RectTransform thenChip = CreatePanel("Chip_Then", thenRow, ChipColor);
+        PlaceLeft(thenChip, 31f, 88f, RuleRowHeight);
+        TextMeshProUGUI thenLabel = CreateText("Label", thenChip, "Then", 17f, TextColor, TextAlignmentOptions.Center);
+        Stretch(thenLabel.rectTransform);
+
+        TMP_Dropdown ddAction = CreateDropdown("Dd_Action", thenRow, 17f, 300f);
+        PlaceLeft((RectTransform)ddAction.transform, 142f, 523f, RuleRowHeight);
+
+        RectTransform activate = CreatePanel("Btn_Activate", section, FieldColor);
+        Place(activate, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(31f, -395f), new Vector2(634f, 55f));
+        Button btnActivate = AddButton(activate);
+        TextMeshProUGUI activateLabel = CreateText("Label", activate, "Kích hoạt", 20f, TextColor, TextAlignmentOptions.Center);
+        Stretch(activateLabel.rectTransform);
+
+        TextMeshProUGUI status = CreateText("Txt_Status", section, string.Empty, 15f, SubTextColor, TextAlignmentOptions.Center);
+        Place(status.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(31f, -454f), new Vector2(634f, 26f));
+
+        SetRef(popup, "conditionContainer", conditions);
+        SetRef(popup, "firstConditionRow", firstRow);
+        SetRef(popup, "btnAnd", btnAnd);
+        SetRef(popup, "btnOr", btnOr);
+        SetRef(popup, "btnAddCondition", btnAdd);
+        SetRef(popup, "ddAction", ddAction);
+        SetRef(popup, "btnActivate", btnActivate);
+        SetRef(popup, "txtStatus", status);
+    }
+
+    private static EdictConditionRowView BuildConditionRow(Transform parent)
+    {
+        RectTransform row = CreateLayoutRow("ConditionRow", parent, RuleRowHeight);
+        EdictConditionRowView view = row.gameObject.AddComponent<EdictConditionRowView>();
+
+        Button btnLink = CreateChipButton("Btn_Link", row, "If", ChipColor, 31f, 59f, 18f);
+        ColorBlock colors = btnLink.colors;
+        colors.disabledColor = Color.white;
+        btnLink.colors = colors;
+        TMP_Text linkLabel = btnLink.GetComponentInChildren<TMP_Text>();
+
+        TMP_Dropdown ddVariable = CreateDropdown("Dd_Variable", row, 17f, 320f);
+        PlaceLeft((RectTransform)ddVariable.transform, 114f, 272f, RuleRowHeight);
+
+        TMP_Dropdown ddOperator = CreateDropdown("Dd_Operator", row, 20f, 240f);
+        PlaceLeft((RectTransform)ddOperator.transform, 402f, 119f, RuleRowHeight);
+
+        TMP_InputField input = CreateInputField("Input_Value", row, 17f);
+        PlaceLeft((RectTransform)input.transform, 539f, 126f, RuleRowHeight);
+
+        RectTransform remove = CreateRect("Btn_Remove", row);
+        PlaceLeft(remove, 669f, 26f, 26f);
+        Image removeImage = AddImage(remove, new Color(1f, 1f, 1f, 0f), null);
+        Button btnRemove = remove.gameObject.AddComponent<Button>();
+        btnRemove.targetGraphic = removeImage;
+        TextMeshProUGUI removeLabel = CreateText("Label", remove, "X", 18f, SubTextColor, TextAlignmentOptions.Center);
+        Stretch(removeLabel.rectTransform);
+
+        SetRef(view, "btnLink", btnLink);
+        SetRef(view, "txtLink", linkLabel);
+        SetRef(view, "ddVariable", ddVariable);
+        SetRef(view, "ddOperator", ddOperator);
+        SetRef(view, "inputValue", input);
+        SetRef(view, "btnRemove", btnRemove);
+        return view;
+    }
+
+    private static void BuildEdictListSection(Transform window, EdictPopupController popup)
+    {
+        const float width = 493f;
+        RectTransform section = CreateSection("ActiveRulesPanel", window, "Luật đang hoạt động", 755f, width);
+
+        RectTransform content = CreateScrollContent("List", section, new Vector2(0f, -SectionHeaderHeight), new Vector2(width, SectionHeight - SectionHeaderHeight), new RectOffset(31, 31, 26, 18), 18f);
+        EdictRuleCardView template = BuildRuleCard(content);
+
+        TextMeshProUGUI empty = CreateText("Txt_Empty", section, "Chưa có luật nào được ban hành", 17f, SubTextColor, TextAlignmentOptions.Center);
+        Place(empty.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -160f), new Vector2(width - 62f, 30f));
+
+        SetRef(popup, "ruleListContent", content);
+        SetRef(popup, "ruleCardTemplate", template);
+        SetRef(popup, "txtEmpty", empty);
+    }
+
+    private static EdictRuleCardView BuildRuleCard(Transform parent)
+    {
+        RectTransform card = CreatePanel("RuleCard_Template", parent, CardColor);
+        LayoutElement element = card.gameObject.AddComponent<LayoutElement>();
+        element.preferredHeight = 167f;
+        EdictRuleCardView view = card.gameObject.AddComponent<EdictRuleCardView>();
+
+        TextMeshProUGUI title = CreateText("Txt_Title", card, "Tăng sản xuất lương thực", 17f, TextColor, TextAlignmentOptions.Left);
+        Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -14f), new Vector2(276f, 32f));
+        title.overflowMode = TextOverflowModes.Ellipsis;
+
+        RectTransform track = CreatePanel("Btn_Toggle", card, ToggleOnColor);
+        Place(track, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(314f, -18f), new Vector2(45f, 25f));
+        Image trackImage = track.GetComponent<Image>();
+        trackImage.pixelsPerUnitMultiplier = 0.35f;
+        Button btnToggle = AddButton(track);
+
+        RectTransform knob = CreateRect("Knob", track);
+        Place(knob, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-3f, 0f), new Vector2(19f, 19f));
+        AddImage(knob, Color.white, circleSprite, false).raycastTarget = false;
+
+        RectTransform delete = CreatePanel("Btn_Delete", card, DeleteColor);
+        Place(delete, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(382f, -18f), new Vector2(25f, 25f));
+        Button btnDelete = AddButton(delete);
+        TextMeshProUGUI deleteLabel = CreateText("Label", delete, "X", 14f, Color.white, TextAlignmentOptions.Center);
+        Stretch(deleteLabel.rectTransform);
+
+        TextMeshProUGUI links = CreateCardColumn("Txt_Links", card, "If\nAnd\nThen", 24f, 52f);
+        TextMeshProUGUI details = CreateCardColumn("Txt_Details", card, "Lương thực < 30\nDân số > 50\nTăng sản xuất nông nghiệp 20%", 79f, 328f);
+
+        SetRef(view, "txtTitle", title);
+        SetRef(view, "txtLinks", links);
+        SetRef(view, "txtDetails", details);
+        SetRef(view, "btnToggle", btnToggle);
+        SetRef(view, "imgToggleTrack", trackImage);
+        SetRef(view, "toggleKnob", knob);
+        SetRef(view, "btnDelete", btnDelete);
+        SetRef(view, "layoutElement", element);
+
+        card.gameObject.SetActive(false);
+        return view;
+    }
+
+    private static TextMeshProUGUI CreateCardColumn(string name, Transform parent, string text, float x, float width)
+    {
+        TextMeshProUGUI tmp = CreateText(name, parent, text, 16f, TextColor, TextAlignmentOptions.TopLeft);
+        tmp.lineSpacing = 30f;
+        tmp.richText = false;
+
+        RectTransform rt = tmp.rectTransform;
+        rt.anchorMin = new Vector2(0f, 0f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        rt.offsetMin = new Vector2(x, 10f);
+        rt.offsetMax = new Vector2(x + width, -58f);
+        return tmp;
+    }
+
+    private static RectTransform CreateSection(string name, Transform parent, string title, float x, float width)
+    {
+        RectTransform section = CreatePanel(name, parent, PopupSectionColor);
+        Place(section, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, -SectionTop), new Vector2(width, SectionHeight));
+
+        RectTransform header = CreatePanel("Header", section, PopupSectionHeaderColor);
+        Place(header, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(width, SectionHeaderHeight));
+        TextMeshProUGUI text = CreateText("Txt_Title", header, title, 20f, TextColor, TextAlignmentOptions.Center);
+        Stretch(text.rectTransform);
+        return section;
+    }
+
+    private static RectTransform CreateScrollContent(string name, Transform parent, Vector2 position, Vector2 size, RectOffset padding, float spacing)
+    {
+        RectTransform viewport = CreateRect(name, parent);
+        Place(viewport, new Vector2(0f, 1f), new Vector2(0f, 1f), position, size);
+        AddImage(viewport, new Color(1f, 1f, 1f, 0f), null);
+        viewport.gameObject.AddComponent<RectMask2D>();
+
+        RectTransform content = CreateRect("Content", viewport);
+        content.anchorMin = new Vector2(0f, 1f);
+        content.anchorMax = Vector2.one;
+        content.pivot = new Vector2(0.5f, 1f);
+        content.anchoredPosition = Vector2.zero;
+        content.sizeDelta = Vector2.zero;
+
+        VerticalLayoutGroup layout = AddVerticalLayout(content, spacing);
+        layout.padding = padding;
+        ContentSizeFitter fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        ScrollRect scroll = viewport.gameObject.AddComponent<ScrollRect>();
+        scroll.viewport = viewport;
+        scroll.content = content;
+        scroll.horizontal = false;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 30f;
+        return content;
+    }
+
+    private static VerticalLayoutGroup AddVerticalLayout(RectTransform rt, float spacing)
+    {
+        VerticalLayoutGroup layout = rt.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.spacing = spacing;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+        return layout;
+    }
+
+    private static RectTransform CreateLayoutRow(string name, Transform parent, float height)
+    {
+        RectTransform row = CreateRect(name, parent);
+        LayoutElement element = row.gameObject.AddComponent<LayoutElement>();
+        element.minHeight = height;
+        element.preferredHeight = height;
+        return row;
+    }
+
+    private static Button CreateChipButton(string name, Transform parent, string label, Color color, float x, float width, float fontSize = 17f)
+    {
+        RectTransform chip = CreatePanel(name, parent, color);
+        PlaceLeft(chip, x, width, RuleRowHeight);
+        Button button = AddButton(chip);
+        TextMeshProUGUI text = CreateText("Label", chip, label, fontSize, TextColor, TextAlignmentOptions.Center);
+        Stretch(text.rectTransform);
+        return button;
+    }
+
+    private static TMP_DefaultControls.Resources DefaultControlResources()
+    {
+        return new TMP_DefaultControls.Resources
+        {
+            standard = panelSprite,
+            background = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd"),
+            inputField = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/InputFieldBackground.psd"),
+            knob = circleSprite,
+            checkmark = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Checkmark.psd"),
+            dropdown = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/DropdownArrow.psd"),
+            mask = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UIMask.psd")
+        };
+    }
+
+    private static TMP_Dropdown CreateDropdown(string name, Transform parent, float fontSize, float listHeight)
+    {
+        GameObject go = TMP_DefaultControls.CreateDropdown(DefaultControlResources());
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        SetLayerRecursive(go.transform, LayerMask.NameToLayer("UI"));
+
+        TMP_Dropdown dropdown = go.GetComponent<TMP_Dropdown>();
+        dropdown.ClearOptions();
+        go.GetComponent<Image>().color = FieldColor;
+
+        RectTransform caption = dropdown.captionText.rectTransform;
+        caption.offsetMin = new Vector2(18f, 4f);
+        caption.offsetMax = new Vector2(-44f, -4f);
+        StyleControlText(dropdown.captionText, fontSize);
+        StyleControlText(dropdown.itemText, fontSize);
+
+        RectTransform arrow = (RectTransform)go.transform.Find("Arrow");
+        arrow.sizeDelta = new Vector2(18f, 18f);
+        arrow.anchoredPosition = new Vector2(-24f, 0f);
+        arrow.GetComponent<Image>().color = SubTextColor;
+
+        RectTransform template = dropdown.template;
+        template.sizeDelta = new Vector2(0f, listHeight);
+        ((RectTransform)template.Find("Viewport/Content")).sizeDelta = new Vector2(0f, 40f);
+        ((RectTransform)template.Find("Viewport/Content/Item")).sizeDelta = new Vector2(0f, 36f);
+        dropdown.itemText.rectTransform.offsetMin = new Vector2(32f, 1f);
+        return dropdown;
+    }
+
+    private static TMP_InputField CreateInputField(string name, Transform parent, float fontSize)
+    {
+        GameObject go = TMP_DefaultControls.CreateInputField(DefaultControlResources());
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        SetLayerRecursive(go.transform, LayerMask.NameToLayer("UI"));
+
+        Image background = go.GetComponent<Image>();
+        background.sprite = panelSprite;
+        background.color = FieldColor;
+
+        TMP_InputField input = go.GetComponent<TMP_InputField>();
+        input.contentType = TMP_InputField.ContentType.DecimalNumber;
+        input.text = "30";
+        input.pointSize = fontSize;
+
+        input.textComponent.alignment = TextAlignmentOptions.Center;
+        input.textComponent.color = TextColor;
+
+        if (input.placeholder is TMP_Text placeholder)
+        {
+            placeholder.text = "0";
+            placeholder.fontStyle = FontStyles.Normal;
+            placeholder.alignment = TextAlignmentOptions.Center;
+        }
+        return input;
+    }
+
+    private static void StyleControlText(TMP_Text text, float fontSize)
+    {
+        text.fontSize = fontSize;
+        text.color = TextColor;
+        text.textWrappingMode = TextWrappingModes.NoWrap;
+        text.overflowMode = TextOverflowModes.Ellipsis;
+    }
+
+    private static void PlaceLeft(RectTransform rt, float x, float width, float height)
+    {
+        Place(rt, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, 0f), new Vector2(width, height));
+    }
+
+    private static void SetLayerRecursive(Transform t, int layer)
+    {
+        t.gameObject.layer = layer;
+        foreach (Transform child in t)
+            SetLayerRecursive(child, layer);
+    }
+
+    // ==========================================
+    // POPUP: MENU TẠM DỪNG
+    // ==========================================
+    private static readonly Color PauseButtonColor = new Color32(0xDD, 0xE1, 0xE5, 0xFF);
+    private static readonly Color PauseTextColor = new Color32(0x2E, 0x3A, 0x46, 0xFF);
+
+    private static PauseMenuController BuildPauseMenu(Transform parent)
+    {
+        const float width = 482f;
+        const float height = 680f;
+        const float headerHeight = 87f;
+        const float buttonX = 64f;
+        const float buttonWidth = 354f;
+        const float buttonHeight = 72f;
+        const float firstButtonY = 111f;
+        const float buttonStride = 88f;
+
+        RectTransform menuRoot = CreateRect(PauseMenuName, parent);
+        Stretch(menuRoot);
+        PauseMenuController menu = menuRoot.gameObject.AddComponent<PauseMenuController>();
+
+        RectTransform overlay = CreateRect("Overlay", menuRoot);
+        Stretch(overlay);
+        AddImage(overlay, OverlayColor, null);
+
+        RectTransform window = CreateRect("Window", overlay);
+        Place(window, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(width, height));
+        AddImage(window, Color.white, null);
+
+        RectTransform header = CreateRect("Header", window);
+        Place(header, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(width, headerHeight));
+        AddImage(header, PopupHeaderColor, null);
+
+        TextMeshProUGUI title = CreateText("Txt_Title", header, "PAUSE", 32f, Color.white, TextAlignmentOptions.Center);
+        Stretch(title.rectTransform);
+
+        RectTransform close = CreateRect("Btn_Close", header);
+        Place(close, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-14f, 0f), new Vector2(52f, 52f));
+        Image closeImage = AddImage(close, new Color(1f, 1f, 1f, 0f), null);
+        Button btnClose = close.gameObject.AddComponent<Button>();
+        btnClose.targetGraphic = closeImage;
+        TextMeshProUGUI closeLabel = CreateText("Label", close, "X", 32f, Color.white, TextAlignmentOptions.Center);
+        Stretch(closeLabel.rectTransform);
+
+        (string label, string field)[] buttons =
+        {
+            ("RESUME", "btnResume"),
+            ("SAVE GAME", "btnSave"),
+            ("LOAD GAME", "btnLoad"),
+            ("SETTINGS", "btnSettings"),
+            ("MAIN MENU", "btnMainMenu"),
+            ("EXIT", "btnExit")
+        };
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            string objectName = "Btn_" + buttons[i].field.Substring(3);
+            RectTransform btn = CreatePanel(objectName, window, PauseButtonColor);
+            Place(btn, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(buttonX, -firstButtonY - i * buttonStride), new Vector2(buttonWidth, buttonHeight));
+            Button button = AddButton(btn);
+            TextMeshProUGUI label = CreateText("Label", btn, buttons[i].label, 20f, PauseTextColor, TextAlignmentOptions.Center);
+            Stretch(label.rectTransform);
+            SetRef(menu, buttons[i].field, button);
+        }
+
+        float statusY = firstButtonY + buttons.Length * buttonStride - 4f;
+        TextMeshProUGUI status = CreateText("Txt_Status", window, string.Empty, 16f, SubTextColor, TextAlignmentOptions.Center);
+        Place(status.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(buttonX, -statusY), new Vector2(buttonWidth, 30f));
+
+        SetRef(menu, "root", overlay.gameObject);
+        SetRef(menu, "btnClose", btnClose);
+        SetRef(menu, "txtStatus", status);
+
+        overlay.gameObject.SetActive(false);
+        return menu;
     }
 
     // ==========================================
