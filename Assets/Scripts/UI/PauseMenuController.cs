@@ -9,7 +9,6 @@ using UnityEngine.UI;
 public class PauseMenuController : MonoBehaviour
 {
     [Header("Tham Chiếu")]
-    [SerializeField] private GlobalSystemManager globalSystemManager;
     [SerializeField] private SaveLoadManager saveLoadManager;
     [SerializeField] private PlacementManager placementManager;
 
@@ -35,8 +34,6 @@ public class PauseMenuController : MonoBehaviour
 
     [Header("Sự Kiện")]
     [SerializeField] private UnityEvent onSettings = new UnityEvent();
-
-    private GameSpeed resumeSpeed = GameSpeed.Speed1x;
 
     public bool IsOpen => root != null && root.activeSelf;
 
@@ -90,13 +87,8 @@ public class PauseMenuController : MonoBehaviour
         root.SetActive(true);
         SetStatus(string.Empty, infoColor);
 
-        globalSystemManager = HUDLocator.ResolveGlobalSystem(globalSystemManager);
-        if (globalSystemManager != null)
-        {
-            GameSpeed current = globalSystemManager.GetGlobalDataRef().currentGameSpeed;
-            resumeSpeed = current == GameSpeed.Pause ? GameSpeed.Speed1x : current;
-            globalSystemManager.SetGameSpeed(GameSpeed.Pause);
-        }
+        if (GamePlayController.Instance != null)
+            GamePlayController.Instance.Pause();
     }
 
     public void Resume()
@@ -106,8 +98,8 @@ public class PauseMenuController : MonoBehaviour
 
         root.SetActive(false);
 
-        if (globalSystemManager != null)
-            globalSystemManager.SetGameSpeed(resumeSpeed);
+        if (GamePlayController.Instance != null)
+            GamePlayController.Instance.Resume();
     }
 
     public void Toggle()
@@ -170,14 +162,6 @@ public class PauseMenuController : MonoBehaviour
         if (!IsOpen)
             return;
 
-        globalSystemManager = HUDLocator.ResolveGlobalSystem(globalSystemManager);
-        if (globalSystemManager != null)
-        {
-            GameSpeed loaded = globalSystemManager.GetGlobalDataRef().currentGameSpeed;
-            resumeSpeed = loaded == GameSpeed.Pause ? GameSpeed.Speed1x : loaded;
-            globalSystemManager.SetGameSpeed(GameSpeed.Pause);
-        }
-
         SetStatus("Đã tải game.", successColor);
     }
 
@@ -218,16 +202,24 @@ public class PauseMenuController : MonoBehaviour
 
     public void GoToMainMenu()
     {
-        Time.timeScale = 1f;
-
         if (GameController.Instance != null)
-            GameController.Instance.LoadScene(mainMenuSceneName);
-        else
-            SceneManager.LoadScene(mainMenuSceneName);
+        {
+            GameController.Instance.GoHome();
+            return;
+        }
+
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(mainMenuSceneName);
     }
 
     public void ExitGame()
     {
+        if (GameController.Instance != null)
+        {
+            GameController.Instance.QuitGame();
+            return;
+        }
+
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else

@@ -251,6 +251,9 @@ public class ResidentManager : MonoBehaviour
     private void OnMonthChanged(object param)
     {
         MonthChangedPayload payload = (MonthChangedPayload)param;
+        if (!payload.isSimulationTick)
+            return;
+
         ProcessMonthlyAssignment(payload.year, payload.month, payload.season);
     }
 
@@ -362,6 +365,8 @@ public class ResidentManager : MonoBehaviour
 
         if (buildingManager == null)
             return;
+
+        buildingManager.ProcessMonthlyConstruction();
 
         ResidentProfessionSystem.ProcessMonthly(
             allResidents,

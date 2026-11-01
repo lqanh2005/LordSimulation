@@ -82,14 +82,7 @@ public static class ResidentAssignmentSystem
         if (!ResidentAssignmentRules.IsBuildingAcceptingResidents(in building))
             return false;
 
-        if (!ResidentAssignmentRules.IsHousingBuilding(building.buildingType))
-            return false;
-
-        if (ResidentAssignmentRules.NeedsQuarantineHousing(in resident))
-            return building.buildingType == BuildingType.QuarantineWard
-                || building.buildingType == BuildingType.House;
-
-        return building.buildingType == BuildingType.House;
+        return ResidentAssignmentRules.IsAllowedHousingType(in resident, building.buildingType);
     }
 
     private static bool IsStillValidWorkplace(in ResidentData resident, in BuildingData building)

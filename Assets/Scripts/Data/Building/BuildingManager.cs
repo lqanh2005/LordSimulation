@@ -46,6 +46,38 @@ public class BuildingManager : MonoBehaviour
         return -1;
     }
 
+    public int ProcessMonthlyConstruction()
+    {
+        if (placementManager == null)
+        {
+            placementManager = FindFirstObjectByType<PlacementManager>();
+        }
+
+        BuildingDatabase database = placementManager != null ? placementManager.database : null;
+        int completed = 0;
+
+        for (int i = 0; i < activeCount; i++)
+        {
+            ref BuildingData building = ref allBuildings[i];
+
+            if (building.buildingState == BuildingState.Active)
+            {
+                BuildingRules.EnsureCapacity(ref building);
+                continue;
+            }
+
+            BuildingConfig config = database != null ? database.GetConfig(building.buildingType) : null;
+            int months = BuildingRules.ResolveConstructionMonths(building.buildingType, config);
+            if (!BuildingRules.TickConstruction(ref building, months))
+                continue;
+
+            completed++;
+            GameEvents.Post(EventID.BuildingCompleted, building.buildingID);
+        }
+
+        return completed;
+    }
+
     // Hook tái dựng Prefab nhà cửa sau khi nạp file save
     public void RebuildVisualCity()
     {

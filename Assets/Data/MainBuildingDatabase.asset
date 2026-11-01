@@ -13,27 +13,93 @@ MonoBehaviour:
   m_Name: MainBuildingDatabase
   m_EditorClassIdentifier: Assembly-CSharp::BuildingDatabase
   allConfigs:
-  - type: 1
-    displayName: NhaDan
-    size: 1
-    costWood: 50
-    costGold: 100
-    visualPrefab: {fileID: 4266857400868516723, guid: cf14471cf5c76e14e81cfc8ff71197db, type: 3}
-  - type: 3
-    displayName: farm
-    size: 2
-    costWood: 90
-    costGold: 1000
-    visualPrefab: {fileID: 2689643035951253611, guid: 093e7ad8b6d804a409ef320826bde164, type: 3}
-  - type: 6
-    displayName: furnace
-    size: 3
-    costWood: 1
-    costGold: 12212
-    visualPrefab: {fileID: 6641003679118375568, guid: 34016351a2d8abc44b68a899fbda5f9a, type: 3}
   - type: 10
     displayName: "L\u1EC1u t\u1EA1m"
     size: 1
     costWood: 10
     costGold: 0
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
     visualPrefab: {fileID: 5810923347621001, guid: 3500cf605fb4413992f00da3f037be35, type: 3}
+  - type: 1
+    displayName: "Nh\xE0 d\xE2n"
+    size: 1
+    costWood: 30
+    costGold: 20
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: cf14471cf5c76e14e81cfc8ff71197db, type: 3}
+  - type: 9
+    displayName: "Tr\u1EA1i g\u1ED7"
+    size: 2
+    costWood: 15
+    costGold: 10
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: b47c94d9de0e1454d84fa4833bf3d347, type: 3}
+  - type: 3
+    displayName: "N\xF4ng tr\u1EA1i"
+    size: 2
+    costWood: 25
+    costGold: 20
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 2689643035951253611, guid: 093e7ad8b6d804a409ef320826bde164, type: 3}
+  - type: 4
+    displayName: "M\u1ECF"
+    size: 2
+    costWood: 40
+    costGold: 40
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: df2661c891fd3e543a026fb3861a9aa8, type: 3}
+  - type: 6
+    displayName: "X\u01B0\u1EDFng l\xF2"
+    size: 3
+    costWood: 40
+    costGold: 60
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 6641003679118375568, guid: 34016351a2d8abc44b68a899fbda5f9a, type: 3}
+  - type: 5
+    displayName: "Ph\xF2ng kh\xE1m"
+    size: 2
+    costWood: 50
+    costGold: 80
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: c8748c49824593440a41fd82d700b44b, type: 3}
+  - type: 7
+    displayName: "Tr\u01B0\u1EDDng h\u1ECDc"
+    size: 2
+    costWood: 50
+    costGold: 60
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: bf5f0e45adf925e4d94c57b10772c47a, type: 3}
+  - type: 8
+    displayName: "Tr\u1EA1m g\xE1c"
+    size: 1
+    costWood: 30
+    costGold: 40
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: 01041ee64610715449c974d0dcb79a47, type: 3}
+  - type: 2
+    displayName: "Khu c\xE1ch ly"
+    size: 2
+    costWood: 40
+    costGold: 50
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: 702b00e46bc96984bbbac5d00d104135, type: 3}

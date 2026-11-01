@@ -54,7 +54,7 @@ public class GlobalSystemManager : MonoBehaviour
             treasuryGold = 100,
             stockFood = 50,
             stockCoal = 30,
-            stockWood = 40,
+            stockWood = 80,
             stockIron = 20,
             stockMedicine = 10,
             authorityPoints = 100,
@@ -64,6 +64,11 @@ public class GlobalSystemManager : MonoBehaviour
             totalInfected = 0,
             overallHappiness = 50.0f
         };
+
+        SetGameSpeed(data.currentGameSpeed);
+        PostMonthChanged(false);
+        PostWeatherChanged();
+        GameEvents.Post(EventID.ResourcesChanged);
     }
 
     // Trả về tham chiếu ref để SaveLoadManager đọc dữ liệu trực tiếp 0 byte GC
@@ -79,7 +84,7 @@ public class GlobalSystemManager : MonoBehaviour
 
         // Cập nhật lại trạng thái thời gian và UI tức thì
         SetGameSpeed(data.currentGameSpeed);
-        PostMonthChanged();
+        PostMonthChanged(false);
         PostWeatherChanged();
         GameEvents.Post(EventID.ResourcesChanged);
     }
@@ -105,7 +110,7 @@ public class GlobalSystemManager : MonoBehaviour
         ProcessMacroMonthlyConsumption();
 
         // 3. Phát event thông báo sang tháng mới cho toàn bộ hệ thống
-        PostMonthChanged();
+        PostMonthChanged(true);
         GameEvents.Post(EventID.ResourcesChanged);
     }
 
@@ -287,13 +292,14 @@ public class GlobalSystemManager : MonoBehaviour
         GameEvents.Post(EventID.ResourcesChanged);
     }
 
-    private void PostMonthChanged()
+    private void PostMonthChanged(bool isSimulationTick)
     {
         GameEvents.Post(EventID.MonthChanged, new MonthChangedPayload
         {
             year = data.currentYear,
             month = data.currentMonth,
-            season = data.CurrentSeason
+            season = data.CurrentSeason,
+            isSimulationTick = isSimulationTick
         });
     }
 

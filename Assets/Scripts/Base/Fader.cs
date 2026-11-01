@@ -19,88 +19,92 @@ public class Fader : MonoBehaviour
     public bool isFadeIn = false;
     CanvasGroup myCanvas;
     Image bg;
-    float lastTime = 0;
     bool startedLoading = false;
+
+    const float LoadTimeoutSeconds = 10f;
+
     private void OnEnable()
     {
         SceneManager.sceneLoaded += OnLevelFinishedLoading;
     }
+
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= OnLevelFinishedLoading;
     }
+
     public void InitiateFader()
     {
         DontDestroyOnLoad(gameObject);
-        if(transform.GetComponent<CanvasGroup>() == null)
-        {
+        myCanvas = GetComponent<CanvasGroup>();
+        if (myCanvas == null)
             myCanvas = gameObject.AddComponent<CanvasGroup>();
-        }
-        if (transform.GetComponentInChildren<Image>())
-        {
-            bg = transform.GetComponent<Image>();
-            bg.color = fadeColor;
-        }
-        if(myCanvas && bg)
-        {
-            myCanvas.alpha = 0.0f;
-            StartCoroutine(FadeIt());
-        }
-        else Debug.LogWarning("Fader: CanvasGroup or Image component is missing.");
+
+        bg = GetComponent<Image>();
+        if (bg == null)
+            bg = gameObject.AddComponent<Image>();
+        bg.color = fadeColor;
+
+        alpha = 0f;
+        isFadeIn = false;
+        startedLoading = false;
+        myCanvas.alpha = 0f;
+        myCanvas.blocksRaycasts = true;
+        StartCoroutine(FadeIt());
     }
+
     IEnumerator FadeIt()
     {
         while (!start)
-        {
             yield return null;
-        }
-        lastTime = Time.time;
-        float coDelta = lastTime;
-        bool hasFadedIn = false;
-        while (!hasFadedIn)
+
+        while (alpha < 1f)
         {
-            coDelta = Time.deltaTime - lastTime;
-            if (!hasFadedIn)
-            {
-                alpha = newAlpha(coDelta, 1, alpha);
-                if (alpha == 1 && !startedLoading)
-                {
-                    startedLoading = true;
-                    SceneManager.LoadScene(fadeScene);
-                }
-            }
-            else
-            {
-                alpha = newAlpha(coDelta, 0, alpha);
-                if (alpha == 0) hasFadedIn = true;
-            }
-            lastTime = Time.time;
+            alpha = Mathf.MoveTowards(alpha, 1f, Time.unscaledDeltaTime * fadeDamp);
             myCanvas.alpha = alpha;
             yield return null;
         }
+
+        if (!startedLoading)
+        {
+            startedLoading = true;
+            if (Application.CanStreamedLevelBeLoaded(fadeScene))
+            {
+                SceneManager.LoadScene(fadeScene);
+            }
+            else
+            {
+                // Scene sai tên / chưa có trong Build Settings: fade ra lại để không kẹt Initiate.IsFading
+                Debug.LogError($"[Fader] Không thể load scene '{fadeScene}'.");
+                isFadeIn = true;
+            }
+        }
+
+        float waited = 0f;
+        while (!isFadeIn && waited < LoadTimeoutSeconds)
+        {
+            waited += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (!isFadeIn)
+            Debug.LogWarning($"[Fader] Chờ load scene '{fadeScene}' quá {LoadTimeoutSeconds}s, tự fade ra.");
+
+        while (alpha > 0f)
+        {
+            alpha = Mathf.MoveTowards(alpha, 0f, Time.unscaledDeltaTime * fadeDamp);
+            myCanvas.alpha = alpha;
+            yield return null;
+        }
+
+        start = false;
         Initiate.DoneFading();
         Destroy(gameObject);
-        yield return null;
     }
-    float newAlpha(float delta, int to, float currentAlpha)
-    {
-        switch (to)
-        {
-            case 1:
-                currentAlpha += delta * fadeDamp;
-                if (currentAlpha > 1) currentAlpha = 1;
-                break;
-            case 0:
-                currentAlpha -= delta * fadeDamp;
-                if (currentAlpha < 0) currentAlpha = 0;
-                break;
-        }
-        return currentAlpha;
-    }
+
     void OnLevelFinishedLoading(Scene scene, LoadSceneMode mode)
     {
-        StartCoroutine(FadeIt());
-        //We can now fade in
-        isFadeIn = true;
+        if (startedLoading)
+            isFadeIn = true;
     }
 }

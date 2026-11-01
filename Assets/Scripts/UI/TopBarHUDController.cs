@@ -144,7 +144,7 @@ public class TopBarHUDController : MonoBehaviour
         if (txtIron != null) txtIron.text = FormatNumber(data.stockIron);
         if (txtMedicine != null) txtMedicine.text = FormatNumber(data.stockMedicine);
 
-        UpdateRate(txtGoldRate, 0f);
+        UpdateRate(txtGoldRate, ResidentSocialSystem.LastMonthTax);
         UpdateRate(txtFoodRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Food));
         UpdateRate(txtCoalRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Coal));
         UpdateRate(txtWoodRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Wood));

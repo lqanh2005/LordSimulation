@@ -7,6 +7,9 @@ public static class Initiate
 {
     static bool areWeFading = false;
     static GameObject initTemp = null;
+
+    public static bool IsFading => areWeFading;
+
     public static void Fade(string scene, Color col, float multiplier)
     {
         if (areWeFading)
@@ -19,6 +22,7 @@ public static class Initiate
         Canvas myCanvas = init.AddComponent<Canvas>();
         myCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
         myCanvas.sortingOrder = 1000;
+        init.AddComponent<GraphicRaycaster>();
         init.AddComponent<Fader>();
         init.AddComponent<CanvasGroup>();
         init.AddComponent<Image>(); 
@@ -43,6 +47,7 @@ public static class Initiate
             initTemp.name = "Fader";
             Canvas myCanvas = initTemp.AddComponent<Canvas>();
             myCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            initTemp.AddComponent<GraphicRaycaster>();
             initTemp.AddComponent<Fader>();
             initTemp.AddComponent<CanvasGroup>();
             initTemp.AddComponent<Image>();

@@ -3,9 +3,13 @@ using UnityEngine;
 public static class ResidentAssignmentRules
 {
     public const short UnassignedId = -1;
+    public const byte SchoolStartAge = 6;
 
     public static bool IsHousingBuilding(BuildingType type) =>
-        type == BuildingType.House || type == BuildingType.QuarantineWard;
+        IsNormalHousing(type) || type == BuildingType.QuarantineWard;
+
+    public static bool IsNormalHousing(BuildingType type) =>
+        type == BuildingType.House || type == BuildingType.Tent;
 
     public static bool IsWorkplaceBuilding(BuildingType type) => type switch
     {
@@ -40,6 +44,7 @@ public static class ResidentAssignmentRules
         BuildingType.Furnace => ProfessionType.Craftsman,
         BuildingType.GuardPost => ProfessionType.Guard,
         BuildingType.LumberCamp => ProfessionType.Lumberjack,
+        BuildingType.School => ProfessionType.Teacher,
         _ => ProfessionType.None
     };
 
@@ -72,7 +77,7 @@ public static class ResidentAssignmentRules
         if (!resident.isAlive)
             return false;
 
-        if (resident.GetAgeGroup() != AgeGroupType.Child)
+        if (resident.GetAgeGroup() != AgeGroupType.Child || resident.age < SchoolStartAge)
             return false;
 
         if (resident.healthStatus == HealthStatus.ActiveInfected
@@ -135,12 +140,15 @@ public static class ResidentAssignmentRules
         if (!HasHousingSlot(in building))
             return false;
 
-        bool needsQuarantine = NeedsQuarantineHousing(in resident);
-        if (needsQuarantine)
-            return building.buildingType == BuildingType.QuarantineWard
-                || building.buildingType == BuildingType.House;
+        return IsAllowedHousingType(in resident, building.buildingType);
+    }
 
-        return building.buildingType == BuildingType.House;
+    public static bool IsAllowedHousingType(in ResidentData resident, BuildingType type)
+    {
+        if (NeedsQuarantineHousing(in resident))
+            return type == BuildingType.QuarantineWard || IsNormalHousing(type);
+
+        return IsNormalHousing(type);
     }
 
     public static bool HasStudentSlot(in BuildingData building) =>
@@ -222,6 +230,9 @@ public static class ResidentAssignmentRules
 
         if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.House)
             return 80 + bonus;
+
+        if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.Tent)
+            return 60 + bonus;
 
         return 40 + bonus;
     }

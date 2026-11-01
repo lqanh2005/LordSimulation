@@ -3,6 +3,7 @@ using UnityEngine;
 public class BuildingView : MonoBehaviour
 {
     private SpriteRenderer[] renderers;
+    private Color[] baseColors;
 
     public ushort BuildingId { get; private set; }
     public BuildingType Type { get; private set; }
@@ -47,6 +48,24 @@ public class BuildingView : MonoBehaviour
         foreach (SpriteRenderer sr in Renderers)
         {
             sr.color = color;
+        }
+    }
+
+    public void SetTint(Color tint)
+    {
+        SpriteRenderer[] list = Renderers;
+        if (baseColors == null || baseColors.Length != list.Length)
+        {
+            baseColors = new Color[list.Length];
+            for (int i = 0; i < list.Length; i++)
+            {
+                baseColors[i] = list[i].color;
+            }
+        }
+
+        for (int i = 0; i < list.Length; i++)
+        {
+            list[i].color = baseColors[i] * tint;
         }
     }
 }

@@ -54,6 +54,8 @@ public class ImmigrationManager : MonoBehaviour
             return;
 
         MonthChangedPayload payload = (MonthChangedPayload)param;
+        if (!payload.isSimulationTick)
+            return;
         if (payload.year == _lastArrivalYear && payload.month == _lastArrivalMonth)
             return;
 

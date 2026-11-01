@@ -8,6 +8,9 @@ public static class ResidentSocialRules
     public const float GreenZoneHappinessGain = 0.01f;
     public const float RedZoneHappinessPenalty = 0.01f;
     public const float MaxMonthlyRiotFromSocial = 8f;
+    public const int LaborTaxPerWorker = 1;
+    public const byte MinTaxableWealth = 40;
+    public const float WealthTaxRate = 0.03f;
 
     public static void EnsureFaction(ref ResidentData resident)
     {
@@ -140,6 +143,26 @@ public static class ResidentSocialRules
         else if (next > MaxWealth)
             next = MaxWealth;
         resident.wealth = (byte)next;
+    }
+
+    public static int GetMonthlyTax(in ResidentData resident, out int wealthCost)
+    {
+        wealthCost = 0;
+        if (!resident.isAlive || resident.GetAgeGroup() != AgeGroupType.Adult)
+            return 0;
+
+        int labor = ResidentAssignmentRules.CanWork(in resident) && resident.assignedWorkID >= 0
+            ? LaborTaxPerWorker
+            : 0;
+
+        if (resident.wealth >= MinTaxableWealth)
+        {
+            wealthCost = UnityEngine.Mathf.Max(1, UnityEngine.Mathf.RoundToInt(resident.wealth * WealthTaxRate));
+            if (resident.factionType == FactionType.Aristocrat)
+                wealthCost++;
+        }
+
+        return labor + wealthCost;
     }
 
     public static float GetMonthlyHappinessDelta(in ResidentData resident)

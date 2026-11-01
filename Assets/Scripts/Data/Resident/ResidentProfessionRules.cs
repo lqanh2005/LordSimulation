@@ -99,6 +99,27 @@ public static class ResidentProfessionRules
         return true;
     }
 
+    public static bool IsIdleWorker(in ResidentData resident) =>
+        resident.isAlive
+        && resident.assignedWorkID < 0
+        && resident.professionType != ProfessionType.None
+        && resident.professionType != ProfessionType.Student
+        && ResidentAssignmentRules.CanWork(in resident);
+
+    public static bool TryReassignIdleWorker(ref ResidentData resident, ProfessionType profession)
+    {
+        if (profession == ProfessionType.None
+            || profession == ProfessionType.Student
+            || profession == resident.professionType)
+            return false;
+
+        if (!IsIdleWorker(in resident))
+            return false;
+
+        resident.professionType = profession;
+        return true;
+    }
+
     public static bool CountsTowardLabor(in ResidentData resident, ProfessionType profession) =>
         resident.professionType == profession
         && ResidentAssignmentRules.CanWork(in resident);
@@ -113,5 +134,22 @@ public static class ResidentProfessionRules
             return 0;
 
         return building.maxWorkers;
+    }
+
+    // Sức chứa giữ chỗ: tính cả công trình đang xây / tạm ngừng để không đẩy thợ sang nghề khác
+    public static int GetReservedLaborCapacity(in BuildingData building, ProfessionType profession)
+    {
+        BuildingType preferred = ResidentAssignmentRules.GetPreferredWorkplace(profession);
+        if (preferred == BuildingType.None || building.buildingType != preferred)
+            return 0;
+
+        if (!building.isAllocated
+            || building.buildingState == BuildingState.None
+            || building.buildingState == BuildingState.Destroyed)
+            return 0;
+
+        return building.maxWorkers > 0
+            ? building.maxWorkers
+            : BuildingRules.GetDefaultMaxWorkers(building.buildingType);
     }
 }

@@ -239,7 +239,8 @@ public class EdictManager : MonoBehaviour
 
     private void OnMonthChanged(object param)
     {
-        EvaluateCityRules(!suppressEffects);
+        bool isTick = param is MonthChangedPayload payload && payload.isSimulationTick;
+        EvaluateCityRules(isTick && !suppressEffects);
         GameEvents.Post(EventID.EdictsChanged);
     }
 

@@ -25,9 +25,26 @@ public enum EventID
 
     BuildingPlaced = 500,
     BuildingPlaceFailed = 501,
+    BuildingCompleted = 502,
 
     EdictsChanged = 600,
-    EdictTriggered = 601
+    EdictTriggered = 601,
+
+    AppStateChanged = 700,
+    GamePlayStateChanged = 701,
+    GameOver = 702
+}
+
+public struct AppStateChangedPayload
+{
+    public AppStateID from;
+    public AppStateID to;
+}
+
+public struct GamePlayStateChangedPayload
+{
+    public GamePlayStateID from;
+    public GamePlayStateID to;
 }
 
 public enum BuildingPlaceFailReason : byte
@@ -51,6 +68,7 @@ public struct MonthChangedPayload
     public int year;
     public byte month;
     public SeasonType season;
+    public bool isSimulationTick;
 }
 
 public struct WeatherChangedPayload

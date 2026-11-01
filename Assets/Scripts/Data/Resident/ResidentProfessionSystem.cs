@@ -1,5 +1,7 @@
 public static class ResidentProfessionSystem
 {
+    private const int NewcomerPriority = 100;
+
     private static readonly ProfessionType[] LaborDemandOrder =
     {
         ProfessionType.Doctor,
@@ -10,6 +12,9 @@ public static class ResidentProfessionSystem
         ProfessionType.Lumberjack,
         ProfessionType.Craftsman
     };
+
+    private static readonly int[] OpenSlotsByProfession = new int[(int)ProfessionType.Guard + 1];
+    private static readonly int[] SurplusByProfession = new int[(int)ProfessionType.Guard + 1];
 
     public static int ProcessMonthly(
         ResidentData[] residents,
@@ -30,24 +35,45 @@ public static class ResidentProfessionSystem
                 changed++;
         }
 
+        for (int i = 0; i < OpenSlotsByProfession.Length; i++)
+        {
+            OpenSlotsByProfession[i] = 0;
+            SurplusByProfession[i] = 0;
+        }
+
         for (int p = 0; p < LaborDemandOrder.Length; p++)
         {
             ProfessionType profession = LaborDemandOrder[p];
-            int openSlots = CountOpenLaborSlots(
-                profession, residents, residentCount, buildings, buildingCount);
-            if (openSlots <= 0)
-                continue;
+            CountLaborSlots(
+                profession, residents, residentCount, buildings, buildingCount,
+                out OpenSlotsByProfession[(int)profession],
+                out SurplusByProfession[(int)profession]);
+        }
 
-            while (openSlots > 0)
+        for (int p = 0; p < LaborDemandOrder.Length; p++)
+        {
+            ProfessionType profession = LaborDemandOrder[p];
+
+            while (OpenSlotsByProfession[(int)profession] > 0)
             {
                 int bestIndex = FindBestCandidate(profession, residents, residentCount);
                 if (bestIndex < 0)
                     break;
 
-                if (!ResidentProfessionRules.TryAssignProfession(ref residents[bestIndex], profession))
+                ref ResidentData candidate = ref residents[bestIndex];
+                ProfessionType previous = candidate.professionType;
+                bool assigned = previous == ProfessionType.None
+                    ? ResidentProfessionRules.TryAssignProfession(ref candidate, profession)
+                    : ResidentProfessionRules.TryReassignIdleWorker(ref candidate, profession);
+                if (!assigned)
                     break;
 
-                openSlots--;
+                OpenSlotsByProfession[(int)profession]--;
+                if (previous != ProfessionType.None)
+                {
+                    OpenSlotsByProfession[(int)previous]++;
+                    SurplusByProfession[(int)previous]--;
+                }
                 changed++;
             }
         }
@@ -55,16 +81,22 @@ public static class ResidentProfessionSystem
         return changed;
     }
 
-    private static int CountOpenLaborSlots(
+    private static void CountLaborSlots(
         ProfessionType profession,
         ResidentData[] residents,
         int residentCount,
         BuildingData[] buildings,
-        int buildingCount)
+        int buildingCount,
+        out int openSlots,
+        out int surplus)
     {
         int capacity = 0;
+        int reserved = 0;
         for (int i = 0; i < buildingCount; i++)
+        {
             capacity += ResidentProfessionRules.GetLaborCapacity(in buildings[i], profession);
+            reserved += ResidentProfessionRules.GetReservedLaborCapacity(in buildings[i], profession);
+        }
 
         int employed = 0;
         for (int i = 0; i < residentCount; i++)
@@ -73,8 +105,8 @@ public static class ResidentProfessionSystem
                 employed++;
         }
 
-        int open = capacity - employed;
-        return open > 0 ? open : 0;
+        openSlots = capacity - employed;
+        surplus = employed - reserved;
     }
 
     private static int FindBestCandidate(
@@ -83,18 +115,34 @@ public static class ResidentProfessionSystem
         int residentCount)
     {
         int bestIndex = -1;
-        int bestAffinity = 0;
+        int bestScore = 0;
 
         for (int i = 0; i < residentCount; i++)
         {
             ref ResidentData r = ref residents[i];
-            if (!ResidentProfessionRules.CanReceiveProfession(in r))
-                continue;
+            int score;
 
-            int affinity = ResidentSocialRules.GetProfessionAffinity(in r, profession);
-            if (affinity > bestAffinity)
+            if (ResidentProfessionRules.CanReceiveProfession(in r))
             {
-                bestAffinity = affinity;
+                int affinity = ResidentSocialRules.GetProfessionAffinity(in r, profession);
+                if (affinity <= 0)
+                    continue;
+                score = NewcomerPriority + affinity;
+            }
+            else if (ResidentProfessionRules.IsIdleWorker(in r)
+                && r.professionType != profession
+                && SurplusByProfession[(int)r.professionType] > 0)
+            {
+                score = ResidentSocialRules.GetProfessionAffinity(in r, profession);
+            }
+            else
+            {
+                continue;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
                 bestIndex = i;
             }
         }

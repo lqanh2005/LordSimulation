@@ -13,6 +13,12 @@ public class BuildingConfig
     public int size = 1;
     public int costWood;
     public int costGold;
+    [Tooltip("0 = dùng mặc định theo loại công trình")]
+    [Min(0)] public int constructionMonths;
+    [Tooltip("0 = dùng mặc định theo loại công trình")]
+    [Min(0)] public int maxOccupancy;
+    [Tooltip("0 = dùng mặc định theo loại công trình")]
+    [Min(0)] public int maxWorkers;
     public GameObject visualPrefab;
 }
 
@@ -35,6 +41,9 @@ public class PlacementManager : MonoBehaviour
     [SerializeField] private Color invalidColor = new Color(1f, 0.2f, 0.2f, 0.6f);
     [SerializeField] private int ghostSortingOrder = 30000;
 
+    [Header("Đang Xây")]
+    [SerializeField] private Color constructingColor = new Color(0.7f, 0.7f, 0.7f, 0.55f);
+
     private readonly Dictionary<Vector2Int, ushort> buildingGridMatrix = new Dictionary<Vector2Int, ushort>();
     private readonly Dictionary<ushort, BuildingView> buildingViews = new Dictionary<ushort, BuildingView>();
     private readonly List<SpriteRenderer> footprintGhosts = new List<SpriteRenderer>();
@@ -55,6 +64,33 @@ public class PlacementManager : MonoBehaviour
         if (buildingRoot == null)
         {
             buildingRoot = transform;
+        }
+    }
+
+    private void OnEnable()
+    {
+        GameEvents.Unlisten(EventID.BuildingCompleted, OnBuildingCompleted);
+        GameEvents.Listen(EventID.BuildingCompleted, OnBuildingCompleted);
+    }
+
+    private void OnDisable()
+    {
+        GameEvents.Unlisten(EventID.BuildingCompleted, OnBuildingCompleted);
+    }
+
+    private void OnBuildingCompleted(object param)
+    {
+        if (param is ushort buildingId && buildingViews.TryGetValue(buildingId, out BuildingView view) && view != null)
+        {
+            ApplyConstructionVisual(view, false);
+        }
+    }
+
+    private void ApplyConstructionVisual(BuildingView view, bool constructing)
+    {
+        if (view != null)
+        {
+            view.SetTint(constructing ? constructingColor : Color.white);
         }
     }
 
@@ -192,7 +228,8 @@ public class PlacementManager : MonoBehaviour
 
             Vector2Int origin = new Vector2Int(data.coordX, data.coordY);
             MarkCells(origin, data.sizeFootprint, data.buildingID);
-            SpawnBuildingView(data.buildingID, data.buildingType, origin, data.sizeFootprint);
+            BuildingView view = SpawnBuildingView(data.buildingID, data.buildingType, origin, data.sizeFootprint);
+            ApplyConstructionVisual(view, BuildingRules.IsUnderConstruction(in data));
         }
     }
 
@@ -226,15 +263,7 @@ public class PlacementManager : MonoBehaviour
             return false;
         }
 
-        BuildingData newData = new BuildingData
-        {
-            buildingID = GetNextBuildingId(),
-            buildingType = config.type,
-            coordX = (ushort)origin.x,
-            coordY = (ushort)origin.y,
-            sizeFootprint = (byte)config.size,
-            buildingState = BuildingState.Constructing
-        };
+        BuildingData newData = BuildingRules.CreatePlaced(config, GetNextBuildingId(), origin);
 
         if (buildingManager != null && buildingManager.AddBuilding(newData) == -1)
         {
@@ -242,11 +271,17 @@ public class PlacementManager : MonoBehaviour
             return false;
         }
 
+        newData.isAllocated = true;
         SpendResources(config);
         MarkCells(origin, config.size, newData.buildingID);
-        SpawnBuildingView(newData.buildingID, config.type, origin, config.size);
+        BuildingView view = SpawnBuildingView(newData.buildingID, config.type, origin, config.size);
+        ApplyConstructionVisual(view, BuildingRules.IsUnderConstruction(in newData));
         OnBuildingPlaced?.Invoke(newData);
         GameEvents.Post(EventID.BuildingPlaced, newData);
+        if (newData.buildingState == BuildingState.Active)
+        {
+            GameEvents.Post(EventID.BuildingCompleted, newData.buildingID);
+        }
         return true;
     }
 

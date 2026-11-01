@@ -119,8 +119,24 @@ public class PlacementResidentVisualTest : MonoBehaviour
         if (placementManager == null)
             return;
 
-        placementManager.PlaceAt(seedHouseCell, BuildingType.House);
-        placementManager.PlaceAt(seedFarmCell, BuildingType.Farm);
+        if (placementManager.PlaceAt(seedHouseCell, BuildingType.House))
+            CompleteLastBuilding();
+        if (placementManager.PlaceAt(seedFarmCell, BuildingType.Farm))
+            CompleteLastBuilding();
+    }
+
+    // Công trình demo bỏ qua thời gian xây để cư dân test vào ở / làm việc ngay
+    private void CompleteLastBuilding()
+    {
+        if (buildingManager == null || buildingManager.activeCount == 0)
+            return;
+
+        ref BuildingData building = ref buildingManager.GetBuildingRef(buildingManager.activeCount - 1);
+        if (building.buildingState == BuildingState.Active)
+            return;
+
+        BuildingRules.Complete(ref building);
+        GameEvents.Post(EventID.BuildingCompleted, building.buildingID);
     }
 
     private void SyncNewBuildings()

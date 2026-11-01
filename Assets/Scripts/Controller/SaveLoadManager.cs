@@ -11,7 +11,7 @@ public class SaveLoadManager : MonoBehaviour
     [SerializeField] private float autoSaveIntervalMinutes = 5f;
 
     [Header("Tên Scene Gameplay")]
-    [SerializeField] private string gameplaySceneName = "GameplayScene";
+    [SerializeField] private string gameplaySceneName = "GamePlayScene";
 
     private string _saveFilePath;
     private float _autoSaveTimer;
@@ -25,7 +25,7 @@ public class SaveLoadManager : MonoBehaviour
     private void OnApplicationPause(bool pauseStatus)
     {
         // Tự động lưu khi người chơi ẩn app / home ra ngoài
-        if (pauseStatus && SceneManager.GetActiveScene().name == gameplaySceneName)
+        if (pauseStatus && CanAutoSave())
         {
             SaveGame();
         }
@@ -34,10 +34,41 @@ public class SaveLoadManager : MonoBehaviour
     private void OnApplicationQuit()
     {
         // Tự động lưu trước khi ứng dụng đóng hoàn toàn
-        if (SceneManager.GetActiveScene().name == gameplaySceneName)
+        if (CanAutoSave())
         {
             SaveGame();
         }
+    }
+
+    public void TickAutoSave(float deltaTime)
+    {
+        if (!enableAutoSave || autoSaveIntervalMinutes <= 0f)
+            return;
+
+        _autoSaveTimer += deltaTime;
+        if (_autoSaveTimer < autoSaveIntervalMinutes * 60f)
+            return;
+
+        _autoSaveTimer = 0f;
+        SaveGame();
+    }
+
+    public void ResetAutoSaveTimer()
+    {
+        _autoSaveTimer = 0f;
+    }
+
+    private bool CanAutoSave()
+    {
+        GamePlayController gameplay = GamePlayController.Instance;
+        if (gameplay == null
+            || !gameplay.IsIn(GamePlayStateID.Playing) && !gameplay.IsIn(GamePlayStateID.Paused))
+            return false;
+
+        if (GameController.Instance != null)
+            return GameController.Instance.IsIn(AppStateID.GamePlay);
+
+        return SceneManager.GetActiveScene().name == gameplaySceneName;
     }
 
     public void SaveGame()
@@ -72,7 +103,8 @@ public class SaveLoadManager : MonoBehaviour
         {
             PlayerContain contain = GamePlayController.Instance.playerContain;
 
-            ref GlobalSystemData globalData = ref contain.globalSystemManager.GetGlobalDataRef();
+            GlobalSystemData globalData = contain.globalSystemManager.GetGlobalDataRef();
+            globalData.currentGameSpeed = GamePlayController.Instance.ResolveSaveSpeed(globalData.currentGameSpeed);
 
             ResidentData[] residents = contain.residentManager.allResidents;
             int residentCount = contain.residentManager.activeCount;
@@ -125,27 +157,27 @@ public class SaveLoadManager : MonoBehaviour
         }
     }
 
-    public void LoadGame()
+    public bool LoadGame()
     {
         if (string.IsNullOrEmpty(_saveFilePath))
         {
             Debug.LogError("[SaveLoadManager] Chưa Init() — không thể nạp.");
             GameEvents.Post(EventID.LoadFailed, "Save path not initialized");
-            return;
+            return false;
         }
 
         if (!File.Exists(_saveFilePath))
         {
             Debug.LogWarning($"[SaveLoadManager] Không tìm thấy file save tại: {_saveFilePath}");
             GameEvents.Post(EventID.LoadFailed, "File not found");
-            return;
+            return false;
         }
 
         if (GamePlayController.Instance == null || GamePlayController.Instance.playerContain == null)
         {
             Debug.LogError("[SaveLoadManager] GamePlayController hoặc PlayerContain chưa sẵn sàng.");
             GameEvents.Post(EventID.LoadFailed, "Gameplay not ready");
-            return;
+            return false;
         }
 
         GameEvents.Post(EventID.LoadStarted);
@@ -157,18 +189,31 @@ public class SaveLoadManager : MonoBehaviour
 
         try
         {
+            // Đọc vào mảng tạm: file hỏng giữa chừng sẽ không làm bẩn dữ liệu đang chạy
+            ResidentData[] residentBuffer = new ResidentData[contain.residentManager.allResidents.Length];
+            BuildingData[] buildingBuffer = new BuildingData[contain.buildingManager.allBuildings.Length];
+            EdictRuleData[] edictBuffer = new EdictRuleData[contain.edictManager.allEdicts.Length];
+            TradeRouteData[] tradeBuffer = new TradeRouteData[contain.tradeManager.allTradeRoutes.Length];
+            ResidentData[] immigrantBuffer = new ResidentData[contain.immigrationManager.waitingApplicants.Length];
+
             using (FileStream fs = new FileStream(_saveFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (BinaryReader reader = new BinaryReader(fs))
             {
                 CitySaveSerializer.DeserializeFullGame(
                     reader,
                     out GlobalSystemData globalData,
-                    contain.residentManager.allResidents, out int residentCount,
-                    contain.buildingManager.allBuildings, out int buildingCount,
-                    contain.edictManager.allEdicts, out int edictCount,
-                    contain.tradeManager.allTradeRoutes, out int tradeCount,
-                    contain.immigrationManager.waitingApplicants, out int immigrantCount
+                    residentBuffer, out int residentCount,
+                    buildingBuffer, out int buildingCount,
+                    edictBuffer, out int edictCount,
+                    tradeBuffer, out int tradeCount,
+                    immigrantBuffer, out int immigrantCount
                 );
+
+                Array.Copy(residentBuffer, contain.residentManager.allResidents, residentBuffer.Length);
+                Array.Copy(buildingBuffer, contain.buildingManager.allBuildings, buildingBuffer.Length);
+                Array.Copy(edictBuffer, contain.edictManager.allEdicts, edictBuffer.Length);
+                Array.Copy(tradeBuffer, contain.tradeManager.allTradeRoutes, tradeBuffer.Length);
+                Array.Copy(immigrantBuffer, contain.immigrationManager.waitingApplicants, immigrantBuffer.Length);
 
                 contain.globalSystemManager.SetGlobalData(globalData);
                 contain.residentManager.activeCount = residentCount;
@@ -189,13 +234,17 @@ public class SaveLoadManager : MonoBehaviour
             contain.immigrationManager.RefreshAfterLoad();
             contain.edictManager.RefreshAfterLoad();
 
+            _autoSaveTimer = 0f;
+            ResidentSocialSystem.ResetStats();
             Debug.Log("[SaveLoadManager] Nạp game thành công!");
             GameEvents.Post(EventID.LoadCompleted);
+            return true;
         }
         catch (Exception ex)
         {
             Debug.LogError($"[SaveLoadManager] Lỗi nạp game: {ex.Message}");
             GameEvents.Post(EventID.LoadFailed, ex.Message);
+            return false;
         }
         finally
         {
