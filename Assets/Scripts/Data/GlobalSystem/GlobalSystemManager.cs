@@ -12,6 +12,9 @@ public class GlobalSystemManager : MonoBehaviour
     public float LastHungryRate { get; private set; }
     public float LastColdRate { get; private set; }
     public float LastDiseasePressure { get; private set; }
+    public BuildingEffectRules.MonthlyEffects LastBuildingEffects { get; private set; }
+
+    [SerializeField] private BuildingManager buildingManager;
 
     private void Update()
     {
@@ -141,8 +144,39 @@ public class GlobalSystemManager : MonoBehaviour
         PostWeatherChanged();
     }
 
+    private BuildingEffectRules.MonthlyEffects CollectBuildingEffects()
+    {
+        if (buildingManager == null && GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null)
+            buildingManager = GamePlayController.Instance.playerContain.buildingManager;
+
+        BuildingEffectRules.MonthlyEffects fx = buildingManager != null
+            ? BuildingEffectRules.Collect(buildingManager.allBuildings, buildingManager.activeCount)
+            : default;
+
+        // Hiệu ứng thụ động từ cây nghiên cứu
+        ResearchManager research = GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
+            ? GamePlayController.Instance.playerContain.researchManager
+            : null;
+        if (research != null)
+        {
+            fx.gold += research.GoldPerMonth;
+            fx.diseaseReduction += research.DiseaseReduction;
+            fx.warmPeople += research.WarmPeople;
+        }
+
+        return fx;
+    }
+
     private void ProcessMacroMonthlyConsumption()
     {
+        // 0. Hiệu ứng thụ động của công trình (thuế CityHall, giếng, lửa trại, trang trí)
+        BuildingEffectRules.MonthlyEffects fx = CollectBuildingEffects();
+        LastBuildingEffects = fx;
+        data.treasuryGold += fx.gold;
+        if (fx.reputation != 0f)
+            ModifyReputation(fx.reputation);
+        data.riotRiskMeter = Mathf.Max(0f, data.riotRiskMeter - fx.riotReduction);
+
         int foodPerCapita = data.CurrentSeason == SeasonType.Winter ? 2 : 1;
         int needFood = data.totalPopulation * foodPerCapita;
         int consumedFood = Mathf.Min(data.stockFood, needFood);
@@ -162,7 +196,9 @@ public class GlobalSystemManager : MonoBehaviour
         int consumedCoal = Mathf.Min(data.stockCoal, needCoal);
         data.stockCoal -= consumedCoal;
 
-        int peopleWarm = coalPerCapita > 0 ? consumedCoal / coalPerCapita : data.totalPopulation;
+        int peopleWarm = coalPerCapita > 0
+            ? Mathf.Min(data.totalPopulation, consumedCoal / coalPerCapita + fx.warmPeople)
+            : data.totalPopulation;
         int peopleCold = Mathf.Max(0, data.totalPopulation - peopleWarm);
         LastColdRate = data.totalPopulation > 0
             ? (float)peopleCold / data.totalPopulation
@@ -188,6 +224,7 @@ public class GlobalSystemManager : MonoBehaviour
 
         pressure += LastHungryRate * 0.03f;
         pressure += LastColdRate * 0.03f;
+        pressure -= LastBuildingEffects.diseaseReduction;
 
         return Mathf.Clamp01(pressure);
     }

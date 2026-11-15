@@ -7,7 +7,15 @@ public static class BuildingRules
     public static int GetDefaultConstructionMonths(BuildingType type) => type switch
     {
         BuildingType.Tent => 0,
+        BuildingType.Campfire => 0,
+        BuildingType.CoalCart => 0,
+        BuildingType.WaterWell => 1,
+        BuildingType.CoalStore => 1,
+        BuildingType.HerbFarm => 2,
+        BuildingType.CityHall => 3,
         BuildingType.House => 1,
+        BuildingType.LargeHouse => 2,
+        BuildingType.Forge => 2,
         BuildingType.LumberCamp => 1,
         BuildingType.GuardPost => 1,
         BuildingType.Farm => 2,
@@ -23,6 +31,7 @@ public static class BuildingRules
     {
         BuildingType.Tent => 3,
         BuildingType.House => 6,
+        BuildingType.LargeHouse => 12,
         BuildingType.QuarantineWard => 8,
         BuildingType.Clinic => 10,
         BuildingType.School => 12,
@@ -32,9 +41,12 @@ public static class BuildingRules
     public static byte GetDefaultMaxWorkers(BuildingType type) => type switch
     {
         BuildingType.Farm => 6,
+        BuildingType.HerbFarm => 4,
+        BuildingType.CoalStore => 3,
         BuildingType.Mine => 6,
         BuildingType.LumberCamp => 4,
         BuildingType.Furnace => 4,
+        BuildingType.Forge => 3,
         BuildingType.GuardPost => 4,
         BuildingType.Clinic => 3,
         BuildingType.School => 2,
@@ -45,9 +57,11 @@ public static class BuildingRules
     {
         BuildingType.Tent => 0.2f,
         BuildingType.House => 0.6f,
+        BuildingType.LargeHouse => 0.65f,
         BuildingType.QuarantineWard => 0.5f,
         BuildingType.Clinic => 0.5f,
         BuildingType.School => 0.5f,
+        BuildingType.CityHall => 0.7f,
         _ => 0.3f
     };
 
@@ -64,7 +78,7 @@ public static class BuildingRules
             buildingType = config.type,
             coordX = (ushort)origin.x,
             coordY = (ushort)origin.y,
-            sizeFootprint = (byte)config.size,
+            sizeFootprint = PackFootprint(config.Footprint),
             tierLevel = 1,
             buildingState = BuildingState.Constructing,
             constructionProgress = 0f,
@@ -86,6 +100,18 @@ public static class BuildingRules
 
         return data;
     }
+
+    public static byte PackFootprint(Vector2Int size) =>
+        (byte)(Mathf.Clamp(size.x, 1, 15) | (Mathf.Clamp(size.y, 1, 15) << 4));
+
+    public static Vector2Int UnpackFootprint(byte packed)
+    {
+        int x = Mathf.Max(1, packed & 0x0F);
+        int y = packed >> 4;
+        return new Vector2Int(x, y == 0 ? x : y);
+    }
+
+    public static Vector2Int GetFootprint(in BuildingData building) => UnpackFootprint(building.sizeFootprint);
 
     public static bool IsUnderConstruction(in BuildingData building) =>
         building.isAllocated && building.buildingState == BuildingState.Constructing;

@@ -9,14 +9,17 @@ public static class ResidentAssignmentRules
         IsNormalHousing(type) || type == BuildingType.QuarantineWard;
 
     public static bool IsNormalHousing(BuildingType type) =>
-        type == BuildingType.House || type == BuildingType.Tent;
+        type == BuildingType.House || type == BuildingType.LargeHouse || type == BuildingType.Tent;
 
     public static bool IsWorkplaceBuilding(BuildingType type) => type switch
     {
         BuildingType.Farm => true,
+        BuildingType.HerbFarm => true,
         BuildingType.Mine => true,
+        BuildingType.CoalStore => true,
         BuildingType.Clinic => true,
         BuildingType.Furnace => true,
+        BuildingType.Forge => true,
         BuildingType.School => true,
         BuildingType.GuardPost => true,
         BuildingType.LumberCamp => true,
@@ -36,12 +39,32 @@ public static class ResidentAssignmentRules
         _ => BuildingType.None
     };
 
+    /// <summary>Công trình phụ cho cùng nghề: nông dân làm vườn thuốc, thợ mỏ làm kho than.</summary>
+    public static BuildingType GetSecondaryWorkplace(ProfessionType profession) => profession switch
+    {
+        ProfessionType.Farmer => BuildingType.HerbFarm,
+        ProfessionType.Miner => BuildingType.CoalStore,
+        ProfessionType.Craftsman => BuildingType.Forge,
+        _ => BuildingType.None
+    };
+
+    public static bool IsWorkplaceFor(ProfessionType profession, BuildingType type)
+    {
+        if (type == BuildingType.None)
+            return false;
+
+        return type == GetPreferredWorkplace(profession) || type == GetSecondaryWorkplace(profession);
+    }
+
     public static ProfessionType GetProfessionForWorkplace(BuildingType type) => type switch
     {
         BuildingType.Farm => ProfessionType.Farmer,
+        BuildingType.HerbFarm => ProfessionType.Farmer,
         BuildingType.Mine => ProfessionType.Miner,
+        BuildingType.CoalStore => ProfessionType.Miner,
         BuildingType.Clinic => ProfessionType.Doctor,
         BuildingType.Furnace => ProfessionType.Craftsman,
+        BuildingType.Forge => ProfessionType.Craftsman,
         BuildingType.GuardPost => ProfessionType.Guard,
         BuildingType.LumberCamp => ProfessionType.Lumberjack,
         BuildingType.School => ProfessionType.Teacher,
@@ -197,8 +220,7 @@ public static class ResidentAssignmentRules
         if (NeedsClinicCare(in resident))
             return HasPatientSlot(in building);
 
-        BuildingType preferred = GetPreferredWorkplace(resident.professionType);
-        if (preferred == BuildingType.None || building.buildingType != preferred)
+        if (!IsWorkplaceFor(resident.professionType, building.buildingType))
             return false;
 
         if (CanStudy(in resident))
@@ -227,6 +249,9 @@ public static class ResidentAssignmentRules
 
         if (NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.QuarantineWard)
             return 100;
+
+        if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.LargeHouse)
+            return 85 + bonus;
 
         if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.House)
             return 80 + bonus;

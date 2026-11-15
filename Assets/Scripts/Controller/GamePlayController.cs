@@ -92,8 +92,15 @@ public class GamePlayController : Singleton<GamePlayController>
 
         playerContain.Init();
 
+        bool isNewGame = !loadSave;
         if (loadSave && !saveLoad.LoadGame())
+        {
             playerContain.globalSystemManager.InitializeNewGame();
+            isNewGame = true;
+        }
+
+        if (isNewGame)
+            playerContain.residentManager.SpawnStartingResidents();
 
         return true;
     }

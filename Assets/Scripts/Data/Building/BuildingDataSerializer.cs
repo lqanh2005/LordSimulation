@@ -28,10 +28,12 @@ public static class BuildingDataSerializer
         writer.Write(data.insulationValue);
         writer.Write(data.contamination);
         writer.Write(data.isHeated);
+        writer.Write((byte)data.cropType);
+        writer.Write(data.cropStage);
     }
 
     // Đọc 1 Struct BuildingData từ luồng nhị phân
-    public static void ReadBuilding(BinaryReader reader, out BuildingData data)
+    public static void ReadBuilding(BinaryReader reader, out BuildingData data, int version)
     {
         data = new BuildingData
         {
@@ -59,5 +61,12 @@ public static class BuildingDataSerializer
             contamination = reader.ReadSingle(),
             isHeated = reader.ReadBoolean()
         };
+
+        // v5: trạng thái ruộng của Farm
+        if (version >= 5)
+        {
+            data.cropType = (CropType)reader.ReadByte();
+            data.cropStage = reader.ReadByte();
+        }
     }
 }

@@ -27,6 +27,16 @@ public class TileDecor
     public string Key => string.IsNullOrEmpty(id) && sprite != null ? sprite.name : id;
 }
 
+/// <summary>Trạng thái gameplay của 1 ô lưới.</summary>
+[Serializable]
+public struct GridCell
+{
+    /// <summary>Ô đã bị công trình chiếm — cư dân phải đi né.</summary>
+    public bool IsOccupied;
+    /// <summary>Id công trình đang chiếm ô (0 = trống).</summary>
+    public ushort OccupantBuildingId;
+}
+
 public class GridController : MonoBehaviour
 {
     private const string DefaultMapResourcePath = "Map/MapData";
@@ -50,6 +60,8 @@ public class GridController : MonoBehaviour
     [Header("Map Data")]
     [SerializeField] private MapData mapData;
     [SerializeField] private bool saveWhenGenerated = true;
+    [Tooltip("Tắt để luôn sinh map mới khi Start (scene test)")]
+    [SerializeField] private bool loadSavedMapOnStart = true;
 
     [Header("Sorting")]
     [SerializeField] private string sortingLayerName = "Default";
@@ -61,11 +73,42 @@ public class GridController : MonoBehaviour
     private Transform groundRoot;
     private Transform objectRoot;
 
-    private SpriteRenderer[,] baseTiles;
+    [Header("Base Mesh (gộp tile nền)")]
+    [Tooltip("Số ô mỗi cạnh của 1 chunk mesh nền. 1 chunk = 1 renderer")]
+    [SerializeField, Min(4)] private int baseChunkSize = 16;
+    [Tooltip("Để trống = dùng material sprite mặc định của render pipeline")]
+    [SerializeField] private Material baseTileMaterial;
+
+    private sealed class BaseChunk
+    {
+        public Mesh mesh;
+        public MeshRenderer renderer;
+        public Color32[] colors;
+        public bool colorsDirty;
+    }
+
+    private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+    private static Material defaultSpriteMaterial;
+
+    private bool gridGenerated;
+    private BaseChunk[] baseChunks;
+    private int baseChunksX;
+    private int[] baseTileChunk;        // index chunk của từng ô
+    private int[] baseTileVertexStart;  // vertex đầu tiên của ô trong mesh chunk
+    private int baseTileVertexCount;
+    private Color32[] baseTileColors;
     private SpriteRenderer[,] groundDecors;
     private SpriteRenderer[,] objectDecors;
     private MapDecorEntry[,] groundEntries;
     private MapDecorEntry[,] objectEntries;
+
+    // Occupancy là state gameplay, không gắn với visual → không bị xoá khi ClearGrid/GenerateGrid
+    private GridCell[] cells;
+    private int cellsWidth;
+    private int cellsHeight;
+
+    /// <summary>Tăng mỗi khi occupancy thay đổi — cư dân dùng để biết cần tìm lại đường.</summary>
+    public int OccupancyVersion { get; private set; }
 
     public int Width => width;
     public int Height => height;
@@ -76,12 +119,12 @@ public class GridController : MonoBehaviour
 
     private void Start()
     {
-        if (mapData == null)
+        if (loadSavedMapOnStart && mapData == null)
         {
             mapData = Resources.Load<MapData>(DefaultMapResourcePath);
         }
 
-        if (mapData != null && mapData.HasData)
+        if (loadSavedMapOnStart && mapData != null && mapData.HasData)
         {
             LoadMap();
         }
@@ -106,7 +149,7 @@ public class GridController : MonoBehaviour
     [ContextMenu("Save Map")]
     public void SaveMap()
     {
-        if (baseTiles == null)
+        if (!gridGenerated)
         {
             return;
         }
@@ -190,7 +233,8 @@ public class GridController : MonoBehaviour
             DestroySafe(transform.GetChild(i).gameObject);
         }
 
-        baseTiles = null;
+        DestroyBaseMeshes();
+        gridGenerated = false;
         groundDecors = null;
         objectDecors = null;
         groundEntries = null;
@@ -215,24 +259,197 @@ public class GridController : MonoBehaviour
         groundRoot = CreateRoot("GroundDecor");
         objectRoot = CreateRoot("ObjectDecor");
 
-        baseTiles = new SpriteRenderer[width, height];
         groundDecors = new SpriteRenderer[width, height];
         objectDecors = new SpriteRenderer[width, height];
         groundEntries = new MapDecorEntry[width, height];
         objectEntries = new MapDecorEntry[width, height];
 
-        for (int x = 0; x < width; x++)
+        BuildBaseMeshes();
+        gridGenerated = true;
+    }
+
+    // ===== Nền: gộp toàn bộ tile thành vài mesh (mỗi chunk 1 renderer) thay vì 1 SpriteRenderer / ô =====
+
+    public bool IsGenerated => gridGenerated;
+
+    /// <summary>Tô màu 1 ô nền (debug overlay, highlight...). Màu nhân với texture qua vertex color.</summary>
+    public void SetBaseTileColor(int x, int y, Color color)
+    {
+        if (!gridGenerated || baseTileColors == null || !IsInside(x, y))
+            return;
+
+        int tile = y * width + x;
+        Color32 c = color;
+        if (baseTileColors[tile].Equals(c))
+            return;
+
+        baseTileColors[tile] = c;
+        BaseChunk chunk = baseChunks[baseTileChunk[tile]];
+        int start = baseTileVertexStart[tile];
+        for (int v = 0; v < baseTileVertexCount; v++)
+            chunk.colors[start + v] = c;
+        chunk.colorsDirty = true;
+    }
+
+    public Color GetBaseTileColor(int x, int y)
+    {
+        return baseTileColors != null && IsInside(x, y) ? (Color)baseTileColors[y * width + x] : Color.white;
+    }
+
+    private void LateUpdate()
+    {
+        if (baseChunks == null)
+            return;
+
+        for (int i = 0; i < baseChunks.Length; i++)
         {
-            for (int y = 0; y < height; y++)
+            BaseChunk chunk = baseChunks[i];
+            if (chunk == null || !chunk.colorsDirty)
+                continue;
+            chunk.mesh.colors32 = chunk.colors;
+            chunk.colorsDirty = false;
+        }
+    }
+
+    private void BuildBaseMeshes()
+    {
+        // Sprite trong atlas: sprite.texture / sprite.uv trả về atlas + UV đã pack
+        Vector2[] spriteVerts = baseSprite.vertices;
+        Vector2[] spriteUvs = baseSprite.uv;
+        ushort[] spriteTris = baseSprite.triangles;
+        baseTileVertexCount = spriteVerts.Length;
+
+        int chunk = Mathf.Max(4, baseChunkSize);
+        baseChunksX = (width + chunk - 1) / chunk;
+        int chunksY = (height + chunk - 1) / chunk;
+        baseChunks = new BaseChunk[baseChunksX * chunksY];
+
+        int tileCount = width * height;
+        baseTileChunk = new int[tileCount];
+        baseTileVertexStart = new int[tileCount];
+        baseTileColors = new Color32[tileCount];
+        for (int i = 0; i < tileCount; i++)
+            baseTileColors[i] = new Color32(255, 255, 255, 255);
+
+        Material material = ResolveBaseMaterial();
+        MaterialPropertyBlock block = new MaterialPropertyBlock();
+        block.SetTexture(MainTexId, baseSprite.texture);
+
+        var verts = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var tris = new List<int>();
+
+        for (int cy = 0; cy < chunksY; cy++)
+        {
+            for (int cx = 0; cx < baseChunksX; cx++)
             {
-                baseTiles[x, y] = CreateRenderer($"Base_{x}_{y}", baseRoot, baseSprite, GridToLocal(x, y), baseOrder);
+                int x0 = cx * chunk, y0 = cy * chunk;
+                int x1 = Mathf.Min(width, x0 + chunk), y1 = Mathf.Min(height, y0 + chunk);
+                int chunkIndex = cy * baseChunksX + cx;
+
+                verts.Clear();
+                uvs.Clear();
+                tris.Clear();
+
+                // Vẽ từ xa (x+y lớn) tới gần để phần chồng mép tile giống cách sort cũ
+                for (int sum = (x1 - 1) + (y1 - 1); sum >= x0 + y0; sum--)
+                {
+                    for (int x = x0; x < x1; x++)
+                    {
+                        int y = sum - x;
+                        if (y < y0 || y >= y1)
+                            continue;
+
+                        int tile = y * width + x;
+                        int start = verts.Count;
+                        baseTileChunk[tile] = chunkIndex;
+                        baseTileVertexStart[tile] = start;
+
+                        Vector3 offset = GridToLocal(x, y);
+                        for (int v = 0; v < spriteVerts.Length; v++)
+                        {
+                            verts.Add(offset + (Vector3)spriteVerts[v]);
+                            uvs.Add(spriteUvs[v]);
+                        }
+                        for (int t = 0; t < spriteTris.Length; t++)
+                            tris.Add(start + spriteTris[t]);
+                    }
+                }
+
+                Mesh mesh = new Mesh { name = $"BaseChunk_{cx}_{cy}", hideFlags = HideFlags.DontSave };
+                if (verts.Count > 65535)
+                    mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                mesh.SetVertices(verts);
+                mesh.SetUVs(0, uvs);
+                mesh.SetTriangles(tris, 0);
+
+                Color32[] colors = new Color32[verts.Count];
+                for (int i = 0; i < colors.Length; i++)
+                    colors[i] = new Color32(255, 255, 255, 255);
+                mesh.colors32 = colors;
+                mesh.RecalculateBounds();
+
+                GameObject go = new GameObject(mesh.name);
+                go.transform.SetParent(baseRoot, false);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                MeshRenderer mr = go.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = material;
+                mr.SetPropertyBlock(block);
+                mr.sortingLayerName = sortingLayerName;
+                mr.sortingOrder = baseOrder;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+
+                baseChunks[chunkIndex] = new BaseChunk { mesh = mesh, renderer = mr, colors = colors };
             }
         }
     }
 
+    private void DestroyBaseMeshes()
+    {
+        if (baseChunks != null)
+        {
+            for (int i = 0; i < baseChunks.Length; i++)
+            {
+                if (baseChunks[i] == null || baseChunks[i].mesh == null)
+                    continue;
+                if (Application.isPlaying)
+                    Destroy(baseChunks[i].mesh);
+                else
+                    DestroyImmediate(baseChunks[i].mesh);
+            }
+        }
+
+        baseChunks = null;
+        baseTileChunk = null;
+        baseTileVertexStart = null;
+        baseTileColors = null;
+    }
+
+    private void OnDestroy()
+    {
+        DestroyBaseMeshes();
+    }
+
+    private Material ResolveBaseMaterial()
+    {
+        if (baseTileMaterial != null)
+            return baseTileMaterial;
+
+        // Lấy đúng material sprite mặc định của pipeline hiện tại (URP 2D: Sprite-Unlit-Default)
+        if (defaultSpriteMaterial == null)
+        {
+            GameObject probe = new GameObject("SpriteMaterialProbe") { hideFlags = HideFlags.HideAndDontSave };
+            defaultSpriteMaterial = probe.AddComponent<SpriteRenderer>().sharedMaterial;
+            DestroyImmediate(probe);
+        }
+
+        return defaultSpriteMaterial;
+    }
+
     public void GenerateDecor()
     {
-        if (baseTiles == null)
+        if (!gridGenerated)
         {
             return;
         }
@@ -289,7 +506,7 @@ public class GridController : MonoBehaviour
 
     public bool PlaceDecor(int x, int y, TileDecor decor, Vector2 offset, float scale, bool flipX)
     {
-        if (decor == null || decor.sprite == null || !IsInside(x, y) || baseTiles == null)
+        if (decor == null || decor.sprite == null || !IsInside(x, y) || !gridGenerated)
         {
             return false;
         }
@@ -332,7 +549,7 @@ public class GridController : MonoBehaviour
 
     public void RemoveDecor(int x, int y, DecorLayer layer)
     {
-        if (!IsInside(x, y) || baseTiles == null)
+        if (!IsInside(x, y) || !gridGenerated)
         {
             return;
         }
@@ -379,10 +596,44 @@ public class GridController : MonoBehaviour
 
     public Vector3 GetFootprintCenterWorld(Vector2Int origin, int size)
     {
+        return GetFootprintCenterWorld(origin, new Vector2Int(size, size));
+    }
+
+    public Vector3 GetFootprintCenterWorld(Vector2Int origin, Vector2Int size)
+    {
         Vector3 first = GridToLocal(origin.x, origin.y);
-        Vector3 last = GridToLocal(origin.x + size - 1, origin.y + size - 1);
+        Vector3 last = GridToLocal(origin.x + size.x - 1, origin.y + size.y - 1);
         return transform.TransformPoint((first + last) * 0.5f);
     }
+
+    /// <summary>Góc dưới cùng (góc trước) của footprint, nơi đặt pivot của sprite công trình.</summary>
+    public Vector3 GetFootprintAnchorWorld(Vector2Int origin)
+    {
+        Vector3 local = GridToLocal(origin.x, origin.y) - new Vector3(0f, tileSize.y * 0.5f, 0f);
+        return transform.TransformPoint(local);
+    }
+
+    /// <summary>Sorting theo tâm footprint (hỗ trợ footprint chữ nhật), cùng thang với GetObjectSortingOrder.</summary>
+    public int GetFootprintSortingOrder(Vector2Int origin, Vector2Int size)
+    {
+        int centerSum = (2 * origin.x + size.x) + (2 * origin.y + size.y);
+        return objectOrder + 2 * (width + height) - centerSum;
+    }
+
+    /// <summary>
+    /// Sorting order cho vật di chuyển tự do (resident) theo vị trí world liên tục, cùng thang với cây/building.
+    /// Cây/building luôn nhận order chẵn; vật di chuyển nhận order lẻ nằm giữa:
+    /// đứng phía trước tâm vật (x+y nhỏ hơn) → order cao hơn → vẽ đè lên; đứng ngay tâm hoặc phía sau → bị che.
+    /// </summary>
+    public int GetDynamicSortingOrder(Vector3 worldPos)
+    {
+        Vector3 local = transform.InverseTransformPoint(worldPos);
+        float sum = local.y / (tileSize.y * 0.5f); // = x + y (toạ độ ô liên tục)
+        float v = objectOrder + 2 * (width + height) - 2 - 2f * sum;
+        return 2 * Mathf.CeilToInt(v * 0.5f) - 1;
+    }
+
+    public int SortingLayerId => SortingLayer.NameToID(sortingLayerName);
 
     public int GetObjectSortingOrder(int x, int y)
     {
@@ -394,10 +645,86 @@ public class GridController : MonoBehaviour
         return x >= 0 && y >= 0 && x < width && y < height;
     }
 
-    public SpriteRenderer GetBaseTile(int x, int y)
+    // ===== Occupancy theo ô =====
+
+    public GridCell GetCell(int x, int y)
     {
-        return baseTiles != null && IsInside(x, y) ? baseTiles[x, y] : null;
+        EnsureCells();
+        return IsInside(x, y) ? cells[y * width + x] : default;
     }
+
+    public bool IsOccupied(int x, int y)
+    {
+        EnsureCells();
+        return IsInside(x, y) && cells[y * width + x].IsOccupied;
+    }
+
+    public ushort GetOccupantId(int x, int y)
+    {
+        EnsureCells();
+        return IsInside(x, y) ? cells[y * width + x].OccupantBuildingId : (ushort)0;
+    }
+
+    /// <summary>Đánh dấu ô bị công trình <paramref name="buildingId"/> chiếm (0 = giải phóng ô).</summary>
+    public void SetOccupied(int x, int y, ushort buildingId)
+    {
+        EnsureCells();
+        if (!IsInside(x, y))
+            return;
+
+        ref GridCell cell = ref cells[y * width + x];
+        bool occupied = buildingId != 0;
+        if (cell.IsOccupied == occupied && cell.OccupantBuildingId == buildingId)
+            return;
+
+        cell.IsOccupied = occupied;
+        cell.OccupantBuildingId = buildingId;
+        OccupancyVersion++;
+    }
+
+    public void SetOccupied(Vector2Int origin, Vector2Int size, ushort buildingId)
+    {
+        for (int dx = 0; dx < size.x; dx++)
+            for (int dy = 0; dy < size.y; dy++)
+                SetOccupied(origin.x + dx, origin.y + dy, buildingId);
+    }
+
+    public void ClearOccupied(Vector2Int origin, Vector2Int size)
+    {
+        SetOccupied(origin, size, 0);
+    }
+
+    public void ClearAllOccupancy()
+    {
+        EnsureCells();
+        Array.Clear(cells, 0, cells.Length);
+        OccupancyVersion++;
+    }
+
+    // Cấp phát / resize mảng ô, giữ lại dữ liệu cũ trong vùng giao nhau
+    private void EnsureCells()
+    {
+        int w = Mathf.Max(1, width);
+        int h = Mathf.Max(1, height);
+        if (cells != null && cellsWidth == w && cellsHeight == h)
+            return;
+
+        GridCell[] next = new GridCell[w * h];
+        if (cells != null)
+        {
+            int copyW = Mathf.Min(w, cellsWidth);
+            int copyH = Mathf.Min(h, cellsHeight);
+            for (int y = 0; y < copyH; y++)
+                for (int x = 0; x < copyW; x++)
+                    next[y * w + x] = cells[y * cellsWidth + x];
+        }
+
+        cells = next;
+        cellsWidth = w;
+        cellsHeight = h;
+        OccupancyVersion++;
+    }
+
 
     private TileDecor FindDecor(string decorId)
     {
@@ -443,7 +770,8 @@ public class GridController : MonoBehaviour
 
     private int GetDepth(int x, int y)
     {
-        return (width + height) - (x + y);
+        // Thang x2 để khớp GetFootprintSortingOrder (1x1 cho cùng giá trị)
+        return 2 * (width + height) - 2 * (x + y) - 2;
     }
 
     private Transform CreateRoot(string rootName)

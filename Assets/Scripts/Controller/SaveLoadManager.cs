@@ -129,7 +129,8 @@ public class SaveLoadManager : MonoBehaviour
                     edicts, edictCount,
                     tradeRoutes, tradeCount,
                     contain.immigrationManager.waitingApplicants,
-                    contain.immigrationManager.waitingCount
+                    contain.immigrationManager.waitingCount,
+                    contain.researchManager != null ? contain.researchManager.GetSaveData() : default
                 );
             }
 
@@ -206,7 +207,8 @@ public class SaveLoadManager : MonoBehaviour
                     buildingBuffer, out int buildingCount,
                     edictBuffer, out int edictCount,
                     tradeBuffer, out int tradeCount,
-                    immigrantBuffer, out int immigrantCount
+                    immigrantBuffer, out int immigrantCount,
+                    out ResearchSaveData researchData
                 );
 
                 Array.Copy(residentBuffer, contain.residentManager.allResidents, residentBuffer.Length);
@@ -218,9 +220,12 @@ public class SaveLoadManager : MonoBehaviour
                 contain.globalSystemManager.SetGlobalData(globalData);
                 contain.residentManager.activeCount = residentCount;
                 contain.buildingManager.activeCount = buildingCount;
+                contain.buildingManager.InvalidateIdCache();
                 contain.edictManager.activeCount = edictCount;
                 contain.tradeManager.activeCount = tradeCount;
                 contain.immigrationManager.waitingCount = immigrantCount;
+                if (contain.researchManager != null)
+                    contain.researchManager.ApplySaveData(in researchData);
 
                 ClearInactiveSlots(contain.residentManager.allResidents, residentCount);
                 ClearInactiveSlots(contain.buildingManager.allBuildings, buildingCount);

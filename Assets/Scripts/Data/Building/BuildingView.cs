@@ -4,11 +4,12 @@ public class BuildingView : MonoBehaviour
 {
     private SpriteRenderer[] renderers;
     private Color[] baseColors;
+    private int[] orderOffsets;
 
     public ushort BuildingId { get; private set; }
     public BuildingType Type { get; private set; }
     public Vector2Int Origin { get; private set; }
-    public int Size { get; private set; }
+    public Vector2Int Footprint { get; private set; }
 
     public SpriteRenderer[] Renderers
     {
@@ -23,12 +24,12 @@ public class BuildingView : MonoBehaviour
         }
     }
 
-    public void Init(ushort buildingId, BuildingType type, Vector2Int origin, int size, string sortingLayerName, int sortingOrder)
+    public void Init(ushort buildingId, BuildingType type, Vector2Int origin, Vector2Int footprint, string sortingLayerName, int sortingOrder)
     {
         BuildingId = buildingId;
         Type = type;
         Origin = origin;
-        Size = size;
+        Footprint = footprint;
         gameObject.name = $"{type}_{buildingId}_{origin.x}_{origin.y}";
 
         SetSorting(sortingLayerName, sortingOrder);
@@ -36,10 +37,21 @@ public class BuildingView : MonoBehaviour
 
     public void SetSorting(string sortingLayerName, int sortingOrder)
     {
-        foreach (SpriteRenderer sr in Renderers)
+        SpriteRenderer[] list = Renderers;
+        if (orderOffsets == null || orderOffsets.Length != list.Length)
         {
-            sr.sortingLayerName = sortingLayerName;
-            sr.sortingOrder = sortingOrder;
+            // sortingOrder trong prefab = offset tương đối (vd: ruộng nằm trên khung Farm)
+            orderOffsets = new int[list.Length];
+            for (int i = 0; i < list.Length; i++)
+            {
+                orderOffsets[i] = list[i].sortingOrder;
+            }
+        }
+
+        for (int i = 0; i < list.Length; i++)
+        {
+            list[i].sortingLayerName = sortingLayerName;
+            list[i].sortingOrder = sortingOrder + orderOffsets[i];
         }
     }
 

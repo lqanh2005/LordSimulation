@@ -112,6 +112,8 @@ public static class EdictRuleCatalog
         return type switch
         {
             BuildingType.House => "nhà ở",
+            BuildingType.LargeHouse => "nhà ở lớn",
+            BuildingType.Forge => "lò rèn",
             BuildingType.QuarantineWard => "khu cách ly",
             BuildingType.Farm => "nông nghiệp",
             BuildingType.Mine => "khai mỏ",

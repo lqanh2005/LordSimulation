@@ -20,7 +20,17 @@ public class ResidentManager : MonoBehaviour
     [SerializeField] private EdictManager edictManager;
     [SerializeField] private int maxVisualAgents = 200;
     [SerializeField] private int poolPreloadCount = 32;
-    [SerializeField] private float commuteSpeed = 2.5f;
+    [Tooltip("Tốc độ đi bộ (đơn vị world/giây — 1 tile rộng ~1 đơn vị)")]
+    [SerializeField] private float commuteSpeed = 0.8f;
+
+    [Header("Tìm đường A*")]
+    [Tooltip("Số lượt A* tối đa mỗi frame — tránh giật khi cả làng đổi ca cùng lúc")]
+    [SerializeField] private int maxPathRequestsPerFrame = 8;
+
+    [Header("Dân khởi đầu (New Game)")]
+    [SerializeField] private int startingResidentCount = 5;
+    [Tooltip("Tuổi dân khởi đầu — nằm trong nhóm Adult (18-64) để dùng sprite Young")]
+    [SerializeField] private Vector2Int startingAgeRange = new Vector2Int(18, 30);
 
     [Header("Đói / Chết đói")]
     [SerializeField] [Range(0f, 1f)] private float starveDeathChance = 0.1f;
@@ -33,11 +43,70 @@ public class ResidentManager : MonoBehaviour
 
     [Header("Grid → World")]
     [SerializeField] private Grid isometricGrid;
+    [Tooltip("Dùng khi không có Unity Grid (GamePlayScene dùng GridController)")]
+    [SerializeField] private GridController gridController;
     [SerializeField] private Vector2 gridOrigin;
     [SerializeField] private float cellSize = 1f;
 
     private readonly List<ResidentBase> _activeVisuals = new List<ResidentBase>();
     private readonly bool[] _visualBoundFlags = new bool[MAX_RESIDENTS];
+
+    private GridPathfinder _pathfinder;
+    private readonly List<Vector2Int> _cellPathBuffer = new List<Vector2Int>(64);
+    private readonly List<Vector3> _worldPathBuffer = new List<Vector3>(64);
+    private int _pathRoundRobin;
+
+    private struct CommuteGoal
+    {
+        public Vector3 world;
+        public Vector2Int cell;
+        public ushort buildingId;
+    }
+
+    // ===== Debug: ép cư dân đi tới ô chỉ định (key = residentID, bền qua compact) =====
+    private readonly Dictionary<int, CommuteGoal> _debugGoals = new Dictionary<int, CommuteGoal>();
+
+    public float CommuteSpeed
+    {
+        get => commuteSpeed;
+        set => commuteSpeed = Mathf.Max(0f, value);
+    }
+
+    public IReadOnlyList<ResidentBase> ActiveVisuals => _activeVisuals;
+    public GridController GridController => gridController;
+    public int DebugOverrideCount => _debugGoals.Count;
+
+    /// <summary>Ép cư dân của <paramref name="view"/> đi tới ô <paramref name="cell"/> (bỏ qua lịch đi làm/về nhà).</summary>
+    public bool DebugMoveTo(ResidentBase view, Vector2Int cell)
+    {
+        if (view == null || !view.IsBound || (uint)view.DataIndex >= (uint)activeCount || gridController == null)
+            return false;
+        if (!gridController.IsInside(cell.x, cell.y))
+            return false;
+
+        ref ResidentData data = ref GetResidentRef(view.DataIndex);
+        Vector3 world = gridController.GridToWorld(cell.x, cell.y);
+        world.z = 0f;
+        _debugGoals[data.residentID] = new CommuteGoal
+        {
+            world = world,
+            cell = cell,
+            buildingId = gridController.GetOccupantId(cell.x, cell.y)
+        };
+        return true;
+    }
+
+    public void ClearDebugMoves()
+    {
+        _debugGoals.Clear();
+    }
+
+    public int GetResidentId(ResidentBase view)
+    {
+        if (view == null || !view.IsBound || (uint)view.DataIndex >= (uint)activeCount)
+            return -1;
+        return GetResidentRef(view.DataIndex).residentID;
+    }
 
     public void Init()
     {
@@ -65,12 +134,14 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
         GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
+        GameEvents.Unlisten(EventID.BuildingDemolished, OnBuildingDemolished);
 
         GameEvents.Listen(EventID.HungerResolved, OnHungerResolved);
         GameEvents.Listen(EventID.ColderResolved, OnColderResolved);
         GameEvents.Listen(EventID.DiseasePressure, OnDiseasePressure);
         GameEvents.Listen(EventID.YearChanged, OnYearChanged);
         GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
+        GameEvents.Listen(EventID.BuildingDemolished, OnBuildingDemolished);
     }
 
     private void UnsubscribeEvents()
@@ -80,6 +151,40 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
         GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
+        GameEvents.Unlisten(EventID.BuildingDemolished, OnBuildingDemolished);
+    }
+
+    // Công trình bị phá → cư dân mất nhà / chỗ làm ngay, rồi xếp lại chỗ mới luôn (không đợi sang tháng)
+    private void OnBuildingDemolished(object param)
+    {
+        if (!(param is BuildingDemolishedPayload payload))
+            return;
+
+        int affected = 0;
+        for (int i = 0; i < activeCount; i++)
+        {
+            ref ResidentData r = ref allResidents[i];
+            if (r.assignedHouseID == payload.buildingId)
+            {
+                ResidentAssignmentRules.ClearHousingAssignment(ref r);
+                affected++;
+            }
+            if (r.assignedWorkID == payload.buildingId)
+            {
+                ResidentAssignmentRules.ClearWorkAssignment(ref r);
+                affected++;
+            }
+        }
+
+        ResolveDependencies();
+        if (affected > 0 && buildingManager != null)
+        {
+            ResidentAssignmentSystem.ProcessMonthly(
+                allResidents,
+                activeCount,
+                buildingManager.allBuildings,
+                buildingManager.activeCount);
+        }
     }
 
     private void OnDestroy()
@@ -89,6 +194,9 @@ public class ResidentManager : MonoBehaviour
 
     private void ResolveDependencies()
     {
+        if (isometricGrid == null && gridController == null)
+            gridController = FindFirstObjectByType<GridController>();
+
         if (GamePlayController.Instance == null || GamePlayController.Instance.playerContain == null)
             return;
 
@@ -99,6 +207,16 @@ public class ResidentManager : MonoBehaviour
             globalSystemManager = contain.globalSystemManager;
         if (edictManager == null)
             edictManager = contain.edictManager;
+    }
+
+    private void EnsurePathfinder()
+    {
+        if (gridController == null && isometricGrid == null)
+            gridController = FindFirstObjectByType<GridController>();
+
+        // A* chỉ chạy trên GridController; Unity Grid cũ vẫn đi đường thẳng
+        if (_pathfinder == null && gridController != null && isometricGrid == null)
+            _pathfinder = new GridPathfinder(gridController);
     }
 
     public int AddResident(in ResidentData newResident)
@@ -143,18 +261,30 @@ public class ResidentManager : MonoBehaviour
 
     public Vector3 GetBuildingWorldPosition(in BuildingData building)
     {
-        int size = Mathf.Max(1, building.sizeFootprint);
-        return CellToWorld(building.coordX, building.coordY, size);
+        return CellToWorld(building.coordX, building.coordY, BuildingRules.GetFootprint(in building));
     }
 
     public Vector3 CellToWorld(int cellX, int cellY, int size = 1)
     {
         size = Mathf.Max(1, size);
+        return CellToWorld(cellX, cellY, new Vector2Int(size, size));
+    }
+
+    public Vector3 CellToWorld(int cellX, int cellY, Vector2Int size)
+    {
+        size = Vector2Int.Max(Vector2Int.one, size);
         if (isometricGrid != null)
         {
             Vector3Int origin = new Vector3Int(cellX, cellY, 0);
-            Vector3Int top = origin + new Vector3Int(size - 1, size - 1, 0);
+            Vector3Int top = origin + new Vector3Int(size.x - 1, size.y - 1, 0);
             Vector3 world = (isometricGrid.GetCellCenterWorld(origin) + isometricGrid.GetCellCenterWorld(top)) * 0.5f;
+            world.z = 0f;
+            return world;
+        }
+
+        if (gridController != null)
+        {
+            Vector3 world = gridController.GetFootprintCenterWorld(new Vector2Int(cellX, cellY), size);
             world.z = 0f;
             return world;
         }
@@ -164,6 +294,42 @@ public class ResidentManager : MonoBehaviour
             gridOrigin.y + cellY * cellSize,
             0f
         );
+    }
+
+    // Gọi một lần khi bắt đầu New Game (không gọi khi load save)
+    public void SpawnStartingResidents()
+    {
+        if (startingResidentCount <= 0)
+            return;
+
+        int nextId = PeekMaxResidentId() + 1;
+        int minAge = Mathf.Max(18, startingAgeRange.x);
+        int maxAge = Mathf.Min(64, Mathf.Max(minAge, startingAgeRange.y));
+        int added = 0;
+
+        for (int i = 0; i < startingResidentCount; i++)
+        {
+            ResidentData resident = ImmigrationRules.CreateApplicant(nextId++);
+            resident.age = (byte)UnityEngine.Random.Range(minAge, maxAge + 1);
+            // Dân khởi đầu luôn khỏe mạnh — không mang bệnh tiềm ẩn như dân nhập cư
+            resident.healthStatus = HealthStatus.Healthy;
+            resident.diseaseType = DiseaseType.None;
+            resident.IncubationMonths = 0;
+            resident.recoveryMonths = 0;
+            resident.symptoms = SymptomFlags.None;
+            resident.bodyTemperature = ResidentDiseaseRules.NormalBodyTemperature;
+            resident.professionType = ResidentProfessionRules.GetInitialProfession(in resident);
+
+            if (AddResident(in resident) >= 0)
+                added++;
+        }
+
+        if (globalSystemManager == null)
+            ResolveDependencies();
+        if (globalSystemManager != null)
+            globalSystemManager.GetGlobalDataRef().totalPopulation += added;
+
+        NotifyPopulationChanged();
     }
 
     public int PeekMaxResidentId()
@@ -367,6 +533,7 @@ public class ResidentManager : MonoBehaviour
             return;
 
         buildingManager.ProcessMonthlyConstruction();
+        buildingManager.ProcessMonthlyCrops(season);
 
         ResidentProfessionSystem.ProcessMonthly(
             allResidents,
@@ -387,7 +554,10 @@ public class ResidentManager : MonoBehaviour
             buildingManager.activeCount,
             season,
             globalSystemManager,
-            edictManager);
+            edictManager,
+            GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
+                ? GamePlayController.Instance.playerContain.researchManager
+                : null);
 
         ResidentProfessionEffectSystem.ProcessMonthly(
             allResidents,
@@ -579,13 +749,14 @@ public class ResidentManager : MonoBehaviour
         if (residentPrefab == null || !resident.isAlive || _activeVisuals.Count >= maxVisualAgents)
             return false;
 
-        Vector3 worldPosition = ResolveCommuteTarget(in resident);
+        Vector3 worldPosition = ResolveCommuteGoal(in resident).world;
         ResidentBase view = SimplePool2.Spawn(residentPrefab, worldPosition, Quaternion.identity);
 
         if (visualRoot != null)
             view.transform.SetParent(visualRoot, true);
 
         view.Bind(index, in resident, worldPosition);
+        ApplyDepthSorting(view);
         _activeVisuals.Add(view);
         return true;
     }
@@ -619,8 +790,18 @@ public class ResidentManager : MonoBehaviour
         if (step <= 0f)
             return;
 
-        for (int i = 0; i < _activeVisuals.Count; i++)
+        EnsurePathfinder();
+        int gridVersion = gridController != null ? gridController.OccupancyVersion : 0;
+        int pathBudget = Mathf.Max(1, maxPathRequestsPerFrame);
+
+        int count = _activeVisuals.Count;
+        if (_pathRoundRobin >= count)
+            _pathRoundRobin = 0;
+
+        // Bắt đầu từ vị trí xoay vòng để mọi cư dân đều tới lượt tìm đường
+        for (int n = 0; n < count; n++)
         {
+            int i = (_pathRoundRobin + n) % count;
             ResidentBase view = _activeVisuals[i];
             if (view == null || !view.IsBound)
                 continue;
@@ -631,54 +812,102 @@ public class ResidentManager : MonoBehaviour
             if (!data.isAlive)
                 continue;
 
-            view.TickCommute(ResolveCommuteTarget(in data), step);
+            CommuteGoal goal = ResolveCommuteGoal(in data);
+            if (pathBudget > 0 && view.NeedsPath(goal.world, gridVersion))
+            {
+                pathBudget--;
+                if (pathBudget == 0)
+                    _pathRoundRobin = (i + 1) % count;
+                AssignPath(view, in goal, gridVersion);
+            }
+
+            view.TickPath(step);
+            ApplyDepthSorting(view);
         }
     }
 
-    private Vector3 ResolveCommuteTarget(in ResidentData data)
+    // Cùng sorting layer + thang order với cây/building → vật phía trước che resident đúng
+    private void ApplyDepthSorting(ResidentBase view)
     {
-        Vector3 home = ResolveHouseWorld(in data) + SlotOffset(data.residentID, 0);
-        if (data.assignedWorkID < 0)
-            return home;
+        if (gridController == null)
+            return;
 
-        float progress = 0.5f;
-        if (globalSystemManager != null)
-            progress = globalSystemManager.GetGlobalDataRef().timeTickProgress;
-
-        if (progress >= 0.5f && progress < 0.95f)
-            return home;
-
-        return ResolveWorkWorld(in data) + SlotOffset(data.residentID, 1);
+        view.SetDepthSorting(gridController.SortingLayerId, gridController.GetDynamicSortingOrder(view.transform.position));
     }
 
-    private Vector3 ResolveHouseWorld(in ResidentData data)
+    private void AssignPath(ResidentBase view, in CommuteGoal goal, int gridVersion)
     {
-        if (buildingManager != null && data.assignedHouseID >= 0)
+        _worldPathBuffer.Clear();
+
+        if (_pathfinder != null && _pathfinder.IsValid)
         {
-            int houseIndex = buildingManager.FindBuildingIndexById((ushort)data.assignedHouseID);
-            if (houseIndex >= 0)
+            Vector2Int startCell = gridController.WorldToGrid(view.transform.position);
+            ushort startBuilding = gridController.GetOccupantId(startCell.x, startCell.y);
+
+            if (_pathfinder.FindPath(startCell, goal.cell, startBuilding, goal.buildingId, _cellPathBuffer))
             {
-                ref BuildingData house = ref buildingManager.GetBuildingRef(houseIndex);
-                return GetBuildingWorldPosition(in house);
+                // Bỏ ô cuối — thay bằng điểm đích chính xác (tâm công trình + slot offset)
+                for (int c = 0; c < _cellPathBuffer.Count - 1; c++)
+                {
+                    Vector3 p = gridController.GridToWorld(_cellPathBuffer[c].x, _cellPathBuffer[c].y);
+                    p.z = 0f;
+                    _worldPathBuffer.Add(p);
+                }
             }
         }
 
-        return FallbackWorld(data.residentID);
+        _worldPathBuffer.Add(goal.world);
+        view.SetPath(_worldPathBuffer, goal.world, gridVersion);
     }
 
-    private Vector3 ResolveWorkWorld(in ResidentData data)
+    private CommuteGoal ResolveCommuteGoal(in ResidentData data)
     {
-        if (buildingManager != null && data.assignedWorkID >= 0)
+        if (_debugGoals.Count > 0 && _debugGoals.TryGetValue(data.residentID, out CommuteGoal debugGoal))
+            return debugGoal;
+
+        bool goToWork = false;
+        if (data.assignedWorkID >= 0)
         {
-            int workIndex = buildingManager.FindBuildingIndexById((ushort)data.assignedWorkID);
-            if (workIndex >= 0)
-            {
-                ref BuildingData work = ref buildingManager.GetBuildingRef(workIndex);
-                return GetBuildingWorldPosition(in work);
-            }
+            float progress = 0.5f;
+            if (globalSystemManager != null)
+                progress = globalSystemManager.GetGlobalDataRef().timeTickProgress;
+
+            goToWork = !(progress >= 0.5f && progress < 0.95f);
         }
 
-        return ResolveHouseWorld(in data);
+        if (goToWork && TryResolveBuildingGoal(data.assignedWorkID, data.residentID, 1, out CommuteGoal work))
+            return work;
+
+        if (TryResolveBuildingGoal(data.assignedHouseID, data.residentID, 0, out CommuteGoal house))
+            return house;
+
+        Vector2Int fallbackCell = FallbackCell(data.residentID);
+        return new CommuteGoal
+        {
+            world = CellToWorld(fallbackCell.x, fallbackCell.y) + SlotOffset(data.residentID, 0),
+            cell = fallbackCell,
+            buildingId = 0
+        };
+    }
+
+    private bool TryResolveBuildingGoal(int buildingId, int residentId, int slot, out CommuteGoal goal)
+    {
+        goal = default;
+        if (buildingManager == null || buildingId < 0)
+            return false;
+
+        int index = buildingManager.FindBuildingIndexById((ushort)buildingId);
+        if (index < 0)
+            return false;
+
+        ref BuildingData building = ref buildingManager.GetBuildingRef(index);
+        Vector2Int footprint = Vector2Int.Max(Vector2Int.one, BuildingRules.GetFootprint(in building));
+        goal.world = GetBuildingWorldPosition(in building) + SlotOffset(residentId, slot);
+        goal.cell = new Vector2Int(
+            building.coordX + (footprint.x - 1) / 2,
+            building.coordY + (footprint.y - 1) / 2);
+        goal.buildingId = building.buildingID;
+        return true;
     }
 
     private static Vector3 SlotOffset(int residentId, int slot)
@@ -689,10 +918,13 @@ public class ResidentManager : MonoBehaviour
         return new Vector3(x, y, 0f);
     }
 
-    private Vector3 FallbackWorld(int residentId)
+    // Dân chưa có nhà tụ tập quanh giữa bản đồ (nơi camera mở ra), rải trong vùng 3x3 ô
+    private Vector2Int FallbackCell(int residentId)
     {
-        int fallbackX = residentId % 20;
-        int fallbackY = (residentId / 20) % 20;
-        return CellToWorld(fallbackX, fallbackY);
+        Vector2Int center = gridController != null
+            ? new Vector2Int(gridController.Width / 2, gridController.Height / 2)
+            : new Vector2Int(10, 10);
+
+        return new Vector2Int(center.x - 1 + residentId % 3, center.y - 1 + (residentId / 3) % 3);
     }
 }

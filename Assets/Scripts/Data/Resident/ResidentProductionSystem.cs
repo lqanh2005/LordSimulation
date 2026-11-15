@@ -23,7 +23,8 @@ public static class ResidentProductionSystem
         int buildingCount,
         SeasonType season,
         GlobalSystemManager global,
-        EdictManager edicts)
+        EdictManager edicts,
+        ResearchManager research = null)
     {
         for (int i = 0; i < ResourceSlots; i++)
             LastOutputByResource[i] = 0f;
@@ -80,7 +81,7 @@ public static class ResidentProductionSystem
             }
 
             if (!ResidentProductionRules.TryGetYield(
-                    building.buildingType,
+                    in building,
                     out ResourceType primary,
                     out float primaryPerWorker,
                     out ResourceType secondary,
@@ -90,6 +91,7 @@ public static class ResidentProductionSystem
             float multiplier = power
                 * ResidentProductionRules.GetSeasonMultiplier(building.buildingType, season)
                 * (edicts != null ? edicts.GetProductionMultiplier(building.buildingType) : 1f)
+                * (research != null ? research.GetProductionMultiplier(building.buildingType) : 1f)
                 * sampleScale;
 
             float primaryAmount = primaryPerWorker * multiplier;

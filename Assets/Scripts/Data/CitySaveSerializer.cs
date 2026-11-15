@@ -4,7 +4,7 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 4;
+    public const int SaveVersion = 6;
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,
@@ -37,7 +37,8 @@ public static class CitySaveSerializer
         BuildingData[] buildings, int buildingCount,
         EdictRuleData[] edicts, int edictCount,
         TradeRouteData[] tradeRoutes, int tradeCount,
-        ResidentData[] immigrants, int immigrantCount)
+        ResidentData[] immigrants, int immigrantCount,
+        in ResearchSaveData research)
     {
         ValidateSaveCounts(
             residentCount, residents.Length,
@@ -84,6 +85,9 @@ public static class CitySaveSerializer
         writer.Write(immigrantCount);
         for (int i = 0; i < immigrantCount; i++)
             ResidentDataSerializer.WriteResident(writer, in immigrants[i]);
+
+        // 7. Research (v6+)
+        ResearchDataSerializer.WriteResearch(writer, in research);
     }
 
     // --- ĐỌC TOÀN BỘ GAME (LOAD) ---
@@ -94,8 +98,11 @@ public static class CitySaveSerializer
         BuildingData[] buildings, out int buildingCount,
         EdictRuleData[] edicts, out int edictCount,
         TradeRouteData[] tradeRoutes, out int tradeCount,
-        ResidentData[] immigrants, out int immigrantCount)
+        ResidentData[] immigrants, out int immigrantCount,
+        out ResearchSaveData research)
     {
+        research = default;
+
         // 1. Kiểm tra tính toàn vẹn Header
         string magic = reader.ReadString();
         int version = reader.ReadInt32();
@@ -119,7 +126,7 @@ public static class CitySaveSerializer
             throw new InvalidDataException($"[SaveSerializer] buildingCount ({buildingCount}) vượt giới hạn mảng ({buildings.Length}).");
         for (int i = 0; i < buildingCount; i++)
         {
-            BuildingDataSerializer.ReadBuilding(reader, out buildings[i]);
+            BuildingDataSerializer.ReadBuilding(reader, out buildings[i], version);
         }
 
         // 4. Residents
@@ -158,5 +165,9 @@ public static class CitySaveSerializer
             throw new InvalidDataException($"[SaveSerializer] immigrantCount ({immigrantCount}) vượt giới hạn mảng ({immigrants.Length}).");
         for (int i = 0; i < immigrantCount; i++)
             ResidentDataSerializer.ReadResident(reader, out immigrants[i], version);
+
+        // 7. Research (v6+) — save cũ hơn bắt đầu với cây nghiên cứu trống
+        if (version >= 6)
+            ResearchDataSerializer.ReadResearch(reader, out research);
     }
 }

@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 812034562}
   - component: {fileID: 812034563}
   - component: {fileID: 812034564}
+  - component: {fileID: 7671779431703053594}
   m_Layer: 0
   m_Name: Resident_Normal
   m_TagString: Untagged
@@ -82,12 +83,12 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 15
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 21300000, guid: f486d5b3ad67e864cbe11a36e37d85fe, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 2b23ce4e4173e5c4786395143c5f21a3, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 0.3911111, y: 1.1377778}
+  m_Size: {x: 0.70857143, y: 0.9142857}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -105,13 +106,40 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ResidentBase
   spriteRenderer: {fileID: 812034563}
+  animator: {fileID: 7671779431703053594}
+  childController: {fileID: 22100000, guid: 8c50e1dbaa6b7984c9fa476bf0fc7e08, type: 2}
+  adultController: {fileID: 22100000, guid: d60a9db269aa2fe47b5096d0e82695f2, type: 2}
+  elderlyController: {fileID: 22100000, guid: fe9d510f4ad24ce4088a1387251aa298, type: 2}
+  spritesFaceRight: 0
   professionSprites: []
   healthyColor: {r: 1, g: 1, b: 1, a: 1}
   incubatingColor: {r: 1, g: 0.9, b: 0.5, a: 1}
   infectedColor: {r: 1, g: 0.4, b: 0.4, a: 1}
   treatedColor: {r: 0.6, g: 0.9, b: 1, a: 1}
-  childScale: 0.72
+  childScale: 1
   adultScale: 1
-  elderlyScale: 0.9
-  overlayOffset: {x: 0, y: 1.22, z: 0}
+  elderlyScale: 1
+  overlayOffset: {x: 0, y: 0.68, z: 0}
   overlayColor: {r: 1, g: 0.95, b: 0.8, a: 1}
+--- !u!95 &7671779431703053594
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 812034561}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 22100000, guid: d60a9db269aa2fe47b5096d0e82695f2, type: 2}
+  m_CullingMode: 2
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0

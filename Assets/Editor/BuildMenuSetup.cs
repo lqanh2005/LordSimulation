@@ -45,28 +45,43 @@ public static class BuildMenuSetup
     {
         new BuildingSpec(BuildingType.Tent, "Lều tạm", 1, 10, 0, new Color(0.85f, 0.8f, 0.65f)),
         new BuildingSpec(BuildingType.House, "Nhà dân", 1, 30, 20, new Color(0f, 0.14f, 0.73f)),
+        new BuildingSpec(BuildingType.LargeHouse, "Nhà lớn", 3, 70, 50, new Color(0.2f, 0.35f, 0.8f)),
         new BuildingSpec(BuildingType.LumberCamp, "Trại gỗ", 2, 15, 10, new Color(0.45f, 0.3f, 0.15f)),
         new BuildingSpec(BuildingType.Farm, "Nông trại", 2, 25, 20, new Color(0.27f, 0.02f, 0.04f)),
         new BuildingSpec(BuildingType.Mine, "Mỏ", 2, 40, 40, new Color(0.25f, 0.25f, 0.35f)),
         new BuildingSpec(BuildingType.Furnace, "Xưởng lò", 3, 40, 60, new Color(0.34f, 0.34f, 0.34f)),
+        new BuildingSpec(BuildingType.Forge, "Lò rèn", 2, 45, 50, new Color(0.7f, 0.35f, 0.25f)),
         new BuildingSpec(BuildingType.Clinic, "Phòng khám", 2, 50, 80, new Color(0.9f, 0.4f, 0.4f)),
         new BuildingSpec(BuildingType.School, "Trường học", 2, 50, 60, new Color(0.9f, 0.75f, 0.2f)),
         new BuildingSpec(BuildingType.GuardPost, "Trạm gác", 1, 30, 40, new Color(0.15f, 0.4f, 0.2f)),
-        new BuildingSpec(BuildingType.QuarantineWard, "Khu cách ly", 2, 40, 50, new Color(0.55f, 0.3f, 0.6f))
+        new BuildingSpec(BuildingType.QuarantineWard, "Khu cách ly", 2, 40, 50, new Color(0.55f, 0.3f, 0.6f)),
+        new BuildingSpec(BuildingType.CityHall, "Tòa thị chính", 3, 80, 100, new Color(0.9f, 0.8f, 0.6f)),
+        new BuildingSpec(BuildingType.WaterWell, "Giếng nước", 1, 15, 5, new Color(0.4f, 0.6f, 0.9f)),
+        new BuildingSpec(BuildingType.CoalStore, "Kho than", 2, 30, 20, new Color(0.3f, 0.3f, 0.3f)),
+        new BuildingSpec(BuildingType.Campfire, "Lửa trại", 1, 5, 0, new Color(0.95f, 0.5f, 0.1f)),
+        new BuildingSpec(BuildingType.CoalCart, "Xe goòng", 1, 5, 5, new Color(0.6f, 0.45f, 0.2f)),
+        new BuildingSpec(BuildingType.HerbFarm, "Vườn thuốc", 4, 25, 30, new Color(0.4f, 0.7f, 0.5f))
     };
 
     private static readonly (string label, BuildingType[] types)[] Categories =
     {
         ("Xây dựng", new[]
         {
-            BuildingType.Tent, BuildingType.House, BuildingType.LumberCamp, BuildingType.Farm, BuildingType.Mine,
-            BuildingType.Furnace, BuildingType.Clinic, BuildingType.School, BuildingType.GuardPost, BuildingType.QuarantineWard
+            BuildingType.Tent, BuildingType.House, BuildingType.LargeHouse, BuildingType.LumberCamp, BuildingType.Farm,
+            BuildingType.Mine, BuildingType.CoalStore, BuildingType.Furnace, BuildingType.Forge, BuildingType.CityHall, BuildingType.Clinic,
+            BuildingType.School, BuildingType.GuardPost, BuildingType.QuarantineWard, BuildingType.WaterWell,
+            BuildingType.Campfire, BuildingType.CoalCart
         }),
-        ("Nhà ở", new[] { BuildingType.Tent, BuildingType.House }),
-        ("Sản xuất", new[] { BuildingType.LumberCamp, BuildingType.Mine, BuildingType.Furnace }),
+        ("Nhà ở", new[] { BuildingType.Tent, BuildingType.House, BuildingType.LargeHouse }),
+        ("Sản xuất", new[] { BuildingType.LumberCamp, BuildingType.Mine, BuildingType.CoalStore, BuildingType.Furnace, BuildingType.Forge }),
+        // Vườn thuốc gộp vào Farm (click Farm -> trồng thuốc); HerbFarm giữ lại cho save cũ
         ("Nông nghiệp", new[] { BuildingType.Farm }),
-        ("Hạ tầng", new[] { BuildingType.Clinic, BuildingType.School, BuildingType.GuardPost, BuildingType.QuarantineWard }),
-        ("Trang trí", new BuildingType[0])
+        ("Hạ tầng", new[]
+        {
+            BuildingType.CityHall, BuildingType.Clinic, BuildingType.School, BuildingType.GuardPost,
+            BuildingType.QuarantineWard, BuildingType.WaterWell, BuildingType.Campfire
+        }),
+        ("Trang trí", new[] { BuildingType.CoalCart })
     };
 
     private static Sprite panelSprite;
@@ -119,12 +134,19 @@ public static class BuildMenuSetup
             }
 
             config.displayName = spec.displayName;
-            config.size = spec.size;
             config.costWood = spec.wood;
             config.costGold = spec.gold;
 
-            if (config.visualPrefab == null)
+            // Ưu tiên art isometric; chỉ tạo khối màu khi chưa có art
+            GameObject art = ArtAssetSync.GetArtPrefab(spec.type);
+            if (art != null)
+                config.visualPrefab = art;
+            else if (config.visualPrefab == null)
                 config.visualPrefab = EnsurePlaceholderPrefab(spec);
+
+            // Footprint thật nằm ở IsoFootprint của prefab -> không ghi đè bằng spec
+            IsoFootprint footprint = config.visualPrefab != null ? config.visualPrefab.GetComponent<IsoFootprint>() : null;
+            config.size = footprint != null ? Mathf.Max(footprint.size.x, footprint.size.y) : spec.size;
         }
 
         database.allConfigs.Sort((a, b) => System.Array.FindIndex(Specs, s => s.type == a.type)
@@ -192,13 +214,15 @@ public static class BuildMenuSetup
         panel.anchoredPosition = new Vector2(0f, 142f);
         AddImage(panel, PanelColor, panelSprite);
 
-        HorizontalLayoutGroup layout = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
+        // Lưới 8 cột để danh mục nhiều công trình không tràn màn hình
+        GridLayoutGroup layout = panel.gameObject.AddComponent<GridLayoutGroup>();
         layout.padding = new RectOffset(10, 10, 10, 10);
-        layout.spacing = 8f;
-        layout.childControlWidth = false;
-        layout.childControlHeight = false;
-        layout.childForceExpandWidth = false;
-        layout.childForceExpandHeight = false;
+        layout.spacing = new Vector2(8f, 8f);
+        layout.cellSize = new Vector2(170f, 96f);
+        layout.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        layout.childAlignment = TextAnchor.LowerCenter;
+        layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        layout.constraintCount = 8;
 
         ContentSizeFitter fitter = panel.gameObject.AddComponent<ContentSizeFitter>();
         fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;

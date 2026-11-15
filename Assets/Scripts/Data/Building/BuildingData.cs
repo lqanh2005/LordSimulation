@@ -2,7 +2,13 @@ using System;
 
 public enum BuildingType : byte
 {
-    None = 0, House = 1, QuarantineWard = 2, Farm = 3, Mine = 4, Clinic = 5, Furnace = 6, School = 7, GuardPost = 8, LumberCamp = 9, Tent = 10
+    None = 0, House = 1, QuarantineWard = 2, Farm = 3, Mine = 4, Clinic = 5, Furnace = 6, School = 7, GuardPost = 8, LumberCamp = 9, Tent = 10,
+    CityHall = 11, WaterWell = 12, CoalStore = 13, Campfire = 14, CoalCart = 15, HerbFarm = 16,
+    LargeHouse = 17, Forge = 18
+}
+public enum CropType : byte
+{
+    None = 0, Rice = 1, Drug = 2
 }
 public enum BuildingState : byte
 {
@@ -15,7 +21,7 @@ public struct BuildingData
     public BuildingType buildingType;
     public ushort coordX;  // Tọa độ X trên bản đồ
     public ushort coordY;
-    public byte sizeFootprint;
+    public byte sizeFootprint;  // Footprint đóng gói: 4 bit thấp = X, 4 bit cao = Y (0 = vuông, dữ liệu cũ). Dùng BuildingRules.GetFootprint
     public byte tierLevel;  // Cấp độ của tòa nhà
     public BuildingState buildingState;
     public float constructionProgress;  // Tiến độ xây dựng: 0.0 - 1.0
@@ -34,4 +40,6 @@ public struct BuildingData
     public float insulationValue;  // Hệ số giữ nhiệt: 0.0 - 1.0
     public float contamination; // Mức độ ô nhiễm: 0.0 - 100
     public bool isHeated;  // Cho biết tòa nhà có được sưởi ấm hay không
+    public CropType cropType;  // Farm: loại cây đang trồng (None = đất trống)
+    public byte cropStage;  // Farm: giai đoạn lớn 0..FarmCropRules.StageCount-1
 }

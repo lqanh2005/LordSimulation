@@ -16,6 +16,10 @@ public class BuildMenuController : MonoBehaviour
     [Header("Tham Chiếu")]
     [SerializeField] private PlacementManager placementManager;
 
+    [Header("Phá Dỡ")]
+    [SerializeField] private Button demolishButton;
+    [SerializeField] private Color demolishActiveColor = new Color(1f, 0.45f, 0.4f, 1f);
+
     [Header("Danh Mục")]
     [SerializeField] private Category[] categories;
 
@@ -27,6 +31,7 @@ public class BuildMenuController : MonoBehaviour
     private readonly List<BuildOptionView> activeOptions = new List<BuildOptionView>();
     private readonly Stack<BuildOptionView> pooledOptions = new Stack<BuildOptionView>();
     private int openCategory = -1;
+    private Color demolishIdleColor = Color.white;
 
     private void Awake()
     {
@@ -46,6 +51,13 @@ public class BuildMenuController : MonoBehaviour
             }
         }
 
+        if (demolishButton != null)
+        {
+            if (demolishButton.targetGraphic != null)
+                demolishIdleColor = demolishButton.targetGraphic.color;
+            demolishButton.onClick.AddListener(OnDemolishClicked);
+        }
+
         Close();
     }
 
@@ -58,11 +70,34 @@ public class BuildMenuController : MonoBehaviour
     {
         GameEvents.Unlisten(EventID.ResourcesChanged, OnResourcesChanged);
         GameEvents.Listen(EventID.ResourcesChanged, OnResourcesChanged);
+        GameEvents.Unlisten(EventID.DemolishModeChanged, OnDemolishModeChanged);
+        GameEvents.Listen(EventID.DemolishModeChanged, OnDemolishModeChanged);
+        GameEvents.Unlisten(EventID.ResearchCompleted, OnResourcesChanged);
+        GameEvents.Listen(EventID.ResearchCompleted, OnResourcesChanged);
     }
 
     private void OnDisable()
     {
         GameEvents.Unlisten(EventID.ResourcesChanged, OnResourcesChanged);
+        GameEvents.Unlisten(EventID.DemolishModeChanged, OnDemolishModeChanged);
+        GameEvents.Unlisten(EventID.ResearchCompleted, OnResourcesChanged);
+    }
+
+    private void OnDemolishClicked()
+    {
+        Close();
+        if (placementManager != null)
+            placementManager.ToggleDemolish();
+    }
+
+    // Tô màu nút Phá dỡ khi đang ở chế độ phá
+    private void OnDemolishModeChanged(object param)
+    {
+        if (demolishButton == null || demolishButton.targetGraphic == null)
+            return;
+
+        bool active = param is bool b && b;
+        demolishButton.targetGraphic.color = active ? demolishActiveColor : demolishIdleColor;
     }
 
     public void ToggleCategory(int index)
@@ -133,6 +168,13 @@ public class BuildMenuController : MonoBehaviour
         for (int i = 0; i < activeOptions.Count; i++)
         {
             BuildingConfig config = placementManager.database.GetConfig(activeOptions[i].Type);
+            if (config != null && !placementManager.IsResearched(config.type))
+            {
+                ResearchNode required = ResearchCatalog.Get(ResearchCatalog.GetRequiredResearch(config.type));
+                activeOptions[i].SetLocked(required != null ? required.displayName : "?");
+                continue;
+            }
+
             activeOptions[i].SetAffordable(config != null && placementManager.CanAfford(config, out _, out _));
         }
     }

@@ -84,6 +84,9 @@ public static class GameplayHUDBuilder
         PauseMenuController pauseMenu = BuildPauseMenu(parent);
         WireButton<PauseMenuController>(parent, PauseButtonName, pauseMenu.Show);
 
+        ResearchTreePopupController researchPopup = BuildResearchPopup(parent);
+        WireButton<ResearchTreePopupController>(parent, ResearchButtonName, researchPopup.Show);
+
         Selection.activeGameObject = root;
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
@@ -155,6 +158,41 @@ public static class GameplayHUDBuilder
         EnsureEventSystem(scene);
 
         Selection.activeGameObject = menu.gameObject;
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+    }
+
+    private const string ResearchPopupName = "ResearchPopup";
+    private const string ResearchButtonName = "Btn_Nghiên cứu";
+
+    [MenuItem("Tools/LordSimulation/Add Research Tree To Existing HUD")]
+    public static void AddResearchTreeToExistingHUD()
+    {
+        LoadSprites();
+
+        if (!TryOpenGameplayScene(out Scene scene))
+            return;
+
+        GameObject root = FindRoot(scene, RootName);
+        if (root == null)
+        {
+            EditorUtility.DisplayDialog("Research Tree", "Không tìm thấy GameplayHUD trong GamePlayScene. Hãy chạy Build Gameplay HUD trước.", "OK");
+            return;
+        }
+
+        Transform old = root.transform.Find(ResearchPopupName);
+        if (old != null)
+            Undo.DestroyObjectImmediate(old.gameObject);
+
+        ResearchTreePopupController popup = BuildResearchPopup(root.transform);
+        Undo.RegisterCreatedObjectUndo(popup.gameObject, "Add Research Tree");
+
+        if (!WireButton<ResearchTreePopupController>(root.transform, ResearchButtonName, popup.Show))
+            EditorUtility.DisplayDialog("Research Tree", $"Không tìm thấy nút {ResearchButtonName}. Popup đã được tạo, hãy tự gắn ResearchTreePopupController.Show vào nút mở.", "OK");
+
+        EnsureEventSystem(scene);
+
+        Selection.activeGameObject = popup.gameObject;
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
     }
@@ -1117,6 +1155,201 @@ public static class GameplayHUDBuilder
 
         overlay.gameObject.SetActive(false);
         return menu;
+    }
+
+    // ==========================================
+    // POPUP: CÂY NGHIÊN CỨU
+    // ==========================================
+    private static readonly Color ResearchStripColor = new Color32(0xEC, 0xEE, 0xF0, 0xFF);
+    private static readonly Color ResearchProgressBgColor = new Color32(0xC9, 0xCC, 0xCF, 0xFF);
+    private static readonly Color ResearchProgressColor = new Color32(0xE8, 0xA8, 0x38, 0xFF);
+    private static readonly Color ResearchButtonColor = new Color32(0x58, 0x86, 0x5A, 0xFF);
+
+    private static ResearchTreePopupController BuildResearchPopup(Transform parent)
+    {
+        const float width = 1720f;
+        const float height = 880f;
+        const float headerHeight = 88f;
+        const float stripHeight = 64f;
+        const float treeX = 20f;
+        const float treeWidth = 1260f;
+        const float detailX = treeX + treeWidth + 20f;
+        const float detailWidth = width - detailX - 20f;
+        const float bodyTop = headerHeight + stripHeight + 16f;
+        const float bodyHeight = height - bodyTop - 20f;
+
+        RectTransform overlay = CreateRect(ResearchPopupName, parent);
+        Stretch(overlay);
+        AddImage(overlay, OverlayColor, null);
+        ResearchTreePopupController popup = overlay.gameObject.AddComponent<ResearchTreePopupController>();
+
+        RectTransform window = CreateRect("Window", overlay);
+        Place(window, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(width, height));
+        AddImage(window, Color.white, null);
+
+        // Header
+        RectTransform header = CreateRect("Header", window);
+        Place(header, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(width, headerHeight));
+        AddImage(header, PopupHeaderColor, null);
+        TextMeshProUGUI title = CreateText("Txt_Title", header, "Nghiên cứu", 34f, Color.white, TextAlignmentOptions.Center);
+        Stretch(title.rectTransform);
+
+        RectTransform close = CreateRect("Btn_Close", header);
+        Place(close, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-18f, 0f), new Vector2(56f, 56f));
+        Image closeImage = AddImage(close, new Color(1f, 1f, 1f, 0f), null);
+        Button btnClose = close.gameObject.AddComponent<Button>();
+        btnClose.targetGraphic = closeImage;
+        TextMeshProUGUI closeLabel = CreateText("Label", close, "X", 34f, Color.white, TextAlignmentOptions.Center);
+        Stretch(closeLabel.rectTransform);
+
+        // Dải trạng thái: điểm/tháng + công nghệ đang nghiên cứu
+        RectTransform strip = CreateRect("StatusStrip", window);
+        Place(strip, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -headerHeight), new Vector2(width, stripHeight));
+        AddImage(strip, ResearchStripColor, null);
+
+        TextMeshProUGUI txtPoints = CreateText("Txt_Points", strip, "Điểm NC: +0/tháng", 20f, TextColor, TextAlignmentOptions.Left);
+        Place(txtPoints.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(28f, 0f), new Vector2(520f, 30f));
+
+        TextMeshProUGUI txtCurrent = CreateText("Txt_Current", strip, "Đang nghiên cứu: (chưa chọn)", 20f, TextColor, TextAlignmentOptions.Left);
+        Place(txtCurrent.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(580f, 8f), new Vector2(940f, 28f));
+
+        RectTransform progressBg = CreatePanel("Progress_Bg", strip, ResearchProgressBgColor);
+        Place(progressBg, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(580f, -16f), new Vector2(940f, 10f));
+        RectTransform progressFillRt = CreateRect("Fill", progressBg);
+        Stretch(progressFillRt);
+        Image progressFill = AddImage(progressFillRt, ResearchProgressColor, null);
+        progressFill.raycastTarget = false;
+
+        // Vùng cây (cuộn 2 chiều)
+        RectTransform viewport = CreateRect("TreeViewport", window);
+        Place(viewport, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(treeX, -bodyTop), new Vector2(treeWidth, bodyHeight));
+        AddImage(viewport, new Color32(0xF7, 0xF8, 0xF9, 0xFF), null);
+        viewport.gameObject.AddComponent<RectMask2D>();
+
+        RectTransform content = CreateRect("Content", viewport);
+        Place(content, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(treeWidth, bodyHeight));
+
+        ScrollRect scroll = viewport.gameObject.AddComponent<ScrollRect>();
+        scroll.viewport = viewport;
+        scroll.content = content;
+        scroll.horizontal = true;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 30f;
+
+        // Template: dải nhánh, nhãn nhánh, đường nối, node
+        RectTransform bandRt = CreateRect("Template_Band", content);
+        Image band = AddImage(bandRt, Color.white, null);
+        band.raycastTarget = false;
+
+        TextMeshProUGUI branchLabel = CreateText("Template_BranchLabel", content, "Nhánh", 20f, SubTextColor, TextAlignmentOptions.Left);
+        branchLabel.fontStyle = FontStyles.Bold;
+        branchLabel.textWrappingMode = TextWrappingModes.Normal;
+
+        RectTransform lineRt = CreateRect("Template_Line", content);
+        Image line = AddImage(lineRt, Color.gray, null);
+        line.raycastTarget = false;
+
+        ResearchNodeView nodeTemplate = BuildResearchNodeTemplate(content);
+
+        // Bảng chi tiết
+        RectTransform detail = CreatePanel("Detail", window, PopupSectionColor);
+        Place(detail, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(detailX, -bodyTop), new Vector2(detailWidth, bodyHeight));
+
+        float inner = detailWidth - 48f;
+        TextMeshProUGUI dName = CreateText("Txt_Name", detail, "Tên công nghệ", 30f, TextColor, TextAlignmentOptions.TopLeft);
+        dName.fontStyle = FontStyles.Bold;
+        Place(dName.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(inner, 40f));
+
+        TextMeshProUGUI dBranch = CreateText("Txt_Branch", detail, "Nhánh · 0 điểm", 18f, SubTextColor, TextAlignmentOptions.TopLeft);
+        Place(dBranch.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -70f), new Vector2(inner, 26f));
+
+        TextMeshProUGUI dDesc = CreateText("Txt_Desc", detail, "Mô tả", 19f, TextColor, TextAlignmentOptions.TopLeft);
+        dDesc.textWrappingMode = TextWrappingModes.Normal;
+        dDesc.fontStyle = FontStyles.Italic;
+        Place(dDesc.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -110f), new Vector2(inner, 90f));
+
+        TextMeshProUGUI dEffects = CreateText("Txt_Effects", detail, "Hiệu quả:", 19f, TextColor, TextAlignmentOptions.TopLeft);
+        dEffects.textWrappingMode = TextWrappingModes.Normal;
+        Place(dEffects.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -210f), new Vector2(inner, 170f));
+
+        TextMeshProUGUI dStatus = CreateText("Txt_Status", detail, string.Empty, 17f, SubTextColor, TextAlignmentOptions.BottomLeft);
+        dStatus.textWrappingMode = TextWrappingModes.Normal;
+        Place(dStatus.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(24f, 104f), new Vector2(inner, 150f));
+
+        RectTransform btnRt = CreatePanel("Btn_Research", detail, ResearchButtonColor);
+        Place(btnRt, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 24f), new Vector2(inner, 64f));
+        Button btnResearch = AddButton(btnRt);
+        TextMeshProUGUI btnLabel = CreateText("Label", btnRt, "Nghiên cứu", 24f, Color.white, TextAlignmentOptions.Center);
+        Stretch(btnLabel.rectTransform);
+
+        SetRef(popup, "btnClose", btnClose);
+        SetRef(popup, "txtPoints", txtPoints);
+        SetRef(popup, "txtCurrent", txtCurrent);
+        SetRef(popup, "currentProgressFill", progressFill);
+        SetRef(popup, "treeContent", content);
+        SetRef(popup, "nodeTemplate", nodeTemplate);
+        SetRef(popup, "lineTemplate", line);
+        SetRef(popup, "branchLabelTemplate", branchLabel);
+        SetRef(popup, "branchBandTemplate", band);
+        SetRef(popup, "txtDetailName", dName);
+        SetRef(popup, "txtDetailBranch", dBranch);
+        SetRef(popup, "txtDetailDesc", dDesc);
+        SetRef(popup, "txtDetailEffects", dEffects);
+        SetRef(popup, "txtDetailStatus", dStatus);
+        SetRef(popup, "btnResearch", btnResearch);
+        SetRef(popup, "txtResearchButton", btnLabel);
+
+        bandRt.gameObject.SetActive(false);
+        branchLabel.gameObject.SetActive(false);
+        lineRt.gameObject.SetActive(false);
+        nodeTemplate.gameObject.SetActive(false);
+        overlay.gameObject.SetActive(false);
+        return popup;
+    }
+
+    private static ResearchNodeView BuildResearchNodeTemplate(Transform parent)
+    {
+        const float w = 210f;
+        const float h = 78f;
+
+        RectTransform root = CreatePanel("Template_Node", parent, new Color(0f, 0f, 0f, 0.25f));
+        Place(root, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(w, h));
+        Image outline = root.GetComponent<Image>();
+        ResearchNodeView view = root.gameObject.AddComponent<ResearchNodeView>();
+
+        RectTransform bg = CreatePanel("Background", root, Color.white);
+        Stretch(bg);
+        bg.offsetMin = new Vector2(3f, 3f);
+        bg.offsetMax = new Vector2(-3f, -3f);
+        Image background = bg.GetComponent<Image>();
+
+        Button button = root.gameObject.AddComponent<Button>();
+        button.targetGraphic = background;
+
+        TextMeshProUGUI name = CreateText("Txt_Name", bg, "Công nghệ", 20f, TextColor, TextAlignmentOptions.Center);
+        name.fontStyle = FontStyles.Bold;
+        Place(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(w - 16f, 28f));
+
+        TextMeshProUGUI info = CreateText("Txt_Info", bg, "0 điểm", 16f, SubTextColor, TextAlignmentOptions.Center);
+        Place(info.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -38f), new Vector2(w - 16f, 22f));
+
+        RectTransform fillRt = CreateRect("Progress", bg);
+        fillRt.anchorMin = Vector2.zero;
+        fillRt.anchorMax = new Vector2(1f, 0f);
+        fillRt.pivot = new Vector2(0f, 0f);
+        fillRt.offsetMin = new Vector2(6f, 5f);
+        fillRt.offsetMax = new Vector2(-6f, 11f);
+        Image fill = AddImage(fillRt, ResearchProgressColor, null);
+        fill.raycastTarget = false;
+
+        SetRef(view, "button", button);
+        SetRef(view, "background", background);
+        SetRef(view, "outline", outline);
+        SetRef(view, "txtName", name);
+        SetRef(view, "txtInfo", info);
+        SetRef(view, "progressFill", fill);
+        return view;
     }
 
     // ==========================================

@@ -12,511 +12,812 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6fca4e45baebb9f4b986f7fa9a215100, type: 3}
   m_Name: MapData
   m_EditorClassIdentifier: Assembly-CSharp::MapData
-  width: 10
-  height: 10
-  seed: 1315312
+  width: 30
+  height: 30
+  seed: 320867156
   decors:
   - x: 0
-    y: 0
-    decorId: 1
+    y: 11
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
   - x: 0
-    y: 1
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 0
-    y: 2
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 0
-    y: 3
-    decorId: 1
+    y: 13
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
-    flipX: 0
-  - x: 0
-    y: 4
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 0
-    y: 5
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 0
-    y: 6
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 0
-    y: 8
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 0
-    y: 9
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
     flipX: 0
   - x: 1
     y: 0
-    decorId: 3
-    layer: 1
+    decorId: Dirt
+    layer: 0
     offset: {x: 0, y: 0}
-    scale: 3.5
+    scale: 1
     flipX: 0
   - x: 1
-    y: 2
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
+    y: 19
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.092240386, y: -0.017910877}
+    scale: 0.7583616
     flipX: 0
   - x: 1
-    y: 3
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 1
-    y: 5
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 1
-    y: 6
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 1
-    y: 7
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 1
-    y: 8
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 1
-    y: 9
-    decorId: 1
+    y: 22
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
   - x: 2
-    y: 2
-    decorId: 3
-    layer: 1
+    y: 3
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.042138755, y: -0.04074633}
+    scale: 0.6684565
+    flipX: 1
+  - x: 2
+    y: 7
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.05991063, y: 0.031855773}
+    scale: 0.68118477
+    flipX: 1
+  - x: 2
+    y: 8
+    decorId: Dirt
+    layer: 0
     offset: {x: 0, y: 0}
-    scale: 3.5
+    scale: 1
     flipX: 0
   - x: 2
+    y: 15
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.11099271, y: 0.018856699}
+    scale: 0.6161814
+    flipX: 0
+  - x: 2
+    y: 17
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.12249035, y: 0.027397955}
+    scale: 0.54903364
+    flipX: 0
+  - x: 3
     y: 4
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 2
-    y: 5
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 2
-    y: 6
-    decorId: 1
+    decorId: GrassTuft
     layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 2
-    y: 7
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 3
-    y: 0
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 3
-    y: 1
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 3
-    y: 2
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 3
-    y: 3
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
+    offset: {x: -0.07260266, y: 0.008696354}
+    scale: 0.58822083
+    flipX: 1
   - x: 3
     y: 5
-    decorId: 3
-    layer: 1
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.09850172, y: 0.021369088}
+    scale: 0.60875124
+    flipX: 1
+  - x: 3
+    y: 18
+    decorId: Dirt
+    layer: 0
     offset: {x: 0, y: 0}
-    scale: 3.5
+    scale: 1
     flipX: 0
   - x: 3
-    y: 7
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
+    y: 19
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.12124909, y: 0.044494685}
+    scale: 0.5718198
+    flipX: 1
+  - x: 3
+    y: 20
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.13886926, y: 0.009355671}
+    scale: 0.53634644
     flipX: 0
   - x: 3
-    y: 8
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 3
-    y: 9
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 4
-    y: 1
-    decorId: 1
+    y: 29
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
   - x: 4
-    y: 2
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 4
-    y: 3
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 4
-    y: 4
-    decorId: 1
+    y: 21
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
   - x: 4
-    y: 7
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 4
-    y: 8
-    decorId: 1
+    y: 27
+    decorId: GrassTuft
     layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 4
-    y: 9
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
+    offset: {x: 0.067169815, y: -0.036476284}
+    scale: 0.631773
+    flipX: 1
+  - x: 5
+    y: 17
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.036515355, y: 0.015759772}
+    scale: 0.7210198
+    flipX: 1
+  - x: 5
+    y: 18
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.111104615, y: 0.036746748}
+    scale: 0.625157
     flipX: 0
   - x: 5
-    y: 0
-    decorId: 1
+    y: 21
+    decorId: GrassTuft
     layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
+    offset: {x: -0.040099785, y: 0.015636826}
+    scale: 0.52197194
     flipX: 0
   - x: 5
-    y: 3
-    decorId: 1
+    y: 27
+    decorId: GrassTuft
     layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 5
-    y: 5
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 5
-    y: 8
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
+    offset: {x: -0.13936576, y: 0.048928797}
+    scale: 0.7448871
     flipX: 0
   - x: 6
+    y: 5
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.04970661, y: -0.036388785}
+    scale: 0.6433564
+    flipX: 1
+  - x: 6
+    y: 9
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.060951002, y: 0.007698679}
+    scale: 0.6571661
+    flipX: 1
+  - x: 6
+    y: 11
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.057030205, y: 0.003537011}
+    scale: 0.5692409
+    flipX: 0
+  - x: 6
+    y: 20
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.14813162, y: -0.049200516}
+    scale: 0.6653768
+    flipX: 1
+  - x: 6
+    y: 22
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 7
+    y: 9
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.01862568, y: -0.021505842}
+    scale: 0.53088903
+    flipX: 0
+  - x: 7
+    y: 15
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.05315611, y: -0.008162409}
+    scale: 0.50696677
+    flipX: 0
+  - x: 7
+    y: 16
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.108416125, y: -0.0014980286}
+    scale: 0.5809397
+    flipX: 0
+  - x: 7
+    y: 22
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.03915766, y: 0.018116921}
+    scale: 0.6201578
+    flipX: 1
+  - x: 7
+    y: 25
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.099084884, y: -0.0003431946}
+    scale: 0.6296545
+    flipX: 1
+  - x: 8
     y: 1
-    decorId: 1
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 6
-    y: 3
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
+  - x: 8
+    y: 16
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.07922585, y: -0.029770158}
+    scale: 0.77199215
     flipX: 0
-  - x: 6
-    y: 4
-    decorId: 1
+  - x: 8
+    y: 23
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.03714231, y: -0.02450545}
+    scale: 0.6649191
+    flipX: 1
+  - x: 9
+    y: 0
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.06281235, y: -0.0062280535}
+    scale: 0.6032144
+    flipX: 1
+  - x: 9
+    y: 11
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 6
+  - x: 9
+    y: 13
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 9
+    y: 20
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.03911411, y: 0.033654936}
+    scale: 0.6578126
+    flipX: 1
+  - x: 9
+    y: 21
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 10
+    y: 13
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 10
+    y: 22
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.11671413, y: 0.029978842}
+    scale: 0.5320694
+    flipX: 1
+  - x: 10
+    y: 23
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 10
+    y: 24
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.05234823, y: -0.036560826}
+    scale: 0.65852934
+    flipX: 0
+  - x: 10
+    y: 25
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.08834725, y: -0.03715301}
+    scale: 0.68109775
+    flipX: 0
+  - x: 11
+    y: 12
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 11
+    y: 22
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.100177124, y: 0.031983614}
+    scale: 0.5019673
+    flipX: 1
+  - x: 11
+    y: 24
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 11
+    y: 29
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.06569426, y: 0.04371745}
+    scale: 0.52077484
+    flipX: 1
+  - x: 12
+    y: 1
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 12
+    y: 10
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 12
+    y: 15
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 12
+    y: 20
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.1336943, y: -0.048018437}
+    scale: 0.7808652
+    flipX: 0
+  - x: 12
+    y: 29
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.12156966, y: 0.002313006}
+    scale: 0.72648853
+    flipX: 1
+  - x: 13
+    y: 12
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.04128444, y: -0.045002475}
+    scale: 0.6557804
+    flipX: 1
+  - x: 14
     y: 5
-    decorId: 2
-    layer: 1
+    decorId: Dirt
+    layer: 0
     offset: {x: 0, y: 0}
-    scale: 2
+    scale: 1
     flipX: 0
-  - x: 6
+  - x: 14
+    y: 18
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.024346279, y: -0.0083974395}
+    scale: 0.52514905
+    flipX: 0
+  - x: 15
     y: 6
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.08599263, y: -0.027060399}
+    scale: 0.63982624
     flipX: 0
-  - x: 6
+  - x: 15
     y: 7
-    decorId: 1
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 6
-    y: 8
-    decorId: 1
+  - x: 15
+    y: 21
+    decorId: GrassTuft
     layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
+    offset: {x: 0.1366036, y: -0.017258868}
+    scale: 0.5619207
     flipX: 0
-  - x: 6
-    y: 9
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 7
+  - x: 16
     y: 0
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 7
-    y: 1
-    decorId: 1
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 7
+  - x: 16
     y: 2
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 7
-    y: 3
-    decorId: 1
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 7
+  - x: 16
     y: 4
-    decorId: 1
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 7
-    y: 5
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 7
-    y: 7
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 7
-    y: 9
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 8
-    y: 0
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 8
-    y: 1
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 8
-    y: 2
-    decorId: 3
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 3.5
-    flipX: 0
-  - x: 8
-    y: 3
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 8
-    y: 4
-    decorId: 1
-    layer: 0
-    offset: {x: 0, y: 0}
-    scale: 1
-    flipX: 0
-  - x: 8
-    y: 5
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 8
+  - x: 16
     y: 6
-    decorId: 1
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 8
-    y: 7
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 9
-    y: 0
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 9
-    y: 2
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
-    flipX: 0
-  - x: 9
-    y: 3
-    decorId: 1
+  - x: 16
+    y: 11
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 9
+  - x: 17
     y: 4
-    decorId: 2
-    layer: 1
-    offset: {x: 0, y: 0}
-    scale: 2
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.0801545, y: 0.049066212}
+    scale: 0.7771524
     flipX: 0
-  - x: 9
-    y: 5
-    decorId: 1
+  - x: 17
+    y: 23
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.09999124, y: 0.007567078}
+    scale: 0.53514326
+    flipX: 0
+  - x: 17
+    y: 29
+    decorId: Dirt
     layer: 0
     offset: {x: 0, y: 0}
     scale: 1
     flipX: 0
-  - x: 9
-    y: 8
-    decorId: 2
-    layer: 1
+  - x: 18
+    y: 0
+    decorId: Dirt
+    layer: 0
     offset: {x: 0, y: 0}
-    scale: 2
+    scale: 1
     flipX: 0
-  - x: 9
-    y: 9
-    decorId: 2
-    layer: 1
+  - x: 18
+    y: 2
+    decorId: Dirt
+    layer: 0
     offset: {x: 0, y: 0}
-    scale: 2
+    scale: 1
+    flipX: 0
+  - x: 18
+    y: 3
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.0425462, y: -0.013889099}
+    scale: 0.5732075
+    flipX: 0
+  - x: 18
+    y: 7
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.018515773, y: -0.032946873}
+    scale: 0.78955156
+    flipX: 0
+  - x: 18
+    y: 11
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.12998106, y: -0.01788345}
+    scale: 0.7015707
+    flipX: 1
+  - x: 18
+    y: 16
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.11963495, y: 0.012778831}
+    scale: 0.58329266
+    flipX: 1
+  - x: 18
+    y: 18
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.1351258, y: 0.023323728}
+    scale: 0.78137904
+    flipX: 1
+  - x: 18
+    y: 24
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.05512636, y: -0.0006656021}
+    scale: 0.5333117
+    flipX: 0
+  - x: 19
+    y: 1
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.03877615, y: 0.043866497}
+    scale: 0.58283365
+    flipX: 0
+  - x: 19
+    y: 11
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 19
+    y: 25
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 20
+    y: 3
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.13121295, y: -0.03884293}
+    scale: 0.63409585
+    flipX: 0
+  - x: 20
+    y: 15
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 20
+    y: 20
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.07760449, y: 0.04707643}
+    scale: 0.67666185
+    flipX: 0
+  - x: 20
+    y: 21
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.0430543, y: -0.0012298614}
+    scale: 0.5394716
+    flipX: 0
+  - x: 20
+    y: 24
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.12598826, y: -0.0035040795}
+    scale: 0.7019342
+    flipX: 0
+  - x: 20
+    y: 25
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.08589903, y: 0.033382785}
+    scale: 0.77768415
+    flipX: 1
+  - x: 20
+    y: 28
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 21
+    y: 7
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 21
+    y: 14
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 22
+    y: 12
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.044360608, y: -0.0044431956}
+    scale: 0.7986278
+    flipX: 1
+  - x: 22
+    y: 24
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 23
+    y: 10
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.09879274, y: -0.039834183}
+    scale: 0.7827099
+    flipX: 1
+  - x: 24
+    y: 8
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.14599448, y: -0.019314244}
+    scale: 0.7608868
+    flipX: 0
+  - x: 24
+    y: 14
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 24
+    y: 21
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.11581049, y: -0.018591926}
+    scale: 0.66603893
+    flipX: 0
+  - x: 24
+    y: 22
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.14264834, y: -0.04119887}
+    scale: 0.72483337
+    flipX: 1
+  - x: 25
+    y: 25
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 25
+    y: 27
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.1399581, y: -0.03465679}
+    scale: 0.67042184
+    flipX: 1
+  - x: 25
+    y: 28
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 26
+    y: 1
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.1441921, y: -0.009676689}
+    scale: 0.58359987
+    flipX: 1
+  - x: 26
+    y: 2
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 26
+    y: 7
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.089637496, y: -0.020125711}
+    scale: 0.6201976
+    flipX: 0
+  - x: 26
+    y: 18
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.069271736, y: 0.033182424}
+    scale: 0.5857548
+    flipX: 0
+  - x: 26
+    y: 27
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.05019622, y: 0.016044348}
+    scale: 0.57351464
+    flipX: 0
+  - x: 27
+    y: 1
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 27
+    y: 6
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: -0.0031239868, y: 0.008485473}
+    scale: 0.7358159
+    flipX: 1
+  - x: 27
+    y: 17
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 27
+    y: 22
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 28
+    y: 4
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 29
+    y: 0
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 29
+    y: 10
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.120606266, y: 0.03432895}
+    scale: 0.5227556
+    flipX: 0
+  - x: 29
+    y: 13
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.081438094, y: -0.015098304}
+    scale: 0.54267997
+    flipX: 0
+  - x: 29
+    y: 18
+    decorId: Dirt
+    layer: 0
+    offset: {x: 0, y: 0}
+    scale: 1
+    flipX: 0
+  - x: 29
+    y: 19
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.07887705, y: -0.03753723}
+    scale: 0.6912604
+    flipX: 0
+  - x: 29
+    y: 22
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.032113124, y: -0.006139353}
+    scale: 0.54858935
+    flipX: 0
+  - x: 29
+    y: 29
+    decorId: GrassTuft
+    layer: 0
+    offset: {x: 0.09483131, y: 0.0101078395}
+    scale: 0.5108558
     flipX: 0

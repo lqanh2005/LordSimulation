@@ -20,8 +20,9 @@ public class BuildOptionView : MonoBehaviour
         if (txtName != null)
             txtName.text = string.IsNullOrEmpty(config.displayName) ? config.type.ToString() : config.displayName;
 
+        costLabel = FormatCost(config);
         if (txtCost != null)
-            txtCost.text = FormatCost(config);
+            txtCost.text = costLabel;
 
         if (button != null)
         {
@@ -30,13 +31,31 @@ public class BuildOptionView : MonoBehaviour
         }
     }
 
+    private string costLabel;
+
     public void SetAffordable(bool affordable)
     {
         if (button != null)
             button.interactable = affordable;
 
         if (txtCost != null)
+        {
+            txtCost.text = costLabel;
             txtCost.color = affordable ? affordableCostColor : missingCostColor;
+        }
+    }
+
+    /// <summary>Chưa nghiên cứu: khóa nút và hiển thị công nghệ cần thiết thay cho giá.</summary>
+    public void SetLocked(string requiredResearch)
+    {
+        if (button != null)
+            button.interactable = false;
+
+        if (txtCost != null)
+        {
+            txtCost.text = $"Cần NC: {requiredResearch}";
+            txtCost.color = missingCostColor;
+        }
     }
 
     private static string FormatCost(BuildingConfig config)

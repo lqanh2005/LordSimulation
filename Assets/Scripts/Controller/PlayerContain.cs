@@ -10,6 +10,7 @@ public class PlayerContain : MonoBehaviour
     public GlobalSystemManager globalSystemManager;
     public TradeManager tradeManager;
     public ImmigrationManager immigrationManager;
+    public ResearchManager researchManager;
     public void Init()
     {
         residentManager.Init();
@@ -18,5 +19,11 @@ public class PlayerContain : MonoBehaviour
         if (immigrationManager == null)
             immigrationManager = gameObject.AddComponent<ImmigrationManager>();
         immigrationManager.Init();
+
+        if (researchManager == null)
+            researchManager = GetComponentInChildren<ResearchManager>(true);
+        if (researchManager == null)
+            researchManager = gameObject.AddComponent<ResearchManager>();
+        researchManager.Init();
     }
 }

@@ -97,8 +97,7 @@ public static class ResidentAssignmentSystem
             && !ResidentAssignmentRules.CanStudy(in resident))
             return false;
 
-        BuildingType preferred = ResidentAssignmentRules.GetPreferredWorkplace(resident.professionType);
-        return preferred != BuildingType.None && building.buildingType == preferred;
+        return ResidentAssignmentRules.IsWorkplaceFor(resident.professionType, building.buildingType);
     }
 
     private static void AssignMissingHousing(

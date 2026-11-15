@@ -126,8 +126,7 @@ public static class ResidentProfessionRules
 
     public static int GetLaborCapacity(in BuildingData building, ProfessionType profession)
     {
-        BuildingType preferred = ResidentAssignmentRules.GetPreferredWorkplace(profession);
-        if (preferred == BuildingType.None || building.buildingType != preferred)
+        if (!ResidentAssignmentRules.IsWorkplaceFor(profession, building.buildingType))
             return 0;
 
         if (!ResidentAssignmentRules.IsBuildingAcceptingResidents(in building))
@@ -139,8 +138,7 @@ public static class ResidentProfessionRules
     // Sức chứa giữ chỗ: tính cả công trình đang xây / tạm ngừng để không đẩy thợ sang nghề khác
     public static int GetReservedLaborCapacity(in BuildingData building, ProfessionType profession)
     {
-        BuildingType preferred = ResidentAssignmentRules.GetPreferredWorkplace(profession);
-        if (preferred == BuildingType.None || building.buildingType != preferred)
+        if (!ResidentAssignmentRules.IsWorkplaceFor(profession, building.buildingType))
             return 0;
 
         if (!building.isAllocated

@@ -26,13 +26,20 @@ public enum EventID
     BuildingPlaced = 500,
     BuildingPlaceFailed = 501,
     BuildingCompleted = 502,
+    BuildingClicked = 503,
+    FarmCropChanged = 504,
+    BuildingDemolished = 505,       // param: BuildingDemolishedPayload
+    DemolishModeChanged = 506,      // param: bool (đang ở chế độ phá dỡ?)
 
     EdictsChanged = 600,
     EdictTriggered = 601,
 
     AppStateChanged = 700,
     GamePlayStateChanged = 701,
-    GameOver = 702
+    GameOver = 702,
+
+    ResearchChanged = 800,          // tiến độ / lựa chọn nghiên cứu thay đổi
+    ResearchCompleted = 801         // param: ResearchID vừa hoàn thành
 }
 
 public struct AppStateChangedPayload
@@ -47,12 +54,22 @@ public struct GamePlayStateChangedPayload
     public GamePlayStateID to;
 }
 
+public struct BuildingDemolishedPayload
+{
+    public ushort buildingId;
+    public BuildingType type;
+    public int refundWood;
+    public int refundGold;
+}
+
 public enum BuildingPlaceFailReason : byte
 {
     None = 0,
     Blocked = 1,
     NotEnoughResources = 2,
-    CapacityFull = 3
+    CapacityFull = 3,
+    AlreadyBuilt = 4,
+    NotResearched = 5
 }
 
 public struct BuildingPlaceFailedPayload
