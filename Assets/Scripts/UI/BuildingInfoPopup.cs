@@ -178,6 +178,15 @@ public class BuildingInfoPopup : MonoBehaviour
             _sb.Append("Cư dân: ").Append(FormatRatio(b.currentOccupancy, b.maxOccupancy)).Append('\n');
         if (b.maxWorkers > 0)
             _sb.Append("Công nhân: ").Append(FormatRatio(b.currentWorkers, b.maxWorkers)).Append('\n');
+        // GDD 3.7: Trạm gác / Phòng khám thu gom thi thể -> cho người chơi thấy tác dụng
+        if (CrisisManager.IsCollector(b.buildingType))
+        {
+            PlayerContain contain = FindFirstObjectByType<PlayerContain>();
+            CrisisManager crisis = contain != null ? contain.crisisManager : null;
+            if (crisis != null)
+                _sb.Append(crisis.DescribeCollection(in b)).Append('\n');
+        }
+
         if (b.maxOccupancy == 0 && b.maxWorkers == 0)
             _sb.Append("<color=#7F8C8D>Công trình hỗ trợ, không cần người</color>\n");
 

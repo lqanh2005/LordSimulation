@@ -14,7 +14,7 @@ public class FarmCropPopup : MonoBehaviour
     private static readonly Color ButtonColor = new Color32(0xD3, 0xD7, 0xDA, 0xFF);
     private static readonly Color ActiveButtonColor = new Color32(0x9F, 0xC8, 0x8A, 0xFF);
     private static readonly Color TextColor = new Color32(0x33, 0x33, 0x33, 0xFF);
-    private static readonly Vector2 PanelSize = new Vector2(260f, 150f);
+    private static readonly Vector2 PanelSize = new Vector2(300f, 230f);
     private const float HudTopMargin = 130f;
     private const float HudBottomMargin = 140f;
 
@@ -26,6 +26,8 @@ public class FarmCropPopup : MonoBehaviour
     private TextMeshProUGUI status;
     private Image riceButton;
     private Image drugButton;
+    private Image pauseButton;
+    private TextMeshProUGUI pauseLabel;
 
     private ushort farmId;
     private int openedFrame = -1;
@@ -154,17 +156,60 @@ public class FarmCropPopup : MonoBehaviour
         ref BuildingData farm = ref placement.buildingManager.GetBuildingRef(index);
         title.text = $"Nông trại #{farm.buildingID}";
 
+        string crop;
         if (BuildingRules.IsUnderConstruction(in farm))
-            status.text = farm.cropType == CropType.None
+            crop = farm.cropType == CropType.None
                 ? "Đang xây — chọn cây để trồng khi xong"
                 : $"Đang xây — sẽ trồng {FarmCropRules.GetCropName(farm.cropType)}";
         else if (farm.cropType == CropType.None)
-            status.text = "Đất trống — chọn cây để trồng";
+            crop = "Đất trống — chọn cây để trồng";
         else
-            status.text = $"{FarmCropRules.GetCropName(farm.cropType)} — giai đoạn {farm.cropStage + 1}/{FarmCropRules.StageCount}";
+            crop = $"{FarmCropRules.GetCropName(farm.cropType)} — giai đoạn {farm.cropStage + 1}/{FarmCropRules.StageCount}";
+
+        // Trạng thái + lý do ngừng, dùng chung luật với popup công trình (GDD 7.2)
+        GlobalSystemManager global = HUDLocator.ResolveGlobalSystem(null);
+        GlobalSystemData globalData = global != null ? global.GetGlobalDataRef() : default;
+        bool connected = RoadNetwork.IsConnected(placement.buildingManager, farm.buildingID);
+        BuildingStatusLevel level = BuildingStatusRules.Evaluate(in farm, in globalData, connected, out string reason);
+        string color = level switch
+        {
+            BuildingStatusLevel.Ok => "#1E8449",
+            BuildingStatusLevel.Limited => "#B7950B",
+            _ => "#C0392B"
+        };
+
+        var sb = new System.Text.StringBuilder(160);
+        sb.Append(crop).Append('\n');
+        sb.Append("<color=").Append(color).Append("><b>").Append(reason).Append("</b></color>\n");
+        if (farm.maxWorkers > 0)
+            sb.Append("Nông dân: ").Append(farm.currentWorkers).Append('/').Append(farm.maxWorkers).Append('\n');
+        string output = BuildingStatusRules.DescribeOutput(in farm);
+        if (!string.IsNullOrEmpty(output))
+            sb.Append("<size=14>").Append(output).Append("</size>");
+        status.text = sb.ToString();
+
+        bool canToggle = !BuildingRules.IsUnderConstruction(in farm);
+        pauseButton.gameObject.SetActive(canToggle);
+        pauseLabel.text = farm.isOperational ? "Tạm dừng" : "Chạy lại";
+        pauseButton.color = farm.isOperational ? ButtonColor : ActiveButtonColor;
 
         riceButton.color = farm.cropType == CropType.Rice ? ActiveButtonColor : ButtonColor;
         drugButton.color = farm.cropType == CropType.Drug ? ActiveButtonColor : ButtonColor;
+    }
+
+    private void TogglePause()
+    {
+        if (!TryGetFarm(farmId, out int index))
+            return;
+
+        ref BuildingData farm = ref placement.buildingManager.GetBuildingRef(index);
+        if (BuildingRules.IsUnderConstruction(in farm))
+            return;
+
+        farm.isOperational = !farm.isOperational;
+        NotificationFeed.Show($"Nông trại #{farm.buildingID} {(farm.isOperational ? "hoạt động trở lại" : "đã tạm dừng")}",
+            NoticeLevel.Info, "toggle:" + farm.buildingID);
+        Refresh();
     }
 
     private void FollowFarm()
@@ -230,11 +275,15 @@ public class FarmCropPopup : MonoBehaviour
         closeLayout.flexibleWidth = 0f;
 
         status = CreateText(panel, "Status", 16f, FontStyles.Normal, TextAlignmentOptions.Left);
-        status.gameObject.AddComponent<LayoutElement>().preferredHeight = 40f;
+        status.gameObject.AddComponent<LayoutElement>().preferredHeight = 104f;
 
-        RectTransform buttons = CreateRow(panel, "Buttons", 40f);
+        RectTransform buttons = CreateRow(panel, "Buttons", 36f);
         riceButton = CreateButton(buttons, "Rice", "Trồng lúa", () => Plant(CropType.Rice));
         drugButton = CreateButton(buttons, "Drug", "Trồng thuốc", () => Plant(CropType.Drug));
+
+        RectTransform controls = CreateRow(panel, "Controls", 30f);
+        pauseButton = CreateButton(controls, "Pause", "Tạm dừng", TogglePause);
+        pauseLabel = pauseButton.GetComponentInChildren<TextMeshProUGUI>();
 
         panelGo.SetActive(false);
     }

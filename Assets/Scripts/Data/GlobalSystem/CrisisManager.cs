@@ -115,15 +115,55 @@ public class CrisisManager : MonoBehaviour
             return capacity;
 
         for (int i = 0; i < buildingManager.activeCount; i++)
-        {
-            ref BuildingData b = ref buildingManager.GetBuildingRef(i);
-            if (b.buildingState != BuildingState.Active || !b.isOperational)
-                continue;
-            if (b.buildingType == BuildingType.GuardPost)
-                capacity += b.currentWorkers * collectPerGuard;
-            else if (b.buildingType == BuildingType.Clinic)
-                capacity += b.currentWorkers * collectPerDoctor;
-        }
+            capacity += GetCollectRate(in buildingManager.GetBuildingRef(i));
         return capacity;
+    }
+
+    /// <summary>Tổng số thi thể có thể thu gom mỗi tháng (nền + mọi công trình).</summary>
+    public int TotalCollectPerMonth => GetCollectCapacity();
+
+    public int BaseCollectPerMonth => baseCollectPerMonth;
+
+    /// <summary>Công trình này có tham gia thu gom thi thể không (Trạm gác, Phòng khám).</summary>
+    public static bool IsCollector(BuildingType type) =>
+        type == BuildingType.GuardPost || type == BuildingType.Clinic;
+
+    /// <summary>Số thi thể công trình này thu gom được mỗi tháng (0 nếu chưa chạy / không có người).</summary>
+    public int GetCollectRate(in BuildingData b)
+    {
+        if (b.buildingState != BuildingState.Active || !b.isOperational)
+            return 0;
+        return b.buildingType switch
+        {
+            BuildingType.GuardPost => b.currentWorkers * collectPerGuard,
+            BuildingType.Clinic => b.currentWorkers * collectPerDoctor,
+            _ => 0
+        };
+    }
+
+    /// <summary>Mô tả ngắn cho popup công trình: thu gom bao nhiêu, thành còn bao nhiêu thi thể.</summary>
+    public string DescribeCollection(in BuildingData b)
+    {
+        if (!IsCollector(b.buildingType))
+            return string.Empty;
+
+        int perWorker = b.buildingType == BuildingType.GuardPost ? collectPerGuard : collectPerDoctor;
+        int rate = GetCollectRate(in b);
+        int pending = 0;
+        if (globalSystemManager != null)
+        {
+            ref GlobalSystemData d = ref globalSystemManager.GetGlobalDataRef();
+            pending = d.corpsesFresh + d.corpsesRotting;
+        }
+
+        var sb = new System.Text.StringBuilder(160);
+        sb.Append("Thu gom thi thể: <b>").Append(rate).Append("/tháng</b>");
+        sb.Append(" <size=13>(").Append(perWorker).Append(" mỗi người)</size>\n");
+        sb.Append("Cả thành: ").Append(TotalCollectPerMonth).Append("/tháng · ");
+        if (pending > 0)
+            sb.Append("<color=#C0392B>còn ").Append(pending).Append(" thi thể chưa thu gom</color>");
+        else
+            sb.Append("<color=#1E8449>không còn thi thể</color>");
+        return sb.ToString();
     }
 }
