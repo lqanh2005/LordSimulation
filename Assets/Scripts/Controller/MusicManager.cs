@@ -53,12 +53,34 @@ public class MusicManager : MonoBehaviour
 
     private void OnEnable()
     {
-        GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
+        Subscribe();
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
     private void OnDisable()
     {
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    /// <summary>
+    /// EventDispatcher bị huỷ (và xoá hết listener) mỗi lần đổi scene, còn MusicManager sống suốt game
+    /// (nằm trên GameController DontDestroyOnLoad) → phải đăng ký lại sau mỗi lần nạp scene.
+    /// </summary>
+    private void Subscribe()
+    {
+        GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
+        GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
+    }
+
+    private void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        Subscribe();
+
+        // Về màn hình chính / màn tải -> nhạc menu; vào gameplay thì nhạc mùa do MonthChanged quyết định
+        GameController app = GameController.Instance;
+        if (app == null || scene.name != app.GameplaySceneName)
+            PlayMusic(menuMusic);
     }
 
     private void Start()

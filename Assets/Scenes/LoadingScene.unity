@@ -564,6 +564,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 40d3f2e58d771e849bb3aceb9bc27b10, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MusicManager
+  menuMusic: {fileID: 8300000, guid: 19554a4886f23e545815e5976c9b438b, type: 3}
+  springMusic: {fileID: 8300000, guid: 614a7c320c41aaa4caac83293dc51ebe, type: 3}
+  summerMusic: {fileID: 8300000, guid: ad5951abc61f1104a996e4f5ece4141f, type: 3}
+  autumnMusic: {fileID: 8300000, guid: fa65f997b65dedf4d8b73c2691593024, type: 3}
+  winterMusic: {fileID: 8300000, guid: 57260edf88ea6ea449dc8828fee5ce95, type: 3}
+  fadeSeconds: 1.5
+  uiClick: {fileID: 8300000, guid: 1bee4b36d2951f04d9798cf614cb6b3a, type: 3}
+  notice: {fileID: 8300000, guid: 3a1a44362ca81f14ca4605d06b643057, type: 3}
+  alarm: {fileID: 8300000, guid: 42983c76331af0e489829fe75a69d35e, type: 3}
 --- !u!4 &530643650
 Transform:
   m_ObjectHideFlags: 0
