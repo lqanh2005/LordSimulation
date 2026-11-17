@@ -17,6 +17,7 @@ public class GamePlayController : Singleton<GamePlayController>
         stateMachine.Register(GamePlayStateID.Playing, new GamePlayPlayingState());
         stateMachine.Register(GamePlayStateID.Paused, new GamePlayPausedState());
         stateMachine.Register(GamePlayStateID.GameOver, new GamePlayOverState());
+        stateMachine.Register(GamePlayStateID.Victory, new GamePlayVictoryState());
         stateMachine.StateChanged += OnStateChanged;
     }
 
@@ -66,10 +67,35 @@ public class GamePlayController : Singleton<GamePlayController>
         return paused != null ? paused.SpeedBeforePause : current;
     }
 
-    public void TriggerGameOver()
+    public GameOverReason LastGameOverReason { get; private set; }
+
+    public void TriggerGameOver(GameOverReason reason)
     {
-        if (!IsIn(GamePlayStateID.Init))
-            ChangeState(GamePlayStateID.GameOver);
+        if (IsIn(GamePlayStateID.Init) || IsIn(GamePlayStateID.GameOver))
+            return;
+
+        LastGameOverReason = reason;
+        ChangeState(GamePlayStateID.GameOver);
+    }
+
+    /// <summary>Đạt mục tiêu MVP: đánh dấu đã thắng (lưu vào save) và mở popup chiến thắng.</summary>
+    public void TriggerVictory()
+    {
+        if (!IsIn(GamePlayStateID.Playing) && !IsIn(GamePlayStateID.Paused))
+            return;
+
+        GlobalSystemManager global = GlobalSystem;
+        if (global != null)
+            global.GetGlobalDataRef().victoryAchieved = true;
+
+        ChangeState(GamePlayStateID.Victory);
+    }
+
+    /// <summary>Chơi tiếp sau khi thắng (endless).</summary>
+    public void ContinueAfterVictory()
+    {
+        if (IsIn(GamePlayStateID.Victory))
+            ChangeState(GamePlayStateID.Playing);
     }
 
     public bool InitializeSession()
@@ -107,7 +133,7 @@ public class GamePlayController : Singleton<GamePlayController>
 
     private void OnLoadCompleted(object param)
     {
-        if (IsIn(GamePlayStateID.GameOver))
+        if (IsIn(GamePlayStateID.GameOver) || IsIn(GamePlayStateID.Victory))
         {
             ChangeState(GamePlayStateID.Playing);
             return;

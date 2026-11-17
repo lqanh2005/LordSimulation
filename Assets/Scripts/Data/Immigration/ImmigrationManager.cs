@@ -62,7 +62,122 @@ public class ImmigrationManager : MonoBehaviour
         _lastArrivalYear = payload.year;
         _lastArrivalMonth = payload.month;
         ProcessQuarantineUpkeep();
+        ProcessWaitingYard();
         EnqueueMonthlyArrivals(payload.season);
+    }
+
+    /// <summary>
+    /// Áp lực hàng chờ mỗi tháng (GDD 3.1.7): ăn lương thực của thành, ai không được ăn thì đói;
+    /// bệnh lây trong hàng; hàng đông gây bất ổn; đói lâu thì bỏ đi (mất uy tín).
+    /// </summary>
+    private void ProcessWaitingYard()
+    {
+        if (waitingCount <= 0)
+            return;
+
+        var report = new WaitingYardReportPayload();
+
+        // 1. Ăn uống: phục vụ theo thứ tự hàng, hết lương thực thì người phía sau đói
+        int stockFood = globalSystemManager != null ? globalSystemManager.GetGlobalDataRef().stockFood : 0;
+        int canFeed = ImmigrationRules.YardFoodPerPerson > 0 ? stockFood / ImmigrationRules.YardFoodPerPerson : waitingCount;
+        int fed = Mathf.Min(waitingCount, canFeed);
+        report.foodEaten = fed * ImmigrationRules.YardFoodPerPerson;
+        if (report.foodEaten > 0 && globalSystemManager != null)
+            globalSystemManager.ConsumeAvailable(ResourceType.Food, report.foodEaten);
+
+        // 2. Đếm người mang bệnh trước khi lây (tránh lây dây chuyền trong cùng tháng)
+        int carriers = 0;
+        DiseaseType yardDisease = DiseaseType.None;
+        for (int i = 0; i < waitingCount; i++)
+        {
+            ref ResidentData a = ref waitingApplicants[i];
+            if (a.healthStatus == HealthStatus.ActiveInfected || a.healthStatus == HealthStatus.Incubating)
+            {
+                carriers++;
+                if (yardDisease == DiseaseType.None)
+                    yardDisease = a.diseaseType;
+            }
+        }
+        float infectChance = ImmigrationRules.GetYardInfectChance(carriers, waitingCount);
+
+        for (int i = 0; i < waitingCount; i++)
+        {
+            ref ResidentData a = ref waitingApplicants[i];
+
+            if (i < fed)
+            {
+                a.hungerMonths = 0;
+            }
+            else
+            {
+                if (a.hungerMonths < byte.MaxValue)
+                    a.hungerMonths++;
+                a.happiness = Mathf.Max(0f, a.happiness - ImmigrationRules.YardHungerHappinessPenalty);
+                report.hungry++;
+            }
+
+            switch (a.healthStatus)
+            {
+                case HealthStatus.Healthy:
+                    if (infectChance > 0f && Random.value < infectChance)
+                    {
+                        ResidentDiseaseRules.Infect(ref a,
+                            yardDisease != DiseaseType.None ? yardDisease : ResidentDiseaseRules.RollRandomDisease());
+                        report.newlyInfected++;
+                    }
+                    break;
+
+                case HealthStatus.Incubating:
+                    // Chờ lâu thì bệnh lộ ra -> thanh tra dễ phát hiện hơn, nhưng đã kịp lây
+                    if (a.IncubationMonths < byte.MaxValue)
+                        a.IncubationMonths++;
+                    if (a.IncubationMonths >= ResidentDiseaseRules.GetIncubationLength(a.diseaseType))
+                    {
+                        ResidentDiseaseRules.ActivateDisease(ref a);
+                        report.newlySymptomatic++;
+                    }
+                    break;
+            }
+        }
+
+        // 3. Bất ổn do hàng đông + người đói
+        report.riotAdded = ImmigrationRules.GetYardRiot(waitingCount, report.hungry);
+        if (report.riotAdded > 0f && globalSystemManager != null)
+        {
+            ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
+            global.riotRiskMeter = Mathf.Min(100f, global.riotRiskMeter + report.riotAdded);
+        }
+
+        // 4. Đói quá lâu -> bỏ đi, tiếng xấu lan ra ngoài
+        for (int i = waitingCount - 1; i >= 0; i--)
+        {
+            if (waitingApplicants[i].hungerMonths < ImmigrationRules.YardLeaveHungerMonths)
+                continue;
+
+            RemoveAt(i);
+            report.left++;
+        }
+        if (report.left > 0 && globalSystemManager != null)
+            globalSystemManager.ModifyReputation(-report.left * ImmigrationRules.YardLeaveReputationPenalty);
+
+        report.waiting = waitingCount;
+        if (report.left > 0)
+            NotifyQueueChanged();
+        GameEvents.Post(EventID.WaitingYardReport, report);
+    }
+
+    /// <summary>Xoá người ở vị trí index (đổi chỗ với người cuối), giữ InspectIndex hợp lệ.</summary>
+    private void RemoveAt(int index)
+    {
+        if ((uint)index >= (uint)waitingCount)
+            return;
+
+        int last = waitingCount - 1;
+        if (index != last)
+            waitingApplicants[index] = waitingApplicants[last];
+        waitingApplicants[last] = default;
+        waitingCount--;
+        InspectIndex = waitingCount > 0 ? Mathf.Clamp(InspectIndex, 0, waitingCount - 1) : 0;
     }
 
     private void ResolveDependencies()

@@ -7,6 +7,8 @@ public static class ResidentSocialRules
     public const float AristocratPovertyPenalty = 0.03f;
     public const float GreenZoneHappinessGain = 0.01f;
     public const float RedZoneHappinessPenalty = 0.01f;
+    public const float HomelessHappinessPenalty = 0.05f;   // GDD: vô gia cư làm giảm hạnh phúc
+    public const float HomelessRiotContribution = 0.02f;
     public const float MaxMonthlyRiotFromSocial = 8f;
     public const int LaborTaxPerWorker = 1;
     public const byte MinTaxableWealth = 40;
@@ -183,6 +185,9 @@ public static class ResidentSocialRules
         else if (resident.originRegion == OriginRegion.RedZone)
             delta -= RedZoneHappinessPenalty;
 
+        if (resident.assignedHouseID < 0)
+            delta -= HomelessHappinessPenalty;
+
         return delta;
     }
 
@@ -202,6 +207,8 @@ public static class ResidentSocialRules
             contrib += 0.05f;
         if (resident.originRegion == OriginRegion.RedZone && resident.wealth < 30)
             contrib += 0.02f;
+        if (resident.assignedHouseID < 0)
+            contrib += HomelessRiotContribution;
         return contrib;
     }
 }

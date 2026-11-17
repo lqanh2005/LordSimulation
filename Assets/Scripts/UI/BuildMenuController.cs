@@ -100,6 +100,9 @@ public class BuildMenuController : MonoBehaviour
         demolishButton.targetGraphic.color = active ? demolishActiveColor : demolishIdleColor;
     }
 
+    public bool IsOpen => openCategory >= 0;
+    public int CategoryCount => categories != null ? categories.Length : 0;
+
     public void ToggleCategory(int index)
     {
         if (openCategory == index)

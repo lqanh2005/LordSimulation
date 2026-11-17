@@ -7,6 +7,7 @@ public static class ResidentDiseaseSystem
     private const float ColdDeathBonus = 0.02f;
     private const float HouseContactChance = 0.22f;
     private const float WorkContactChance = 0.16f;
+    private const float HomelessExposureChance = 0.04f;   // GDD: vô gia cư tăng nguy cơ bệnh
     private const float MaxContactChance = 0.45f;
 
     private static readonly DiseaseType[] ContactByBuildingId = new DiseaseType[ushort.MaxValue + 1];
@@ -94,6 +95,8 @@ public static class ResidentDiseaseSystem
             float sampleDeathRate = (float)deaths / alive;
             int macroDeaths = Mathf.RoundToInt(globalData.totalPopulation * sampleDeathRate);
             globalData.totalPopulation = Mathf.Max(0, globalData.totalPopulation - macroDeaths);
+            if (macroDeaths > 0)
+                GameEvents.Post(EventID.ResidentsDied, new ResidentsDiedPayload { cause = DeathCause.Disease, count = macroDeaths });
         }
 
         return deaths;
@@ -124,6 +127,9 @@ public static class ResidentDiseaseSystem
                 contactType = workType;
             }
         }
+
+        if (r.assignedHouseID < 0)
+            chance += HomelessExposureChance * originMult;
 
         if (chance > MaxContactChance)
             chance = MaxContactChance;

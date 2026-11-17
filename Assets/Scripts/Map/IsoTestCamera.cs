@@ -22,14 +22,15 @@ public class IsoTestCamera : MonoBehaviour
     private void Update()
     {
         Keyboard kb = Keyboard.current;
-        if (kb != null)
+        if (kb != null && !GameHotkeys.IsTypingInUI())
         {
             Vector2 dir = Vector2.zero;
             if (kb.wKey.isPressed) dir.y += 1f;
             if (kb.sKey.isPressed) dir.y -= 1f;
             if (kb.aKey.isPressed) dir.x -= 1f;
             if (kb.dKey.isPressed) dir.x += 1f;
-            transform.position += (Vector3)(dir * panSpeed * cam.orthographicSize / 9f * Time.deltaTime);
+            // unscaled: vẫn pan được khi game đang Pause (timeScale = 0)
+            transform.position += (Vector3)(dir * panSpeed * cam.orthographicSize / 9f * Time.unscaledDeltaTime);
         }
 
         Mouse mouse = Mouse.current;

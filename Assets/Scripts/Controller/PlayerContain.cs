@@ -11,8 +11,15 @@ public class PlayerContain : MonoBehaviour
     public TradeManager tradeManager;
     public ImmigrationManager immigrationManager;
     public ResearchManager researchManager;
+    public MerchantManager merchantManager;
     public void Init()
     {
+        if (merchantManager == null)
+            merchantManager = GetComponentInChildren<MerchantManager>(true);
+        if (merchantManager == null)
+            merchantManager = gameObject.AddComponent<MerchantManager>();
+        merchantManager.Init();
+
         residentManager.Init();
         if (immigrationManager == null)
             immigrationManager = GetComponentInChildren<ImmigrationManager>(true);

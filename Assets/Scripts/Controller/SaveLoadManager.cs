@@ -130,7 +130,8 @@ public class SaveLoadManager : MonoBehaviour
                     tradeRoutes, tradeCount,
                     contain.immigrationManager.waitingApplicants,
                     contain.immigrationManager.waitingCount,
-                    contain.researchManager != null ? contain.researchManager.GetSaveData() : default
+                    contain.researchManager != null ? contain.researchManager.GetSaveData() : default,
+                    contain.merchantManager != null ? contain.merchantManager.GetSaveData() : default
                 );
             }
 
@@ -208,7 +209,8 @@ public class SaveLoadManager : MonoBehaviour
                     edictBuffer, out int edictCount,
                     tradeBuffer, out int tradeCount,
                     immigrantBuffer, out int immigrantCount,
-                    out ResearchSaveData researchData
+                    out ResearchSaveData researchData,
+                    out MerchantSaveData merchantData
                 );
 
                 Array.Copy(residentBuffer, contain.residentManager.allResidents, residentBuffer.Length);
@@ -226,6 +228,8 @@ public class SaveLoadManager : MonoBehaviour
                 contain.immigrationManager.waitingCount = immigrantCount;
                 if (contain.researchManager != null)
                     contain.researchManager.ApplySaveData(in researchData);
+                if (contain.merchantManager != null)
+                    contain.merchantManager.ApplySaveData(in merchantData);
 
                 ClearInactiveSlots(contain.residentManager.allResidents, residentCount);
                 ClearInactiveSlots(contain.buildingManager.allBuildings, buildingCount);

@@ -103,6 +103,11 @@ public class PlacementManager : MonoBehaviour
     private void Start()
     {
         FarmCropPopup.EnsureInstance(this);
+        BuildingInfoPopup.EnsureInstance(this);
+        ResidentInfoPopup.EnsureInstance(this);
+        NotificationFeed.EnsureInstance(this);
+        MerchantPopup.EnsureInstance();
+        GameHotkeys.EnsureInstance(this);   // tạo sau cùng để tìm thấy các popup ở trên
     }
 
     private void OnEnable()
@@ -389,17 +394,27 @@ public class PlacementManager : MonoBehaviour
         return true;
     }
 
-    private void RefundResources(in BuildingData removed, ref BuildingDemolishedPayload payload)
+    /// <summary>Số gỗ / vàng hoàn lại nếu phá công trình này (dùng cho popup xem trước).</summary>
+    public void GetDemolishRefund(in BuildingData building, out int wood, out int gold)
     {
-        BuildingConfig config = database != null ? database.GetConfig(removed.buildingType) : null;
-        if (config == null || globalSystemManager == null)
+        wood = gold = 0;
+        BuildingConfig config = database != null ? database.GetConfig(building.buildingType) : null;
+        if (config == null)
             return;
 
-        float ratio = BuildingRules.IsUnderConstruction(in removed)
+        float ratio = BuildingRules.IsUnderConstruction(in building)
             ? demolishConstructingRefundRatio
             : demolishRefundRatio;
-        payload.refundWood = Mathf.FloorToInt(config.costWood * ratio);
-        payload.refundGold = Mathf.FloorToInt(config.costGold * ratio);
+        wood = Mathf.FloorToInt(config.costWood * ratio);
+        gold = Mathf.FloorToInt(config.costGold * ratio);
+    }
+
+    private void RefundResources(in BuildingData removed, ref BuildingDemolishedPayload payload)
+    {
+        if (globalSystemManager == null)
+            return;
+
+        GetDemolishRefund(in removed, out payload.refundWood, out payload.refundGold);
         if (payload.refundWood == 0 && payload.refundGold == 0)
             return;
 

@@ -111,6 +111,8 @@ MonoBehaviour:
   adultController: {fileID: 22100000, guid: d60a9db269aa2fe47b5096d0e82695f2, type: 2}
   elderlyController: {fileID: 22100000, guid: fe9d510f4ad24ce4088a1387251aa298, type: 2}
   spritesFaceRight: 0
+  backSpritesFaceRight: 0
+  faceFrontWhenIdle: 1
   professionSprites: []
   healthyColor: {r: 1, g: 1, b: 1, a: 1}
   incubatingColor: {r: 1, g: 0.9, b: 0.5, a: 1}
@@ -119,8 +121,12 @@ MonoBehaviour:
   childScale: 1
   adultScale: 1
   elderlyScale: 1
-  overlayOffset: {x: 0, y: 0.68, z: 0}
-  overlayColor: {r: 1, g: 0.95, b: 0.8, a: 1}
+  overlayOffset: {x: 0, y: 0.5, z: 0}
+  sickIcon: {fileID: 2085617996, guid: 8097c5b3638859a46ac7d129e31a21ca, type: 3}
+  fluIcon: {fileID: 1038733744, guid: 108ff0e25d2e46b44a26fa0bdfc770ed, type: 3}
+  coldIcon: {fileID: 1297867367, guid: 3c081014864daed4296603414701257c, type: 3}
+  homelessIcon: {fileID: -547361865, guid: 37331e78a8ce2a34b8b5ca20c9fbcfd3, type: 3}
+  statusIconScale: 0.8
 --- !u!95 &7671779431703053594
 Animator:
   serializedVersion: 7

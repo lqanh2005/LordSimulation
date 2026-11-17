@@ -39,6 +39,7 @@ public class TopBarHUDController : MonoBehaviour
     [SerializeField] private TMP_Text txtPopulation;       // "Dân: 120"
     [SerializeField] private TMP_Text txtHappiness;        // "Vui: 75%"
     [SerializeField] private TMP_Text txtInfection;        // "Dịch bệnh: 3%"
+    [SerializeField] private TMP_Text txtReputation;       // Uy tín: -50..100 (ảnh hưởng lượng người tới Cổng)
 
     [Header("Thanh Đo Bạo Loạn")]
     [SerializeField] private Image imgRiotFill;            // Image Type = Filled
@@ -161,6 +162,16 @@ public class TopBarHUDController : MonoBehaviour
         }
 
         UpdateRiotMeter(data.riotRiskMeter);
+        UpdateReputation(data.reputation);
+    }
+
+    private void UpdateReputation(float reputation)
+    {
+        if (txtReputation == null) return;
+
+        int value = Mathf.RoundToInt(reputation);
+        string color = value >= 20 ? "#4CAF50" : value < 0 ? "#E54848" : "#6B6F73";
+        txtReputation.text = $"<color={color}>{(value > 0 ? "+" : "")}{value}</color>";
     }
 
     private void UpdateRate(TMP_Text text, float amount)

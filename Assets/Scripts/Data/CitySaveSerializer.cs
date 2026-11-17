@@ -4,7 +4,7 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 6;
+    public const int SaveVersion = 8;
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,
@@ -38,7 +38,8 @@ public static class CitySaveSerializer
         EdictRuleData[] edicts, int edictCount,
         TradeRouteData[] tradeRoutes, int tradeCount,
         ResidentData[] immigrants, int immigrantCount,
-        in ResearchSaveData research)
+        in ResearchSaveData research,
+        in MerchantSaveData merchant)
     {
         ValidateSaveCounts(
             residentCount, residents.Length,
@@ -88,6 +89,12 @@ public static class CitySaveSerializer
 
         // 7. Research (v6+)
         ResearchDataSerializer.WriteResearch(writer, in research);
+
+        // 8. Cờ chiến thắng (v7+) — ghi cuối để không đổi layout khối Global cũ
+        writer.Write(globalData.victoryAchieved);
+
+        // 9. Thương nhân (v8+)
+        merchant.Write(writer);
     }
 
     // --- ĐỌC TOÀN BỘ GAME (LOAD) ---
@@ -99,9 +106,11 @@ public static class CitySaveSerializer
         EdictRuleData[] edicts, out int edictCount,
         TradeRouteData[] tradeRoutes, out int tradeCount,
         ResidentData[] immigrants, out int immigrantCount,
-        out ResearchSaveData research)
+        out ResearchSaveData research,
+        out MerchantSaveData merchant)
     {
         research = default;
+        merchant = default;
 
         // 1. Kiểm tra tính toàn vẹn Header
         string magic = reader.ReadString();
@@ -169,5 +178,13 @@ public static class CitySaveSerializer
         // 7. Research (v6+) — save cũ hơn bắt đầu với cây nghiên cứu trống
         if (version >= 6)
             ResearchDataSerializer.ReadResearch(reader, out research);
+
+        // 8. Cờ chiến thắng (v7+)
+        if (version >= 7)
+            globalData.victoryAchieved = reader.ReadBoolean();
+
+        // 9. Thương nhân (v8+) — save cũ: chưa có thương nhân
+        if (version >= 8)
+            merchant = MerchantSaveData.Read(reader);
     }
 }

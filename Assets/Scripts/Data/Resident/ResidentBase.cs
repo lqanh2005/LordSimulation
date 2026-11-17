@@ -44,13 +44,26 @@ public class ResidentBase : MonoBehaviour
 
     [Header("Overlay")]
     [SerializeField] private Vector3 overlayOffset = new Vector3(0f, 0.68f, 0f);
-    [SerializeField] private Color overlayColor = new Color(1f, 0.95f, 0.8f);
+
+    [Header("Icon trạng thái trên đầu (ưu tiên: Bệnh (Flu/Sick) > Cold > Homeless)")]
+    [Tooltip("Đang phát bệnh (không sốt)")]
+    [SerializeField] private Sprite sickIcon;
+    [Tooltip("Đang phát bệnh có triệu chứng sốt")]
+    [SerializeField] private Sprite fluIcon;
+    [Tooltip("Đang bị lạnh (coldMonths > 0)")]
+    [SerializeField] private Sprite coldIcon;
+    [Tooltip("Chưa có nhà (assignedHouseID < 0)")]
+    [SerializeField] private Sprite homelessIcon;
+    [SerializeField] private float statusIconScale = 1f;
 
     public int DataIndex { get; private set; } = -1;
 
     public bool IsBound => DataIndex >= 0;
 
-    private TextMesh _overlay;
+    /// <summary>Sprite thân nhân vật (dùng để click chọn cư dân).</summary>
+    public SpriteRenderer BodyRenderer => spriteRenderer;
+
+    private SpriteRenderer _statusIcon;
 
     // Layer gốc của prefab (nằm trên layer map) — dành cho overlay chữ để luôn đọc được
     private int _overlaySortingLayerId;
@@ -343,56 +356,64 @@ public class ResidentBase : MonoBehaviour
 
     private void ApplyOverlay(in ResidentData data)
     {
-        EnsureOverlay();
-        if (_overlay == null)
+        Sprite icon = GetStatusIcon(in data);
+        if (icon == null)
+        {
+            if (_statusIcon != null && _statusIcon.enabled)
+                _statusIcon.enabled = false;
             return;
+        }
 
-        // Chỉ hiện tên trên đầu
-        string fullName = NameDatabase.GetFullName(data.firstNameID, data.lastNameID);
-        if (_overlay.text != fullName)
-            _overlay.text = fullName;
+        EnsureStatusIcon();
+        if (_statusIcon.sprite != icon)
+            _statusIcon.sprite = icon;
+        if (!_statusIcon.enabled)
+            _statusIcon.enabled = true;
     }
 
-    private void EnsureOverlay()
+    private Sprite GetStatusIcon(in ResidentData data)
     {
-        if (_overlay != null)
+        if (data.healthStatus == HealthStatus.ActiveInfected)
+            return data.HasSymptom(SymptomFlags.Fever) && fluIcon != null ? fluIcon : sickIcon;
+        if (data.coldMonths > 0)
+            return coldIcon;
+        if (data.assignedHouseID < 0)
+            return homelessIcon;
+        return null;
+    }
+
+    private void EnsureStatusIcon()
+    {
+        if (_statusIcon != null)
             return;
 
-        Transform existing = transform.Find("Overlay");
-        GameObject overlayGo;
+        // Overlay chữ tên cũ (nếu còn sót trong prefab/pool) -> bỏ
+        Transform oldOverlay = transform.Find("Overlay");
+        if (oldOverlay != null)
+            Destroy(oldOverlay.gameObject);
+
+        Transform existing = transform.Find("StatusIcon");
+        GameObject iconGo;
         if (existing != null)
         {
-            overlayGo = existing.gameObject;
-            _overlay = overlayGo.GetComponent<TextMesh>();
+            iconGo = existing.gameObject;
         }
         else
         {
-            overlayGo = new GameObject("Overlay");
-            overlayGo.transform.SetParent(transform, false);
+            iconGo = new GameObject("StatusIcon");
+            iconGo.transform.SetParent(transform, false);
         }
 
-        overlayGo.transform.localPosition = overlayOffset;
-        overlayGo.transform.localRotation = Quaternion.identity;
-        overlayGo.transform.localScale = Vector3.one;
+        iconGo.transform.localPosition = overlayOffset;
+        iconGo.transform.localRotation = Quaternion.identity;
+        iconGo.transform.localScale = Vector3.one * statusIconScale;
 
-        if (_overlay == null)
-            _overlay = overlayGo.GetComponent<TextMesh>();
-        if (_overlay == null)
-            _overlay = overlayGo.AddComponent<TextMesh>();
+        _statusIcon = iconGo.GetComponent<SpriteRenderer>();
+        if (_statusIcon == null)
+            _statusIcon = iconGo.AddComponent<SpriteRenderer>();
 
-        _overlay.anchor = TextAnchor.LowerCenter;
-        _overlay.alignment = TextAlignment.Center;
-        _overlay.fontSize = 24;
-        _overlay.characterSize = 0.045f;
-        _overlay.color = overlayColor;
-        _overlay.lineSpacing = 0.85f;
-
-        // Chữ thông tin luôn nằm trên map/building để đọc được
-        MeshRenderer meshRenderer = overlayGo.GetComponent<MeshRenderer>();
-        if (meshRenderer != null)
-        {
-            meshRenderer.sortingLayerID = _overlaySortingLayerId;
-            meshRenderer.sortingOrder = 20;
-        }
+        // Icon luôn nằm trên map/building để dễ thấy
+        _statusIcon.sortingLayerID = _overlaySortingLayerId;
+        _statusIcon.sortingOrder = 20;
     }
 }

@@ -388,15 +388,28 @@ public class ResidentManager : MonoBehaviour
             deaths++;
         }
 
-        if (globalSystemManager != null && aliveBefore > 0 && deaths > 0)
+        ApplyMacroDeaths(deaths, aliveBefore, DeathCause.OldAge);
+
+        RefreshVisualPopulation();
+    }
+
+    /// <summary>Quy số chết trong mẫu ra dân số thật, trừ vào tổng và báo cho UI.</summary>
+    private void ApplyMacroDeaths(int deaths, int aliveBefore, DeathCause cause)
+    {
+        if (deaths <= 0 || aliveBefore <= 0)
+            return;
+
+        int macroDeaths = deaths;
+        if (globalSystemManager != null)
         {
             ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
             float sampleDeathRate = (float)deaths / aliveBefore;
-            int macroDeaths = Mathf.RoundToInt(global.totalPopulation * sampleDeathRate);
-            global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
+            macroDeaths = Mathf.Min(global.totalPopulation, Mathf.RoundToInt(global.totalPopulation * sampleDeathRate));
+            global.totalPopulation -= macroDeaths;
         }
 
-        RefreshVisualPopulation();
+        if (macroDeaths > 0)
+            GameEvents.Post(EventID.ResidentsDied, new ResidentsDiedPayload { cause = cause, count = macroDeaths });
     }
 
     private void OnHungerResolved(object param)
@@ -460,19 +473,16 @@ public class ResidentManager : MonoBehaviour
             }
         }
 
-        if (globalSystemManager != null && aliveBefore > 0 && deaths > 0)
-        {
-            ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
-            float sampleDeathRate = (float)deaths / aliveBefore;
-            int macroDeaths = Mathf.RoundToInt(global.totalPopulation * sampleDeathRate);
-            global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
-        }
+        ApplyMacroDeaths(deaths, aliveBefore, DeathCause.Starvation);
 
         RefreshVisualPopulation();
     }
     public void ProcessMonthlyColder(float coldRate)
     {
         coldRate = Mathf.Clamp01(coldRate);
+        // GDD: vô gia cư không được sưởi -> mùa đông luôn bị lạnh dù kho còn than
+        bool isWinter = globalSystemManager != null
+            && globalSystemManager.GetGlobalDataRef().CurrentSeason == SeasonType.Winter;
         int aliveBefore = 0;
         int deaths = 0;
         for(int i = 0; i < activeCount; i++)
@@ -481,7 +491,8 @@ public class ResidentManager : MonoBehaviour
             if(!r.isAlive)
                 continue;
             aliveBefore++;
-            bool coldThisMonth = coldRate > 0f && UnityEngine.Random.value < coldRate;
+            bool coldThisMonth = (isWinter && r.assignedHouseID < 0)
+                || (coldRate > 0f && UnityEngine.Random.value < coldRate);
             if (coldThisMonth)
             {
                 if(r.coldMonths < byte.MaxValue)
@@ -496,13 +507,7 @@ public class ResidentManager : MonoBehaviour
                 deaths++;
             }
         }
-        if(globalSystemManager != null && aliveBefore > 0 && deaths > 0)
-        {
-            ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
-            float sampleDeathRate = (float)deaths / aliveBefore;
-            int macroDeaths = Mathf.RoundToInt(global.totalPopulation * sampleDeathRate);
-            global.totalPopulation = Mathf.Max(0, global.totalPopulation - macroDeaths);
-        }
+        ApplyMacroDeaths(deaths, aliveBefore, DeathCause.Cold);
         RefreshVisualPopulation();
     }
 

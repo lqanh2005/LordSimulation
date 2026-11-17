@@ -78,7 +78,8 @@ public class AppGamePlayState : IState<GameController>
     {
         GamePlayController gameplay = GamePlayController.Instance;
         bool canSave = gameplay != null
-            && (gameplay.IsIn(GamePlayStateID.Playing) || gameplay.IsIn(GamePlayStateID.Paused));
+            && (gameplay.IsIn(GamePlayStateID.Playing) || gameplay.IsIn(GamePlayStateID.Paused)
+                || gameplay.IsIn(GamePlayStateID.Victory)); // Về menu từ màn thắng -> lưu cờ đã thắng
 
         if (canSave && owner.saveLoadManager != null)
             owner.saveLoadManager.SaveGame();

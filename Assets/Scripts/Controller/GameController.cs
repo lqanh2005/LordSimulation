@@ -107,6 +107,23 @@ public class GameController : MonoBehaviour
             pendingStartMode = GameStartMode.Auto;
     }
 
+    /// <summary>Chơi lại từ đầu khi đang ở GamePlay (vd. sau Game Over): ép load lại scene.</summary>
+    public void RestartNewGame()
+    {
+        if (!IsIn(AppStateID.GamePlay))
+        {
+            StartNewGame();
+            return;
+        }
+
+        if (Initiate.IsFading)
+            return;
+
+        pendingStartMode = GameStartMode.NewGame;
+        Time.timeScale = 1f;
+        LoadScene(gameplaySceneName);
+    }
+
     public void ContinueGame()
     {
         if (!HasSaveFile)

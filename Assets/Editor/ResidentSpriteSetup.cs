@@ -80,9 +80,158 @@ public static class ResidentSpriteSetup
         var old = BuildOverride("Old", baseController, baseIdle, baseWalk, overrides["Old"]);
 
         SetupPrefab(kid, young, old);
+        SetupStatusIcons();
 
         AssetDatabase.SaveAssets();
         Debug.Log("[ResidentSpriteSetup] Hoàn tất setup sprite + animation cư dân.");
+    }
+
+    // ===== Icon trạng thái trên đầu (Cold / Flu / Homeless / Sick) =====
+    // Art 1920x1080 có nhiều khoảng trống -> cắt sát icon, pivot ở mũi nhọn bong bóng.
+    // Icon rộng ~600px -> ~0.3 unit trên map.
+    private const float StatusIconPixelsPerUnit = 2000f;
+
+    private static readonly (string file, string field)[] StatusIcons =
+    {
+        ("Sick", "sickIcon"),
+        ("Flu", "fluIcon"),
+        ("Cold", "coldIcon"),
+        ("Homeless", "homelessIcon"),
+    };
+
+    [MenuItem("Tools/Resident/Setup Status Icons")]
+    public static void SetupStatusIcons()
+    {
+        GameObject root = PrefabUtility.LoadPrefabContents(PrefabPath);
+        try
+        {
+            ResidentBase view = root.GetComponent<ResidentBase>();
+            var so = new SerializedObject(view);
+            foreach (var (file, field) in StatusIcons)
+            {
+                Sprite sprite = ImportStatusIcon($"{TextureRoot}/{file}.png");
+                if (sprite == null)
+                    Debug.LogError($"[ResidentSpriteSetup] Không import được icon {file}.png");
+                so.FindProperty(field).objectReferenceValue = sprite;
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            // Bỏ overlay chữ tên cũ nếu đã lưu trong prefab
+            Transform oldOverlay = root.transform.Find("Overlay");
+            if (oldOverlay != null)
+                Object.DestroyImmediate(oldOverlay.gameObject);
+
+            PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+
+        AssetDatabase.SaveAssets();
+        Debug.Log("[ResidentSpriteSetup] Đã gán icon trạng thái cho cư dân.");
+    }
+
+    private static Sprite ImportStatusIcon(string path)
+    {
+        var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null)
+            return null;
+
+        Rect rect = FindIconRect(path);
+
+        importer.textureType = TextureImporterType.Sprite;
+        importer.spriteImportMode = SpriteImportMode.Multiple;
+        importer.spritePixelsPerUnit = StatusIconPixelsPerUnit;
+        importer.alphaIsTransparency = true;
+        importer.mipmapEnabled = false;
+        importer.filterMode = FilterMode.Bilinear;
+        importer.wrapMode = TextureWrapMode.Clamp;
+        importer.textureCompression = TextureImporterCompression.CompressedHQ;
+
+        var factory = new UnityEditor.U2D.Sprites.SpriteDataProviderFactories();
+        factory.Init();
+        var provider = factory.GetSpriteEditorDataProviderFromObject(importer);
+        provider.InitSpriteEditorDataProvider();
+
+        // Giữ spriteID cũ để không mất reference khi chạy lại
+        var existing = provider.GetSpriteRects();
+        var spriteRect = existing.Length > 0 ? existing[0] : new SpriteRect { spriteID = GUID.Generate() };
+        spriteRect.name = Path.GetFileNameWithoutExtension(path);
+        spriteRect.rect = rect;
+        spriteRect.alignment = SpriteAlignment.Custom;
+        spriteRect.pivot = new Vector2(0.5f, 0f);
+        provider.SetSpriteRects(new[] { spriteRect });
+
+        var nameIdProvider = provider.GetDataProvider<UnityEditor.U2D.Sprites.ISpriteNameFileIdDataProvider>();
+        nameIdProvider?.SetNameFileIdPairs(new[]
+        {
+            new SpriteNameFileIdPair(spriteRect.name, spriteRect.spriteID)
+        });
+
+        provider.Apply();
+        importer.SaveAndReimport();
+
+        return AssetDatabase.LoadAllAssetsAtPath(path).OfType<Sprite>().FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Tìm khung icon trong canvas lớn, bỏ qua chấm lẻ (vd. vết bẩn trong Flu.png).
+    /// Cột/hàng "đặc" (>= 40px đục) cho biên trái/phải/trên; đáy lấy tới mũi nhọn mảnh của bong bóng.
+    /// </summary>
+    private static Rect FindIconRect(string path)
+    {
+        var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        try
+        {
+            tex.LoadImage(File.ReadAllBytes(path));
+            int w = tex.width, h = tex.height;
+            Color32[] px = tex.GetPixels32();
+
+            var colCount = new int[w];
+            var rowCount = new int[h];
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                if (px[y * w + x].a > 128)
+                {
+                    colCount[x]++;
+                    rowCount[y]++;
+                }
+            }
+
+            const int Solid = 40;
+            int minX = System.Array.FindIndex(colCount, c => c >= Solid);
+            int maxX = System.Array.FindLastIndex(colCount, c => c >= Solid);
+            int maxY = System.Array.FindLastIndex(rowCount, c => c >= Solid); // đỉnh (Texture2D: y=0 ở đáy)
+            if (minX < 0 || maxY < 0)
+                return new Rect(0, 0, w, h);
+
+            // Đáy: hàng thấp nhất còn pixel đục trong khoảng cột icon (mũi nhọn)
+            int minY = maxY;
+            for (int y = 0; y < maxY; y++)
+            {
+                bool any = false;
+                for (int x = minX; x <= maxX && !any; x++)
+                    any = px[y * w + x].a > 10;
+                if (any)
+                {
+                    minY = y;
+                    break;
+                }
+            }
+
+            const int Pad = 4;
+            minX = Mathf.Max(0, minX - Pad);
+            minY = Mathf.Max(0, minY - Pad);
+            maxX = Mathf.Min(w - 1, maxX + Pad);
+            maxY = Mathf.Min(h - 1, maxY + Pad);
+            return new Rect(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        }
+        finally
+        {
+            Object.DestroyImmediate(tex);
+        }
     }
 
     private static string FindSubFolder(string parent, string nameLower)

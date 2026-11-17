@@ -84,7 +84,7 @@ public class FarmCropPopup : MonoBehaviour
         FollowFarm();
     }
 
-    private bool IsOpen => panel != null && panel.gameObject.activeSelf;
+    public bool IsOpen => panel != null && panel.gameObject.activeSelf;
 
     private void OnBuildingClicked(object param)
     {
@@ -125,7 +125,7 @@ public class FarmCropPopup : MonoBehaviour
         Refresh();
     }
 
-    private void Hide()
+    public void Hide()
     {
         if (panel != null)
             panel.gameObject.SetActive(false);

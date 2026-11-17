@@ -15,6 +15,36 @@ public static class ImmigrationRules
     public const int QuarantineFoodPerMonth = 1;
     public const int QuarantineMedicinePerMonth = 1;
 
+    // ===== Áp lực hàng chờ (Waiting Yard) — GDD 3.1.7 =====
+    public const int YardFoodPerPerson = 1;               // Lương thực / người chờ / tháng (lấy từ kho thành)
+    public const float YardHungerHappinessPenalty = 0.1f;
+    public const int YardLeaveHungerMonths = 2;           // Đói >= N tháng thì bỏ đi
+    public const float YardLeaveReputationPenalty = 0.5f; // Mỗi người bỏ đi vì đói
+    public const float YardInfectChancePerCarrier = 0.05f;
+    public const float YardMaxInfectChance = 0.5f;
+    public const float YardCrowdThreshold = 0.5f;         // Đầy hơn 50% sức chứa thì bắt đầu bất ổn
+    public const float YardMaxCrowdRiot = 4f;             // Bạo loạn tối đa / tháng khi hàng chờ đầy
+    public const float YardHungryRiotPerPerson = 0.15f;
+
+    /// <summary>Bạo loạn sinh ra từ hàng chờ trong tháng.</summary>
+    public static float GetYardRiot(int waiting, int hungry)
+    {
+        float crowd = MaxWaiting > 0 ? (float)waiting / MaxWaiting : 0f;
+        float riot = crowd > YardCrowdThreshold
+            ? (crowd - YardCrowdThreshold) / (1f - YardCrowdThreshold) * YardMaxCrowdRiot
+            : 0f;
+        return riot + hungry * YardHungryRiotPerPerson;
+    }
+
+    /// <summary>Xác suất một người khỏe bị lây trong hàng chờ (đông + nhiều người bệnh thì cao).</summary>
+    public static float GetYardInfectChance(int carriers, int waiting)
+    {
+        if (carriers <= 0)
+            return 0f;
+        float crowdMult = 1f + (MaxWaiting > 0 ? (float)waiting / MaxWaiting : 0f);
+        return Mathf.Min(YardMaxInfectChance, carriers * YardInfectChancePerCarrier * crowdMult);
+    }
+
     public static int RollArrivalCount(SeasonType season, float reputation)
     {
         int extra = season switch

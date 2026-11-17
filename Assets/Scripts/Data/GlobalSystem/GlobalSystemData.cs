@@ -25,6 +25,7 @@ public struct GlobalSystemData
     public int totalPopulation;
     public int totalInfected;
     public float overallHappiness;
+    public bool victoryAchieved;   // Đã đạt mục tiêu MVP (sống qua mùa đông đầu) — lưu từ save v7
     public SeasonType CurrentSeason => (currentMonth - 1) switch
     {
         >= 0 and <= 2 => SeasonType.Spring,

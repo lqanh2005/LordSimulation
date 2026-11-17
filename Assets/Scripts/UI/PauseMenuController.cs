@@ -37,6 +37,13 @@ public class PauseMenuController : MonoBehaviour
 
     public bool IsOpen => root != null && root.activeSelf;
 
+    /// <summary>GameHotkeys tắt cờ này để tự xử lý Esc (đóng cửa sổ trước, rồi mới mở Pause).</summary>
+    public bool ToggleWithEscape
+    {
+        get => toggleWithEscape;
+        set => toggleWithEscape = value;
+    }
+
     private void Awake()
     {
         if (btnClose != null) btnClose.onClick.AddListener(Resume);

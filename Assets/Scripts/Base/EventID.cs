@@ -13,6 +13,7 @@ public enum EventID
     ColderResolved = 202,
     DiseasePressure = 203,
     PopulationChanged = 204,
+    ResidentsDied = 205,            // param: ResidentsDiedPayload
 
     SaveStarted = 300,
     SaveCompleted = 301,
@@ -22,6 +23,7 @@ public enum EventID
     LoadFailed = 305,
 
     ImmigrationQueueChanged = 400,
+    WaitingYardReport = 401,        // param: WaitingYardReportPayload (mỗi tháng)
 
     BuildingPlaced = 500,
     BuildingPlaceFailed = 501,
@@ -36,10 +38,15 @@ public enum EventID
 
     AppStateChanged = 700,
     GamePlayStateChanged = 701,
-    GameOver = 702,
+    GameOver = 702,                 // param: GameOverPayload
+    Victory = 703,                  // param: VictoryPayload
 
     ResearchChanged = 800,          // tiến độ / lựa chọn nghiên cứu thay đổi
-    ResearchCompleted = 801         // param: ResearchID vừa hoàn thành
+    ResearchCompleted = 801,        // param: ResearchID vừa hoàn thành
+
+    MerchantArrived = 900,          // param: bool (true = vừa tới trong game, false = khôi phục từ save)
+    MerchantLeft = 901,             // param: bool (true = vừa rời đi trong game)
+    MerchantTraded = 902
 }
 
 public struct AppStateChangedPayload
@@ -86,6 +93,53 @@ public struct MonthChangedPayload
     public byte month;
     public SeasonType season;
     public bool isSimulationTick;
+}
+
+public struct WaitingYardReportPayload
+{
+    public int waiting;          // Số người còn chờ sau khi xử lý tháng
+    public int foodEaten;
+    public int hungry;           // Không được ăn tháng này
+    public int newlyInfected;    // Bị lây trong hàng chờ
+    public int newlySymptomatic; // Ủ bệnh -> phát bệnh trong lúc chờ
+    public int left;             // Bỏ đi vì đói
+    public float riotAdded;
+}
+
+public enum DeathCause : byte
+{
+    OldAge = 0,
+    Starvation = 1,
+    Cold = 2,
+    Disease = 3
+}
+
+public struct ResidentsDiedPayload
+{
+    public DeathCause cause;
+    public int count;               // Số người chết quy ra dân số thật (macro)
+}
+
+public enum GameOverReason : byte
+{
+    None = 0,
+    Extinction = 1,     // Toàn bộ dân chết
+    Riot = 2            // Bạo loạn chạm đỉnh -> lãnh chúa bị lật đổ
+}
+
+public struct GameOverPayload
+{
+    public GameOverReason reason;
+    public int year;
+    public byte month;
+}
+
+public struct VictoryPayload
+{
+    public int year;
+    public byte month;
+    public int population;
+    public int wintersSurvived;
 }
 
 public struct WeatherChangedPayload

@@ -79,11 +79,24 @@ public class ImmigrationPopupUI : MonoBehaviour
         if (titleText != null)
             titleText.text = "City Gate — Immigration Check";
         if (queueText != null)
-            queueText.text = $"Waiting: {waitingCount}";
+            queueText.text = FormatQueue(waitingCount);
         if (bodyText != null)
-            bodyText.text = ImmigrationRules.FormatProfile(in applicant, suggested);
+        {
+            string profile = ImmigrationRules.FormatProfile(in applicant, suggested);
+            if (applicant.hungerMonths > 0)
+                profile += $"\n<color=#C0392B>Đói trong hàng chờ: {applicant.hungerMonths} tháng (sắp bỏ đi)</color>";
+            bodyText.text = profile;
+        }
         SetButtons(true);
         HighlightSuggestion(suggested);
+    }
+
+    /// <summary>"Waiting: 20/32" — đỏ khi hàng đông tới mức gây bất ổn.</summary>
+    private static string FormatQueue(int waitingCount)
+    {
+        string text = $"Waiting: {waitingCount}/{ImmigrationRules.MaxWaiting}";
+        bool crowded = waitingCount > ImmigrationRules.MaxWaiting * ImmigrationRules.YardCrowdThreshold;
+        return crowded ? $"<color=#C0392B>{text} — quá đông!</color>" : text;
     }
 
     public void ShowEmpty()
@@ -98,6 +111,8 @@ public class ImmigrationPopupUI : MonoBehaviour
             bodyText.text = "No arrivals waiting at the gate.";
         SetButtons(false);
     }
+
+    public bool IsOpen => root != null && root.activeSelf;
 
     public void Hide()
     {
