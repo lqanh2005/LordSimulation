@@ -97,6 +97,12 @@ public class BuildMenuController : MonoBehaviour
             return;
 
         bool active = param is bool b && b;
+        UISkin skin = UISkin.Instance;
+        if (skin != null && demolishButton.targetGraphic is Image image && skin.squareButton != null)
+        {
+            image.sprite = active ? skin.squareButtonActive : skin.squareButton;
+            return;
+        }
         demolishButton.targetGraphic.color = active ? demolishActiveColor : demolishIdleColor;
     }
 

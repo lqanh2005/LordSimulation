@@ -8,11 +8,45 @@ using UnityEngine.UI;
 /// </summary>
 public static class RuntimeUIKit
 {
-    public static readonly Color PanelColor = new Color32(0xE2, 0xE5, 0xE7, 0xF2);
-    public static readonly Color ButtonColor = new Color32(0xD3, 0xD7, 0xDA, 0xFF);
-    public static readonly Color ActiveButtonColor = new Color32(0x9F, 0xC8, 0x8A, 0xFF);
-    public static readonly Color DangerButtonColor = new Color32(0xE5, 0x9A, 0x9A, 0xFF);
-    public static readonly Color TextColor = new Color32(0x33, 0x33, 0x33, 0xFF);
+    // Màu dự phòng khi chưa có Resources/UISkin.asset (theo palette mockup).
+    public static readonly Color PanelColor = new Color32(0x26, 0x24, 0x22, 0xF2);
+    public static readonly Color ButtonColor = new Color32(0x22, 0x22, 0x22, 0xFF);
+    public static readonly Color ActiveButtonColor = new Color32(0x8D, 0x61, 0x00, 0xFF);
+    public static readonly Color DangerButtonColor = new Color32(0xA6, 0x38, 0x38, 0xFF);
+    public static readonly Color TextColor = UISkin.Cream;
+    public static readonly Color SubTextColor = UISkin.Tan;
+
+    public enum ButtonStyle { Normal, Active, Danger }
+
+    /// <summary>Nền panel popup: khung vát góc viền vàng.</summary>
+    public static void StylePanel(Image image)
+    {
+        UISkin skin = UISkin.Instance;
+        if (skin != null && skin.popupFrame != null)
+            UISkin.SetSliced(image, skin.popupFrame, Color.white, 4f);
+        else if (image != null)
+            image.color = PanelColor;
+    }
+
+    /// <summary>Nền nút: thường = tối viền vàng, Active = vàng đậm, Danger = đỏ.</summary>
+    public static void SetButtonStyle(Image image, ButtonStyle style)
+    {
+        if (image == null)
+            return;
+        UISkin skin = UISkin.Instance;
+        if (skin == null || skin.boxGold == null)
+        {
+            image.color = style == ButtonStyle.Active ? ActiveButtonColor : style == ButtonStyle.Danger ? DangerButtonColor : ButtonColor;
+            return;
+        }
+
+        switch (style)
+        {
+            case ButtonStyle.Active: UISkin.SetSliced(image, skin.fillGold, Color.white); break;
+            case ButtonStyle.Danger: UISkin.SetSliced(image, skin.fillWhite, DangerButtonColor); break;
+            default: UISkin.SetSliced(image, skin.boxGold, Color.white); break;
+        }
+    }
 
     public static Canvas FindHudCanvas()
     {
@@ -44,10 +78,10 @@ public static class RuntimeUIKit
         rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0f);
         rt.sizeDelta = new Vector2(width, 100f);
-        go.GetComponent<Image>().color = PanelColor;
+        StylePanel(go.GetComponent<Image>());
 
         VerticalLayoutGroup layout = go.GetComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(12, 12, 10, 12);
+        layout.padding = new RectOffset(18, 18, 14, 18);
         layout.spacing = 6f;
         layout.childControlWidth = true;
         layout.childControlHeight = true;
@@ -82,7 +116,7 @@ public static class RuntimeUIKit
         tmp.fontSize = size;
         tmp.fontStyle = style;
         tmp.alignment = align;
-        tmp.color = TextColor;
+        UISkin.StyleText(tmp, TextColor);
         tmp.textWrappingMode = TextWrappingModes.Normal;
         tmp.richText = true;
         tmp.raycastTarget = false;
@@ -94,12 +128,13 @@ public static class RuntimeUIKit
         GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
         go.transform.SetParent(parent, false);
         Image image = go.GetComponent<Image>();
-        image.color = ButtonColor;
+        SetButtonStyle(image, ButtonStyle.Normal);
         Button button = go.GetComponent<Button>();
+        UISkin.SetButtonTint(button);
         button.onClick.AddListener(PlayClick);
         button.onClick.AddListener(onClick);
 
-        TextMeshProUGUI text = CreateText(go.transform, "Label", 16f, FontStyles.Bold, TextAlignmentOptions.Center);
+        TextMeshProUGUI text = CreateText(go.transform, "Label", 16f, FontStyles.Normal, TextAlignmentOptions.Center);
         RectTransform rt = text.rectTransform;
         rt.anchorMin = Vector2.zero;
         rt.anchorMax = Vector2.one;
@@ -120,11 +155,18 @@ public static class RuntimeUIKit
     {
         RectTransform header = CreateRow(panel, "Header", 26f);
         header.GetComponent<HorizontalLayoutGroup>().childForceExpandWidth = false;
-        TextMeshProUGUI title = CreateText(header, "Title", 20f, FontStyles.Bold, TextAlignmentOptions.Left);
+        TextMeshProUGUI title = CreateText(header, "Title", 20f, FontStyles.Normal, TextAlignmentOptions.Left);
+        UISkin.StyleText(title, UISkin.GoldBright, true);
         title.textWrappingMode = TextWrappingModes.NoWrap;
         title.overflowMode = TextOverflowModes.Ellipsis;
         title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
         Image close = CreateButton(header, "Close", "X", onClose);
+        UISkin skin = UISkin.Instance;
+        if (skin != null && skin.closeIcon != null)
+        {
+            UISkin.SetIcon(close, skin.closeIcon);
+            close.transform.Find("Label").gameObject.SetActive(false);
+        }
         LayoutElement closeLayout = close.gameObject.AddComponent<LayoutElement>();
         closeLayout.preferredWidth = 26f;
         closeLayout.minWidth = 26f;

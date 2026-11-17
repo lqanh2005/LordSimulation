@@ -17,18 +17,31 @@ public enum GameStartMode : byte
 
 public class AppLoadingState : IState<GameController>
 {
+    // Giữ thanh 100% một chút trước khi chuyển cảnh để người chơi kịp thấy "Hoàn tất"
+    private const float HoldAtFullSeconds = 0.35f;
+
     private float elapsed;
+    private float doneTime;
 
     public void Enter(GameController owner)
     {
         elapsed = 0f;
+        doneTime = -1f;
         Time.timeScale = 1f;
+        owner.StartPreload();
     }
 
     public void Tick(GameController owner, float deltaTime)
     {
         elapsed += deltaTime;
-        if (elapsed >= owner.MinLoadingSeconds)
+
+        GameDataPreloader preloader = owner.Preloader;
+        if (preloader != null && !preloader.IsDone)
+            return;
+        if (doneTime < 0f)
+            doneTime = elapsed;
+
+        if (elapsed >= owner.MinLoadingSeconds && elapsed - doneTime >= HoldAtFullSeconds)
             owner.ChangeState(AppStateID.Home);
     }
 

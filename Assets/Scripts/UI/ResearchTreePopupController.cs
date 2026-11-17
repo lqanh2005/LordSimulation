@@ -22,7 +22,14 @@ public class ResearchTreePopupController : MonoBehaviour
     [SerializeField] private TMP_Text branchLabelTemplate;
     [SerializeField] private Image branchBandTemplate;
 
+    [Header("Lọc theo nhánh (tuỳ chọn) — cột trái kiểu mockup")]
+    [SerializeField] private RectTransform branchList;
+    [SerializeField] private Button branchButtonTemplate;
+    [SerializeField] private float branchButtonHeight = 65f;
+    [SerializeField] private float branchButtonSpacing = 10f;
+
     [Header("Chi Tiết")]
+    [SerializeField] private Image imgDetailIcon;
     [SerializeField] private TMP_Text txtDetailName;
     [SerializeField] private TMP_Text txtDetailBranch;
     [SerializeField] private TMP_Text txtDetailDesc;
@@ -59,6 +66,14 @@ public class ResearchTreePopupController : MonoBehaviour
     {
         public Image image;
         public ResearchID from;
+        public ResearchBranch branch;
+    }
+
+    private struct BranchButton
+    {
+        public ResearchBranch branch;
+        public Button button;
+        public TMP_Text label;
     }
 
     private readonly Dictionary<ResearchID, ResearchNodeView> nodeViews = new Dictionary<ResearchID, ResearchNodeView>();
@@ -66,6 +81,11 @@ public class ResearchTreePopupController : MonoBehaviour
     private ResearchManager research;
     private ResearchID selected = ResearchID.None;
     private bool built;
+
+    // Chế độ lọc: chỉ hiện node của một nhánh, hàng tính lại trong nhánh
+    private readonly List<BranchButton> branchButtons = new List<BranchButton>();
+    private readonly Dictionary<ResearchBranch, float> branchMinRow = new Dictionary<ResearchBranch, float>();
+    private bool FilterMode => branchList != null && branchButtonTemplate != null;
 
     private void Awake()
     {
@@ -75,6 +95,7 @@ public class ResearchTreePopupController : MonoBehaviour
         if (lineTemplate != null) lineTemplate.gameObject.SetActive(false);
         if (branchLabelTemplate != null) branchLabelTemplate.gameObject.SetActive(false);
         if (branchBandTemplate != null) branchBandTemplate.gameObject.SetActive(false);
+        if (branchButtonTemplate != null) branchButtonTemplate.gameObject.SetActive(false);
     }
 
     private void OnEnable()
@@ -90,7 +111,7 @@ public class ResearchTreePopupController : MonoBehaviour
 
     public void Show()
     {
-        gameObject.SetActive(true);
+        UIPopupAnim.Show(gameObject);
         transform.SetAsLastSibling();
         ResolveManager();
         BuildTree();
@@ -100,17 +121,23 @@ public class ResearchTreePopupController : MonoBehaviour
                 ? research.CurrentResearch
                 : ResearchCatalog.All[0].id;
 
+        if (FilterMode)
+        {
+            ResearchNode selectedNode = ResearchCatalog.Get(selected);
+            SetBranch(selectedNode != null ? selectedNode.branch : ResearchBranch.Agriculture);
+        }
+
         RefreshAll();
     }
 
     public void Hide()
     {
-        gameObject.SetActive(false);
+        UIPopupAnim.Hide(gameObject);
     }
 
     public void Toggle()
     {
-        if (gameObject.activeSelf)
+        if (UIPopupAnim.IsVisible(gameObject))
             Hide();
         else
             Show();
@@ -132,7 +159,10 @@ public class ResearchTreePopupController : MonoBehaviour
     // ==========================================
 
     private Vector2 NodePosition(ResearchNode node) =>
-        new Vector2(padding.x + node.tier * columnSpacing, -(padding.y + node.row * rowSpacing));
+        new Vector2(padding.x + node.tier * columnSpacing, -(padding.y + RowOf(node) * rowSpacing));
+
+    private float RowOf(ResearchNode node) =>
+        FilterMode && branchMinRow.TryGetValue(node.branch, out float min) ? node.row - min : node.row;
 
     private void BuildTree()
     {
@@ -140,11 +170,22 @@ public class ResearchTreePopupController : MonoBehaviour
             return;
         built = true;
 
+        if (FilterMode)
+        {
+            for (int i = 0; i < ResearchCatalog.All.Length; i++)
+            {
+                ResearchNode n = ResearchCatalog.All[i];
+                branchMinRow[n.branch] = branchMinRow.TryGetValue(n.branch, out float min) ? Mathf.Min(min, n.row) : n.row;
+            }
+            BuildBranchButtons();
+        }
+
         float width = padding.x + padding.y + ResearchCatalog.MaxTier * columnSpacing + nodeSize.x;
         float height = padding.y * 2f + ResearchCatalog.MaxRow * rowSpacing + nodeSize.y;
         treeContent.sizeDelta = new Vector2(Mathf.Max(width, treeContent.sizeDelta.x), height);
 
-        BuildBranchBands(treeContent.sizeDelta.x);
+        if (!FilterMode)
+            BuildBranchBands(treeContent.sizeDelta.x);
 
         // Đường nối vẽ trước để nằm dưới node
         for (int i = 0; i < ResearchCatalog.All.Length; i++)
@@ -153,7 +194,8 @@ public class ResearchTreePopupController : MonoBehaviour
             for (int p = 0; p < node.prerequisites.Length; p++)
             {
                 ResearchNode parent = ResearchCatalog.Get(node.prerequisites[p]);
-                if (parent != null)
+                // Chế độ lọc: bỏ đường nối khác nhánh (vẫn ghi ở dòng "Cần nghiên cứu trước")
+                if (parent != null && (!FilterMode || parent.branch == node.branch))
                     BuildConnector(parent, node);
             }
         }
@@ -172,8 +214,99 @@ public class ResearchTreePopupController : MonoBehaviour
             rt.anchoredPosition = NodePosition(node);
 
             view.Bind(node, OnNodeClicked);
+            view.SetIcon(GetBranchIcon(node.branch));
             nodeViews[node.id] = view;
         }
+    }
+
+    private void BuildBranchButtons()
+    {
+        for (int b = 0; b <= (int)ResearchBranch.Society; b++)
+        {
+            ResearchBranch branch = (ResearchBranch)b;
+            Button button = Instantiate(branchButtonTemplate, branchList);
+            button.name = $"Branch_{branch}";
+            button.gameObject.SetActive(true);
+
+            RectTransform rt = (RectTransform)button.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0f, -b * (branchButtonHeight + branchButtonSpacing));
+            rt.sizeDelta = new Vector2(0f, branchButtonHeight);
+
+            TMP_Text label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+                label.text = ResearchCatalog.GetBranchName(branch);
+
+            button.onClick.AddListener(() =>
+            {
+                SetBranch(branch);
+                RefreshAll();
+            });
+            branchButtons.Add(new BranchButton { branch = branch, button = button, label = label });
+        }
+    }
+
+    private void SetBranch(ResearchBranch branch)
+    {
+        float maxRow = 0f;
+        int maxTier = 0;
+        foreach (KeyValuePair<ResearchID, ResearchNodeView> pair in nodeViews)
+        {
+            ResearchNode node = ResearchCatalog.Get(pair.Key);
+            bool visible = node.branch == branch;
+            pair.Value.gameObject.SetActive(visible);
+            if (!visible) continue;
+            maxRow = Mathf.Max(maxRow, RowOf(node));
+            maxTier = Mathf.Max(maxTier, node.tier);
+        }
+
+        for (int i = 0; i < lines.Count; i++)
+            lines[i].image.gameObject.SetActive(lines[i].branch == branch);
+
+        if (treeContent != null)
+        {
+            float width = padding.x + padding.y + maxTier * columnSpacing + nodeSize.x;
+            float height = padding.y * 2f + maxRow * rowSpacing + nodeSize.y;
+            treeContent.sizeDelta = new Vector2(width, height);
+            treeContent.anchoredPosition = Vector2.zero;
+        }
+
+        UISkin skin = UISkin.Instance;
+        for (int i = 0; i < branchButtons.Count; i++)
+        {
+            bool on = branchButtons[i].branch == branch;
+            if (skin != null && branchButtons[i].button.targetGraphic is Image image)
+                UISkin.SetSliced(image, on ? skin.boxGoldBright : skin.boxGold, Color.white);
+            if (branchButtons[i].label != null)
+                branchButtons[i].label.color = on ? UISkin.GoldBright : UISkin.Cream;
+        }
+
+        // Node đang chọn không thuộc nhánh mới -> chọn node đầu của nhánh
+        ResearchNode current = ResearchCatalog.Get(selected);
+        if (current == null || current.branch != branch)
+        {
+            for (int i = 0; i < ResearchCatalog.All.Length; i++)
+            {
+                if (ResearchCatalog.All[i].branch != branch) continue;
+                selected = ResearchCatalog.All[i].id;
+                break;
+            }
+        }
+    }
+
+    public static Sprite GetBranchIcon(ResearchBranch branch)
+    {
+        UISkin skin = UISkin.Instance;
+        if (skin == null)
+            return null;
+        return branch switch
+        {
+            ResearchBranch.Agriculture => skin.iconAgriculture,
+            ResearchBranch.Industry => skin.iconProduct,
+            _ => skin.iconLaw
+        };
     }
 
     private void BuildBranchBands(float contentWidth)
@@ -230,12 +363,12 @@ public class ResearchTreePopupController : MonoBehaviour
         Vector2 b = NodePosition(to) + new Vector2(0f, -nodeSize.y * 0.5f);
         float midX = b.x - (columnSpacing - nodeSize.x) * 0.5f;
 
-        AddSegment(from.id, new Vector2(a.x, a.y), new Vector2(midX, a.y));
-        AddSegment(from.id, new Vector2(midX, a.y), new Vector2(midX, b.y));
-        AddSegment(from.id, new Vector2(midX, b.y), new Vector2(b.x, b.y));
+        AddSegment(from, new Vector2(a.x, a.y), new Vector2(midX, a.y));
+        AddSegment(from, new Vector2(midX, a.y), new Vector2(midX, b.y));
+        AddSegment(from, new Vector2(midX, b.y), new Vector2(b.x, b.y));
     }
 
-    private void AddSegment(ResearchID from, Vector2 p0, Vector2 p1)
+    private void AddSegment(ResearchNode from, Vector2 p0, Vector2 p1)
     {
         if (lineTemplate == null)
             return;
@@ -255,7 +388,7 @@ public class ResearchTreePopupController : MonoBehaviour
         rt.pivot = new Vector2(0f, 1f);
         rt.anchoredPosition = new Vector2(xMin, yMax);
         rt.sizeDelta = new Vector2(xMax - xMin, yMax - yMin);
-        lines.Add(new LineSegment { image = line, from = from });
+        lines.Add(new LineSegment { image = line, from = from.id, branch = from.branch });
     }
 
     // ==========================================
@@ -304,7 +437,7 @@ public class ResearchTreePopupController : MonoBehaviour
         }
 
         if (txtPoints != null)
-            txtPoints.text = $"Điểm NC: +{research.LastPointsPerMonth:0.#}/tháng   ·   Đã xong {research.CompletedCount}/{ResearchCatalog.All.Length}";
+            txtPoints.text = $"Điểm NC: +{research.LastPointsPerMonth:0.#}/tháng{(FilterMode ? "\n" : "   ·   ")}Đã xong {research.CompletedCount}/{ResearchCatalog.All.Length}";
 
         ResearchNode current = ResearchCatalog.Get(research.CurrentResearch);
         if (current == null)
@@ -382,6 +515,12 @@ public class ResearchTreePopupController : MonoBehaviour
         ResearchNodeState state = research != null ? research.GetState(node.id) : ResearchNodeState.Locked;
 
         SetText(txtDetailName, node.displayName);
+        if (imgDetailIcon != null)
+        {
+            Sprite icon = GetBranchIcon(node.branch);
+            imgDetailIcon.sprite = icon;
+            imgDetailIcon.enabled = icon != null;
+        }
         SetText(txtDetailBranch, $"{ResearchCatalog.GetBranchName(node.branch)}  ·  {node.cost} điểm");
         SetText(txtDetailDesc, node.description);
         SetText(txtDetailEffects, "Hiệu quả:\n" + ResearchCatalog.DescribeEffects(node));

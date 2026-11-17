@@ -13,13 +13,116 @@ public class SaveLoadManager : MonoBehaviour
     [Header("Tên Scene Gameplay")]
     [SerializeField] private string gameplaySceneName = "GamePlayScene";
 
+    /// <summary>Số ô lưu trong màn Lưu / Tải game. Ô 1 dùng đúng file cũ nên save cũ vẫn mở được.</summary>
+    public const int SlotCount = 5;
+
     private string _saveFilePath;
     private float _autoSaveTimer;
     private bool _isSaving;
 
+    /// <summary>Ô đang dùng cho lưu tự động / Tiếp tục (0-based).</summary>
+    public int ActiveSlot { get; private set; }
+
+    /// <summary>Thông tin hiển thị một ô lưu (đọc từ file .meta đi kèm).</summary>
+    public struct SlotInfo
+    {
+        public bool exists;
+        public DateTime savedAt;
+        public int year;
+        public int month;
+        public int population;
+        public bool hasMeta;
+    }
+
     public void Init()
     {
-        _saveFilePath = Path.Combine(Application.persistentDataPath, saveSlotFileName);
+        // Tiếp tục = bản lưu mới nhất
+        int latest = GetLatestSlot();
+        SetActiveSlot(latest >= 0 ? latest : 0);
+    }
+
+    public string GetSlotPath(int slot)
+    {
+        string file = slot <= 0 ? saveSlotFileName : $"city_save_slot_{slot + 1}.dat";
+        return Path.Combine(Application.persistentDataPath, file);
+    }
+
+    public void SetActiveSlot(int slot)
+    {
+        ActiveSlot = Mathf.Clamp(slot, 0, SlotCount - 1);
+        _saveFilePath = GetSlotPath(ActiveSlot);
+    }
+
+    public void SaveToSlot(int slot)
+    {
+        SetActiveSlot(slot);
+        SaveGame();
+    }
+
+    public bool LoadFromSlot(int slot)
+    {
+        SetActiveSlot(slot);
+        return LoadGame();
+    }
+
+    public int GetLatestSlot()
+    {
+        int best = -1;
+        DateTime bestTime = DateTime.MinValue;
+        for (int i = 0; i < SlotCount; i++)
+        {
+            string path = GetSlotPath(i);
+            if (!File.Exists(path))
+                continue;
+            DateTime time = File.GetLastWriteTime(path);
+            if (best < 0 || time > bestTime)
+            {
+                best = i;
+                bestTime = time;
+            }
+        }
+        return best;
+    }
+
+    public SlotInfo GetSlotInfo(int slot)
+    {
+        var info = new SlotInfo();
+        string path = GetSlotPath(slot);
+        if (!File.Exists(path))
+            return info;
+
+        info.exists = true;
+        info.savedAt = File.GetLastWriteTime(path);
+        try
+        {
+            string metaPath = path + ".meta";
+            if (File.Exists(metaPath))
+            {
+                string[] parts = File.ReadAllText(metaPath).Split('|');
+                if (parts.Length >= 3
+                    && int.TryParse(parts[0], out info.year)
+                    && int.TryParse(parts[1], out info.month)
+                    && int.TryParse(parts[2], out info.population))
+                    info.hasMeta = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[SaveLoadManager] Không đọc được meta ô {slot + 1}: {ex.Message}");
+        }
+        return info;
+    }
+
+    private void WriteSlotMeta(in GlobalSystemData data)
+    {
+        try
+        {
+            File.WriteAllText(_saveFilePath + ".meta", $"{data.currentYear}|{data.currentMonth}|{data.totalPopulation}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[SaveLoadManager] Không ghi được meta: {ex.Message}");
+        }
     }
 
     private void OnApplicationPause(bool pauseStatus)
@@ -144,6 +247,7 @@ public class SaveLoadManager : MonoBehaviour
                 File.Move(tempPath, _saveFilePath);
             }
 
+            WriteSlotMeta(in globalData);
             Debug.Log($"[SaveLoadManager] Lưu game thành công vào: {_saveFilePath}");
             GameEvents.Post(EventID.SaveCompleted);
         }

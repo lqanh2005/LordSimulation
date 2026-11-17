@@ -22,14 +22,30 @@ public class NotificationFeed : MonoBehaviour
     private const float DefaultDuration = 6f;
     private const float DedupeSeconds = 3f;
     private const int MaxVisible = 5;
-    private const float RowHeight = 56f;
-    private const float RowSpacing = 10f;
+    private const float RowHeight = 52f;
+    private const float RowSpacing = 12f;
     private const float MinWidth = 260f;
     private const float MaxWidth = 720f;
-    private const float TextLeft = 68f;
-    private const float TextRight = 56f;
+    private const float TextLeft = 30f;
+    private const float TextRight = 48f;
 
     public static NotificationFeed Instance { get; private set; }
+
+    /// <summary>Một mục trong lịch sử thông báo (cửa sổ Thông báo ở nút chuông).</summary>
+    public struct HistoryEntry
+    {
+        public string message;
+        public NoticeLevel level;
+        public int year;
+        public int month;
+        public System.Action onClick;
+    }
+
+    private const int MaxHistory = 50;
+    private readonly List<HistoryEntry> _history = new List<HistoryEntry>();
+
+    /// <summary>Lịch sử thông báo, mới nhất ở đầu danh sách.</summary>
+    public IReadOnlyList<HistoryEntry> History => _history;
 
     private sealed class Notice
     {
@@ -475,6 +491,19 @@ public class NotificationFeed : MonoBehaviour
             _recentKeys[key] = now;
         }
 
+        GlobalSystemManager global = ResolveGlobal();
+        _history.Insert(0, new HistoryEntry
+        {
+            message = message,
+            level = level,
+            year = global != null ? global.GetGlobalDataRef().currentYear : 0,
+            month = global != null ? global.GetGlobalDataRef().currentMonth : 0,
+            onClick = onClick
+        });
+        if (_history.Count > MaxHistory)
+            _history.RemoveAt(_history.Count - 1);
+        NoticeWindow.RefreshIfOpen();
+
         if (!EnsureContainer())
             return;
 
@@ -570,7 +599,14 @@ public class NotificationFeed : MonoBehaviour
         {
             Image bg = go.GetComponent<Image>();
             if (bg != null)
-                bg.color = CriticalColor;
+            {
+                // Nền tối của skin nhân màu sẽ ra đỏ bẩn -> đổi sang nền trắng bo góc rồi tô đỏ
+                UISkin skin = UISkin.Instance;
+                if (skin != null && skin.fillWhite != null)
+                    UISkin.SetSliced(bg, skin.fillWhite, CriticalColor);
+                else
+                    bg.color = CriticalColor;
+            }
             if (text != null)
             {
                 text.color = Color.white;
@@ -603,7 +639,7 @@ public class NotificationFeed : MonoBehaviour
         RectTransform tr = text.rectTransform;
         tr.anchorMin = tr.anchorMax = new Vector2(0f, 0.5f);
         tr.pivot = new Vector2(0f, 0.5f);
-        tr.anchoredPosition = new Vector2(TextLeft - 40f, 0f);
+        tr.anchoredPosition = new Vector2(TextLeft, 0f);
         tr.sizeDelta = new Vector2(200f, 30f);
 
         Image close = RuntimeUIKit.CreateButton(go.transform, "Btn_Close", "X", () => { });

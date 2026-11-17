@@ -56,10 +56,19 @@ public class EdictRuleCardView : MonoBehaviour
 
     private void SetActiveVisual(bool isActive)
     {
-        if (imgToggleTrack != null)
+        UISkin skin = UISkin.Instance;
+        bool skinned = skin != null && skin.toggleOn != null && imgToggleTrack != null;
+        if (skinned)
+        {
+            // Sprite On/Off của mockup đã có sẵn núm -> ẩn núm rời
+            UISkin.SetIcon(imgToggleTrack, isActive ? skin.toggleOn : skin.toggleOff);
+            if (toggleKnob != null)
+                toggleKnob.gameObject.SetActive(false);
+        }
+        else if (imgToggleTrack != null)
             imgToggleTrack.color = isActive ? toggleOnColor : toggleOffColor;
 
-        if (toggleKnob != null)
+        if (toggleKnob != null && !skinned)
         {
             Vector2 anchor = new Vector2(isActive ? 1f : 0f, 0.5f);
             toggleKnob.anchorMin = anchor;

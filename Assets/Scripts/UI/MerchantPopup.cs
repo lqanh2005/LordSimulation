@@ -124,7 +124,7 @@ public class MerchantPopup : MonoBehaviour
         {
             row.info.text =
                 $"<b>{MerchantManager.GetResourceName(row.type)}</b>   Kho: {merchant.GetPlayerStock(row.type)}   ·   Thương nhân có: {merchant.GetMerchantStock(row.type)}\n" +
-                $"<size=14>Mua <color=#C0392B>{merchant.GetBuyPrice(row.type)}</color> vàng/đv   ·   Bán <color=#1E8449>{merchant.GetSellPrice(row.type)}</color> vàng/đv</size>";
+                $"<size=14>Mua <color=#E86A5A>{merchant.GetBuyPrice(row.type)}</color> vàng/đv   ·   Bán <color=#5CCB6A>{merchant.GetSellPrice(row.type)}</color> vàng/đv</size>";
         }
     }
 
@@ -159,7 +159,7 @@ public class MerchantPopup : MonoBehaviour
         if (_status == null)
             return;
         _status.text = string.IsNullOrEmpty(message) ? string.Empty
-            : $"<color={(success ? "#1E8449" : "#C0392B")}>{message}</color>";
+            : $"<color={(success ? "#5CCB6A" : "#E86A5A")}>{message}</color>";
     }
 
     // ==========================================
@@ -199,9 +199,13 @@ public class MerchantPopup : MonoBehaviour
 
         GameObject box = new GameObject("Row_" + type, typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
         box.transform.SetParent(_panel, false);
-        box.GetComponent<Image>().color = new Color32(0xD9, 0xDD, 0xE0, 0xFF);
+        UISkin skin = UISkin.Instance;
+        if (skin != null && skin.boxGold != null)
+            UISkin.SetSliced(box.GetComponent<Image>(), skin.boxGold, Color.white);
+        else
+            box.GetComponent<Image>().color = RuntimeUIKit.ButtonColor;
         VerticalLayoutGroup v = box.GetComponent<VerticalLayoutGroup>();
-        v.padding = new RectOffset(10, 10, 6, 8);
+        v.padding = new RectOffset(14, 14, 10, 12);
         v.spacing = 4f;
         v.childControlWidth = v.childControlHeight = true;
         v.childForceExpandWidth = true;
@@ -227,7 +231,7 @@ public class MerchantPopup : MonoBehaviour
     private void BuildHudButton()
     {
         Image button = RuntimeUIKit.CreateButton(_canvas.transform, "Btn_Merchant", "Thương nhân", Toggle);
-        button.color = new Color32(0xF2, 0xC9, 0x4C, 0xFF);
+        RuntimeUIKit.SetButtonStyle(button, RuntimeUIKit.ButtonStyle.Active);
         _hudButton = button.rectTransform;
         // Góc dưới trái, ngang thanh xây dựng
         _hudButton.anchorMin = _hudButton.anchorMax = new Vector2(0f, 0f);

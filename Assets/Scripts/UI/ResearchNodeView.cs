@@ -11,6 +11,7 @@ public class ResearchNodeView : MonoBehaviour
     [SerializeField] private TMP_Text txtName;
     [SerializeField] private TMP_Text txtInfo;
     [SerializeField] private Image progressFill;
+    [SerializeField] private Image icon;
 
     public ResearchID Id { get; private set; }
     public RectTransform Rect => (RectTransform)transform;
@@ -28,9 +29,30 @@ public class ResearchNodeView : MonoBehaviour
         }
     }
 
+    public void SetIcon(Sprite sprite)
+    {
+        if (icon == null)
+            return;
+        icon.sprite = sprite;
+        icon.enabled = sprite != null;
+    }
+
     public void Refresh(ResearchNodeState state, string info, float progress01, Color fill, Color text, bool selected, Color selectedColor)
     {
-        if (background != null)
+        UISkin skin = UISkin.Instance;
+        if (skin != null && background != null && skin.boxGold != null)
+        {
+            // Skin mockup: khoá = hộp xám, đang chọn / đang nghiên cứu = viền vàng sáng
+            Sprite sprite = state == ResearchNodeState.Locked && !selected ? skin.boxDim
+                : selected || state == ResearchNodeState.Researching ? skin.boxGoldBright
+                : skin.boxGold;
+            UISkin.SetSliced(background, sprite, Color.white);
+            if (outline != null)
+                outline.color = Color.clear;
+            if (icon != null)
+                icon.color = state == ResearchNodeState.Locked ? new Color(1f, 1f, 1f, 0.35f) : Color.white;
+        }
+        else if (background != null)
             background.color = fill;
         if (txtName != null)
             txtName.color = text;
@@ -39,7 +61,7 @@ public class ResearchNodeView : MonoBehaviour
             txtInfo.text = info;
             txtInfo.color = text;
         }
-        if (outline != null)
+        if (outline != null && skin == null)
             outline.color = selected ? selectedColor : new Color(0f, 0f, 0f, 0.25f);
         if (progressFill != null)
         {

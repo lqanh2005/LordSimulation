@@ -1,8 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// Nhạc nền theo mùa + hiệu ứng âm thanh. Chưa có file âm thanh trong project: gán AudioClip vào Inspector là chạy.
-/// Âm lượng đọc từ SettingsPopup (PlayerPrefs) và áp dụng ngay khi đổi.
+/// Nhạc nền theo mùa + hiệu ứng âm thanh. Âm lượng đọc từ SettingsPopup (PlayerPrefs).
+/// Nhạc nền nạp qua Addressables theo address (GameAssets.Music*), chỉ giữ bài đang phát trong bộ nhớ:
+/// đổi bài thì nạp bài mới, phát xong phần chuyển thì Release bài cũ. Hiệu ứng (nhỏ) gán thẳng.
 /// </summary>
 public class MusicManager : MonoBehaviour
 {
@@ -12,12 +13,12 @@ public class MusicManager : MonoBehaviour
 
     public static MusicManager Instance { get; private set; }
 
-    [Header("Nhạc nền")]
-    [SerializeField] private AudioClip menuMusic;
-    [SerializeField] private AudioClip springMusic;
-    [SerializeField] private AudioClip summerMusic;
-    [SerializeField] private AudioClip autumnMusic;
-    [SerializeField] private AudioClip winterMusic;
+    [Header("Nhạc nền (address Addressables)")]
+    [SerializeField] private string menuMusicKey = GameAssets.MusicMenuKey;
+    [SerializeField] private string springMusicKey = GameAssets.MusicSpringKey;
+    [SerializeField] private string summerMusicKey = GameAssets.MusicSummerKey;
+    [SerializeField] private string autumnMusicKey = GameAssets.MusicAutumnKey;
+    [SerializeField] private string winterMusicKey = GameAssets.MusicWinterKey;
     [SerializeField, Min(0f)] private float fadeSeconds = 1.5f;
 
     [Header("Hiệu ứng")]
@@ -29,6 +30,23 @@ public class MusicManager : MonoBehaviour
     private AudioSource _sfx;
     private AudioClip _target;
     private float _fade;
+
+    private string _playingKey;   // bài đang phát (đang giữ handle)
+    private string _targetKey;    // bài đang nạp / chuẩn bị chuyển sang
+
+    public string MenuMusicKey => menuMusicKey;
+
+    /// <summary>Clip hiệu ứng (nhỏ, gán thẳng) — màn Loading nạp trước dữ liệu âm thanh.</summary>
+    public System.Collections.Generic.List<AudioClip> GetSfxClips()
+    {
+        var clips = new System.Collections.Generic.List<AudioClip>();
+        foreach (AudioClip clip in new[] { uiClick, notice, alarm })
+        {
+            if (clip != null && !clips.Contains(clip))
+                clips.Add(clip);
+        }
+        return clips;
+    }
 
     public static float MasterVolume => PlayerPrefs.GetFloat(PrefMaster, 1f);
     public static float MusicVolume => PlayerPrefs.GetFloat(PrefMusic, 0.7f);
@@ -80,12 +98,12 @@ public class MusicManager : MonoBehaviour
         // Về màn hình chính / màn tải -> nhạc menu; vào gameplay thì nhạc mùa do MonthChanged quyết định
         GameController app = GameController.Instance;
         if (app == null || scene.name != app.GameplaySceneName)
-            PlayMusic(menuMusic);
+            PlayMusicKey(menuMusicKey);
     }
 
     private void Start()
     {
-        PlayMusic(menuMusic);
+        PlayMusicKey(menuMusicKey);
     }
 
     public void ApplyVolumes()
@@ -100,14 +118,40 @@ public class MusicManager : MonoBehaviour
         if (!(param is MonthChangedPayload p))
             return;
 
-        AudioClip clip = p.season switch
+        string key = p.season switch
         {
-            SeasonType.Spring => springMusic,
-            SeasonType.Summer => summerMusic,
-            SeasonType.Autumn => autumnMusic,
-            _ => winterMusic
+            SeasonType.Spring => springMusicKey,
+            SeasonType.Summer => summerMusicKey,
+            SeasonType.Autumn => autumnMusicKey,
+            _ => winterMusicKey
         };
-        PlayMusic(clip);
+        PlayMusicKey(key);
+    }
+
+    /// <summary>Nạp bài theo address (bất đồng bộ) rồi chuyển nhạc có fade.</summary>
+    public void PlayMusicKey(string key)
+    {
+        if (string.IsNullOrEmpty(key) || key == _playingKey || key == _targetKey)
+            return;
+
+        // Đang nạp dở một bài khác mà chưa phát: bỏ bài đó
+        if (!string.IsNullOrEmpty(_targetKey) && _targetKey != _playingKey)
+            GameAssets.Release(_targetKey);
+
+        _targetKey = key;
+        GameAssets.LoadAsync<AudioClip>(key).Completed += handle =>
+        {
+            if (_targetKey != key)
+                return; // đã đổi ý sang bài khác trong lúc nạp
+            if (handle.Status != UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
+            {
+                Debug.LogWarning($"[MusicManager] Không nạp được nhạc '{key}'.");
+                GameAssets.Release(key);
+                _targetKey = null;
+                return;
+            }
+            PlayMusic(handle.Result);
+        };
     }
 
     /// <summary>Chuyển nhạc có fade (bỏ qua nếu clip null hoặc đang phát).</summary>
@@ -143,6 +187,15 @@ public class MusicManager : MonoBehaviour
             _music.clip = _target;
             _music.Play();
             _fade = 0f;
+
+            // Bài cũ đã dừng hẳn -> trả bộ nhớ
+            if (!string.IsNullOrEmpty(_targetKey) && _targetKey != _playingKey)
+            {
+                if (!string.IsNullOrEmpty(_playingKey))
+                    GameAssets.Release(_playingKey);
+                _playingKey = _targetKey;
+                _targetKey = null;
+            }
         }
 
         _music.volume = Mathf.Lerp(0f, MusicVolume, _fade);

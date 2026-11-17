@@ -161,9 +161,9 @@ public class CrisisManager : MonoBehaviour
         sb.Append(" <size=13>(").Append(perWorker).Append(" mỗi người)</size>\n");
         sb.Append("Cả thành: ").Append(TotalCollectPerMonth).Append("/tháng · ");
         if (pending > 0)
-            sb.Append("<color=#C0392B>còn ").Append(pending).Append(" thi thể chưa thu gom</color>");
+            sb.Append("<color=#E86A5A>còn ").Append(pending).Append(" thi thể chưa thu gom</color>");
         else
-            sb.Append("<color=#1E8449>không còn thi thể</color>");
+            sb.Append("<color=#5CCB6A>không còn thi thể</color>");
         return sb.ToString();
     }
 }

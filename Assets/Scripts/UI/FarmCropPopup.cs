@@ -10,10 +10,6 @@ using UnityEngine.UI;
 /// </summary>
 public class FarmCropPopup : MonoBehaviour
 {
-    private static readonly Color PanelColor = new Color32(0xE2, 0xE5, 0xE7, 0xF2);
-    private static readonly Color ButtonColor = new Color32(0xD3, 0xD7, 0xDA, 0xFF);
-    private static readonly Color ActiveButtonColor = new Color32(0x9F, 0xC8, 0x8A, 0xFF);
-    private static readonly Color TextColor = new Color32(0x33, 0x33, 0x33, 0xFF);
     private static readonly Vector2 PanelSize = new Vector2(300f, 230f);
     private const float HudTopMargin = 130f;
     private const float HudBottomMargin = 140f;
@@ -173,9 +169,9 @@ public class FarmCropPopup : MonoBehaviour
         BuildingStatusLevel level = BuildingStatusRules.Evaluate(in farm, in globalData, connected, out string reason);
         string color = level switch
         {
-            BuildingStatusLevel.Ok => "#1E8449",
-            BuildingStatusLevel.Limited => "#B7950B",
-            _ => "#C0392B"
+            BuildingStatusLevel.Ok => "#5CCB6A",
+            BuildingStatusLevel.Limited => "#F0C24B",
+            _ => "#E86A5A"
         };
 
         var sb = new System.Text.StringBuilder(160);
@@ -191,10 +187,10 @@ public class FarmCropPopup : MonoBehaviour
         bool canToggle = !BuildingRules.IsUnderConstruction(in farm);
         pauseButton.gameObject.SetActive(canToggle);
         pauseLabel.text = farm.isOperational ? "Tạm dừng" : "Chạy lại";
-        pauseButton.color = farm.isOperational ? ButtonColor : ActiveButtonColor;
+        RuntimeUIKit.SetButtonStyle(pauseButton, farm.isOperational ? RuntimeUIKit.ButtonStyle.Normal : RuntimeUIKit.ButtonStyle.Active);
 
-        riceButton.color = farm.cropType == CropType.Rice ? ActiveButtonColor : ButtonColor;
-        drugButton.color = farm.cropType == CropType.Drug ? ActiveButtonColor : ButtonColor;
+        RuntimeUIKit.SetButtonStyle(riceButton, farm.cropType == CropType.Rice ? RuntimeUIKit.ButtonStyle.Active : RuntimeUIKit.ButtonStyle.Normal);
+        RuntimeUIKit.SetButtonStyle(drugButton, farm.cropType == CropType.Drug ? RuntimeUIKit.ButtonStyle.Active : RuntimeUIKit.ButtonStyle.Normal);
     }
 
     private void TogglePause()
@@ -257,22 +253,17 @@ public class FarmCropPopup : MonoBehaviour
         panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
         panel.pivot = new Vector2(0.5f, 0f);
         panel.sizeDelta = PanelSize;
-        panelGo.GetComponent<Image>().color = PanelColor;
+        RuntimeUIKit.StylePanel(panelGo.GetComponent<Image>());
 
         VerticalLayoutGroup layout = panelGo.GetComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(12, 12, 10, 12);
+        layout.padding = new RectOffset(18, 18, 14, 18);
         layout.spacing = 6f;
         layout.childControlWidth = true;
         layout.childControlHeight = true;
         layout.childForceExpandWidth = true;
         layout.childForceExpandHeight = false;
 
-        RectTransform header = CreateRow(panel, "Header", 26f);
-        title = CreateText(header, "Title", 20f, FontStyles.Bold, TextAlignmentOptions.Left);
-        Image close = CreateButton(header, "Close", "X", Hide);
-        LayoutElement closeLayout = close.gameObject.AddComponent<LayoutElement>();
-        closeLayout.preferredWidth = 26f;
-        closeLayout.flexibleWidth = 0f;
+        title = RuntimeUIKit.CreateHeader(panel, Hide);
 
         status = CreateText(panel, "Status", 16f, FontStyles.Normal, TextAlignmentOptions.Left);
         status.gameObject.AddComponent<LayoutElement>().preferredHeight = 104f;
@@ -305,47 +296,11 @@ public class FarmCropPopup : MonoBehaviour
     }
 
     private static RectTransform CreateRow(Transform parent, string name, float height)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
-        go.transform.SetParent(parent, false);
-        HorizontalLayoutGroup row = go.GetComponent<HorizontalLayoutGroup>();
-        row.spacing = 8f;
-        row.childControlWidth = true;
-        row.childControlHeight = true;
-        row.childForceExpandWidth = true;
-        row.childForceExpandHeight = true;
-        go.GetComponent<LayoutElement>().preferredHeight = height;
-        return (RectTransform)go.transform;
-    }
+        => RuntimeUIKit.CreateRow(parent, name, height);
 
     private static TextMeshProUGUI CreateText(Transform parent, string name, float size, FontStyles style, TextAlignmentOptions align)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
-        go.transform.SetParent(parent, false);
-        TextMeshProUGUI tmp = go.GetComponent<TextMeshProUGUI>();
-        tmp.fontSize = size;
-        tmp.fontStyle = style;
-        tmp.alignment = align;
-        tmp.color = TextColor;
-        tmp.textWrappingMode = TextWrappingModes.Normal;
-        tmp.raycastTarget = false;
-        return tmp;
-    }
+        => RuntimeUIKit.CreateText(parent, name, size, style, align);
 
     private static Image CreateButton(Transform parent, string name, string label, UnityEngine.Events.UnityAction onClick)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        Image image = go.GetComponent<Image>();
-        image.color = ButtonColor;
-        go.GetComponent<Button>().onClick.AddListener(onClick);
-
-        TextMeshProUGUI text = CreateText(go.transform, "Label", 16f, FontStyles.Bold, TextAlignmentOptions.Center);
-        RectTransform rt = text.rectTransform;
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
-        rt.offsetMin = rt.offsetMax = Vector2.zero;
-        text.text = label;
-        return image;
-    }
+        => RuntimeUIKit.CreateButton(parent, name, label, onClick);
 }

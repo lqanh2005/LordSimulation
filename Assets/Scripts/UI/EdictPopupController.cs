@@ -95,7 +95,7 @@ public class EdictPopupController : MonoBehaviour
 
     public void Show()
     {
-        gameObject.SetActive(true);
+        UIPopupAnim.Show(gameObject);
         transform.SetAsLastSibling();
         Initialize();
 
@@ -106,12 +106,12 @@ public class EdictPopupController : MonoBehaviour
 
     public void Hide()
     {
-        gameObject.SetActive(false);
+        UIPopupAnim.Hide(gameObject);
     }
 
     public void Toggle()
     {
-        if (gameObject.activeSelf)
+        if (UIPopupAnim.IsVisible(gameObject))
             Hide();
         else
             Show();
@@ -181,8 +181,16 @@ public class EdictPopupController : MonoBehaviour
 
     private void Tint(Button button, bool selected)
     {
-        if (button != null && button.targetGraphic != null)
-            button.targetGraphic.color = selected ? linkSelectedColor : linkNormalColor;
+        if (button == null || button.targetGraphic == null)
+            return;
+
+        UISkin skin = UISkin.Instance;
+        if (skin != null && button.targetGraphic is Image image && skin.fillGold != null)
+        {
+            UISkin.SetSliced(image, selected ? skin.fillGold : skin.boxGold, Color.white);
+            return;
+        }
+        button.targetGraphic.color = selected ? linkSelectedColor : linkNormalColor;
     }
 
     private void AddCondition()

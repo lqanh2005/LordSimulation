@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee29e8713f771364e8a30025b1b06c29, type: 3}
+  m_Name: UISkin
+  m_EditorClassIdentifier: Assembly-CSharp::UISkin
+  popupFrame: {fileID: 21300000, guid: d4d4928309943d64796f38b5faf83d92, type: 3}
+  boxGold: {fileID: 21300000, guid: 8d9c827d6e6fa434f9d40ffaa28c8b07, type: 3}
+  boxGoldBright: {fileID: 21300000, guid: 909a1a15ae0d67c4abcd63ecfbfd9b2c, type: 3}
+  boxDim: {fileID: 21300000, guid: 5fd2d394a57b1d6498ee1bdf3b8d0614, type: 3}
+  fillGold: {fileID: 21300000, guid: e3282f1d86e7a6743ba236a94fe8e6d9, type: 3}
+  fillDark: {fileID: 21300000, guid: ea274522f700c014ba0b03196f4b73e4, type: 3}
+  fillWhite: {fileID: 21300000, guid: 0f35c3341c2092f49bd708346edda01f, type: 3}
+  pillWhite: {fileID: 21300000, guid: fbe18431de7f3574fb3031afc5387152, type: 3}
+  blackFrame: {fileID: 21300000, guid: e1b870c972e6d6c49be0c5c32a025ef3, type: 3}
+  squareButton: {fileID: 21300000, guid: a510afcf435882e4f815d76e0c2ea712, type: 3}
+  squareButtonActive: {fileID: 21300000, guid: 9d049ef7325ebcd4895aefacc330aa05, type: 3}
+  ornateButton: {fileID: 21300000, guid: ceb97f10885efad43ac31c4092e6868c, type: 3}
+  ornateButtonSelected: {fileID: 21300000, guid: f9d5fdc321b55fc4eaa00cb6f566c17c, type: 3}
+  ornateButtonDisabled: {fileID: 21300000, guid: 5dfdd037ff8f50b468d6b77fffcffe77, type: 3}
+  tab: {fileID: 21300000, guid: 2db7ee7f474a5a542a9ac4b49189672c, type: 3}
+  tabSelected: {fileID: 21300000, guid: 5e3705e17d9076041b7e91d0c62d74aa, type: 3}
+  titleLine: {fileID: 21300000, guid: af6e17a39c9fcaf40ab6a32d3a04de6b, type: 3}
+  titleLineRight: {fileID: 21300000, guid: 13871c447433b8a4fb7592b837d18f18, type: 3}
+  rhombus: {fileID: 21300000, guid: 91c094420ee491b469c01d388d325599, type: 3}
+  closeIcon: {fileID: 21300000, guid: 2dde94774705bad46b3ab606cf6a00c7, type: 3}
+  chevronDown: {fileID: 21300000, guid: cb7a8c0f2a96aa34981a49438adfff79, type: 3}
+  checkIcon: {fileID: 21300000, guid: 9dab3410efc32fa4285ee66e3bdb5e22, type: 3}
+  checkboxOn: {fileID: 21300000, guid: 5417100788539c848a691f328511ec33, type: 3}
+  checkboxOff: {fileID: 21300000, guid: 3b6c198599aadba4f936806dd7aa9c88, type: 3}
+  toggleOn: {fileID: 21300000, guid: 167bb9f140878cc428fb8213fafb81b4, type: 3}
+  toggleOff: {fileID: 21300000, guid: a30e49e56f289164a9af97a037e5a09f, type: 3}
+  deleteIcon: {fileID: 21300000, guid: e572e0b34453bff47a24f5429d992147, type: 3}
+  sliderKnob: {fileID: 21300000, guid: c8d84e99bdb2a374bad20493e3f33b31, type: 3}
+  sliderFill: {fileID: 21300000, guid: c5f84e819081c9c42843d6d9e80fc3e5, type: 3}
+  alertIcon: {fileID: 21300000, guid: 2e8e7484a3d3d1b4cad2732c3c9ab8db, type: 3}
+  saveIcon: {fileID: 21300000, guid: e2ada42826293aa47b2f1a7fb632b48d, type: 3}
+  loadIcon: {fileID: 21300000, guid: 7ea376ecf613e624b80d0706d31f0514, type: 3}
+  logo: {fileID: 21300000, guid: 3a9ab5beade81b44992633ccad96b62f, type: 3}
+  gatePortraitFrame: {fileID: 21300000, guid: ccd8b7c1780f4f947b78493113480c8b, type: 3}
+  gateStackFrame: {fileID: 21300000, guid: 3e499aa3ee09c7546af4d117712b550a, type: 3}
+  gateAccept: {fileID: 21300000, guid: 4b9641c485097be49b64bcc5ac97537a, type: 3}
+  gateDeny: {fileID: 21300000, guid: c94f4d6fa33940a4e83b0972d37b311f, type: 3}
+  gateQuarantine: {fileID: 21300000, guid: 34125ac605edf2645aa6c7ad5392b732, type: 3}
+  portraitAdult: {fileID: 21300000, guid: 32839d195736d5140b3df290fc106454, type: 3}
+  portraitKid: {fileID: 21300000, guid: 7422492ad992ad24190d1c59a9e01fd7, type: 3}
+  dialogFrame: {fileID: 21300000, guid: 665648978d3c3cd48a3c5eb8f15ed6a9, type: 3}
+  iconPause: {fileID: 21300000, guid: eb4438b7507382842bb42e80c46c976f, type: 3}
+  iconSun: {fileID: 21300000, guid: 96851ecaa581d4a47aa31cdadae82559, type: 3}
+  iconNotice: {fileID: 21300000, guid: deb1951dea8de554796cc64ba608dd2c, type: 3}
+  iconLetter: {fileID: 21300000, guid: 78a573ff617c59e41b57d836fe97cde6, type: 3}
+  iconSetting: {fileID: 21300000, guid: 18115ea8e2ad5c04d8e6a2037854fed6, type: 3}
+  iconGate: {fileID: 21300000, guid: 60cbdddfb4672224c848263aea1231dc, type: 3}
+  iconResearch: {fileID: 21300000, guid: af59916cba00016428036dda4277bc37, type: 3}
+  iconLaw: {fileID: 21300000, guid: 72b7e1a551131cb47ab79cfda45b3648, type: 3}
+  iconTax: {fileID: 21300000, guid: 036654bb69a47344e88eff949c68e2db, type: 3}
+  iconBuild: {fileID: 21300000, guid: 94ef715750208eb498f8c7b1eceed63e, type: 3}
+  iconHouse: {fileID: 21300000, guid: 264b4191298eda44ab52cd854c6f2d96, type: 3}
+  iconProduct: {fileID: 21300000, guid: c47b1eb8fbfd5b646a98d9e0b5eafca0, type: 3}
+  iconAgriculture: {fileID: 21300000, guid: 31ca76f72bb5c6340acdd28af3ef3955, type: 3}
+  iconInfrastructure: {fileID: 21300000, guid: 743500beddc01aa4cbe3648027abbcac, type: 3}
+  iconDecor: {fileID: 21300000, guid: 99c0e539f94ab9441bf318d4e04a04b9, type: 3}
+  resWood: {fileID: 21300000, guid: 2ab78dbb45b86c340b994a1c8bf09213, type: 3}
+  resStone: {fileID: 21300000, guid: 01de5f13b56a45e4daa6e924c24cba52, type: 3}
+  resFood: {fileID: 21300000, guid: d5534ef5b1d3a8a4e9b909abfcd5233e, type: 3}
+  resCoal: {fileID: 21300000, guid: 62e5747c3b761ec4681c242929457b40, type: 3}
+  resGold: {fileID: 21300000, guid: d2673fc7b70e0a243b27b27add41f946, type: 3}
+  resMedicine: {fileID: 21300000, guid: 6937fb70962d1344a9222a00e42ca6c0, type: 3}
+  statPopulation: {fileID: 21300000, guid: ff03c262b4455a64ba741418477b0866, type: 3}
+  statDisease: {fileID: 21300000, guid: 9b7cd2c0599212c44b72edd63df869de, type: 3}
+  statStability: {fileID: 21300000, guid: dd691ff252c55ba498059ba8b1f5c503, type: 3}
+  statRiot: {fileID: 21300000, guid: 933b0165fe6f25242b2559dd0c9037dc, type: 3}
+  statReputation: {fileID: 21300000, guid: 91f28394da18ce04dab6c0d86f9176c2, type: 3}
+  titleFont: {fileID: 11400000, guid: db7e754f4fc38c543846e0d6ad801217, type: 2}
+  bodyFont: {fileID: 11400000, guid: 6e8a5c0f155de5f40b10911b3f763dcc, type: 2}

@@ -116,6 +116,24 @@ public class GameHotkeys : MonoBehaviour
         if (_placement != null && (_placement.isPlacing || _placement.IsDemolishing))
             return;
 
+        if (ConfirmDialog.IsOpen)
+        {
+            ConfirmDialog.Close();
+            return;
+        }
+
+        if (SaveLoadWindow.IsOpen)
+        {
+            SaveLoadWindow.Close();
+            return;
+        }
+
+        if (NoticeWindow.IsOpen)
+        {
+            NoticeWindow.Close();
+            return;
+        }
+
         if (SettingsPopup.AnyOpen)
         {
             SettingsPopup.CloseIfOpen();
@@ -144,8 +162,8 @@ public class GameHotkeys : MonoBehaviour
         if (_farmPopup != null && _farmPopup.IsOpen) { _farmPopup.Hide(); return true; }
         if (_immigrationUi != null && _immigrationUi.IsOpen) { _immigrationUi.Hide(); return true; }
         if (_merchantPopup != null && _merchantPopup.IsOpen) { _merchantPopup.Hide(); return true; }
-        if (_research != null && _research.gameObject.activeSelf) { _research.Hide(); return true; }
-        if (_edicts != null && _edicts.gameObject.activeSelf) { _edicts.Hide(); return true; }
+        if (_research != null && UIPopupAnim.IsVisible(_research.gameObject)) { _research.Hide(); return true; }
+        if (_edicts != null && UIPopupAnim.IsVisible(_edicts.gameObject)) { _edicts.Hide(); return true; }
         if (_buildMenu != null && _buildMenu.IsOpen) { _buildMenu.Close(); return true; }
         return false;
     }
@@ -254,15 +272,15 @@ public class GameHotkeys : MonoBehaviour
         if (window == null)
             return;
 
-        if (!window.activeSelf)
+        if (!UIPopupAnim.IsVisible(window))
             CloseLargeWindows();
         toggle();
     }
 
     private void CloseLargeWindows()
     {
-        if (_research != null && _research.gameObject.activeSelf) _research.Hide();
-        if (_edicts != null && _edicts.gameObject.activeSelf) _edicts.Hide();
+        if (_research != null && UIPopupAnim.IsVisible(_research.gameObject)) _research.Hide();
+        if (_edicts != null && UIPopupAnim.IsVisible(_edicts.gameObject)) _edicts.Hide();
         if (_immigrationUi != null && _immigrationUi.IsOpen) _immigrationUi.Hide();
         if (_merchantPopup != null && _merchantPopup.IsOpen) _merchantPopup.Hide();
     }

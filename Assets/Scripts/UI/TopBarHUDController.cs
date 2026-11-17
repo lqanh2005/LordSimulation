@@ -170,7 +170,7 @@ public class TopBarHUDController : MonoBehaviour
         if (txtReputation == null) return;
 
         int value = Mathf.RoundToInt(reputation);
-        string color = value >= 20 ? "#4CAF50" : value < 0 ? "#E54848" : "#6B6F73";
+        string color = value >= 20 ? "#3FC14F" : value < 0 ? "#E04B4B" : "#D6BD8B";
         txtReputation.text = $"<color={color}>{(value > 0 ? "+" : "")}{value}</color>";
     }
 

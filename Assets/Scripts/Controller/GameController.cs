@@ -22,6 +22,17 @@ public class GameController : MonoBehaviour
     public string HomeSceneName => homeSceneName;
     public string GameplaySceneName => gameplaySceneName;
     public float MinLoadingSeconds => minLoadingSeconds;
+
+    /// <summary>Khởi tạo dữ liệu ở màn Loading (null nếu mở thẳng Home / GamePlay trong editor).</summary>
+    public GameDataPreloader Preloader { get; private set; }
+
+    public void StartPreload()
+    {
+        if (Preloader != null)
+            return;
+        Preloader = new GameDataPreloader(this);
+        StartCoroutine(Preloader.Run());
+    }
     public AppStateID CurrentState => stateMachine != null ? stateMachine.CurrentId : AppStateID.None;
     public bool HasSaveFile => saveLoadManager != null && saveLoadManager.HasSaveFile();
 

@@ -81,6 +81,17 @@ public static class EdictRuleCatalog
         };
     }
 
+    /// <summary>Nhãn tiếng Việt cho chip trong bảng tạo luật: Nếu / Và / Hoặc.</summary>
+    public static string GetLinkLabel(LogicalLink link)
+    {
+        return link switch
+        {
+            LogicalLink.AND => "Và",
+            LogicalLink.OR => "Hoặc",
+            _ => "Nếu"
+        };
+    }
+
     public static string GetLinkName(LogicalLink link)
     {
         return link switch

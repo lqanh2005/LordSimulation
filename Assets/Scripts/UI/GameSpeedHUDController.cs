@@ -67,8 +67,19 @@ public class GameSpeedHUDController : MonoBehaviour
 
     private void Tint(Button button, bool active)
     {
-        if (button != null && button.targetGraphic != null)
-            button.targetGraphic.color = active ? activeColor : normalColor;
+        if (button == null || button.targetGraphic == null)
+            return;
+
+        // Có skin: đổi sprite nền vàng / tối như mockup thay vì tô màu
+        UISkin skin = UISkin.Instance;
+        if (skin != null && button.targetGraphic is Image image && skin.squareButton != null)
+        {
+            image.sprite = active ? skin.squareButtonActive : skin.squareButton;
+            image.color = Color.white;
+            return;
+        }
+
+        button.targetGraphic.color = active ? activeColor : normalColor;
     }
 
     private bool TryResolve()

@@ -35,7 +35,7 @@ public class PauseMenuController : MonoBehaviour
     [Header("Sự Kiện")]
     [SerializeField] private UnityEvent onSettings = new UnityEvent();
 
-    public bool IsOpen => root != null && root.activeSelf;
+    public bool IsOpen => UIPopupAnim.IsVisible(root);
 
     /// <summary>GameHotkeys tắt cờ này để tự xử lý Esc (đóng cửa sổ trước, rồi mới mở Pause).</summary>
     public bool ToggleWithEscape
@@ -91,7 +91,7 @@ public class PauseMenuController : MonoBehaviour
             return;
 
         transform.SetAsLastSibling();
-        root.SetActive(true);
+        UIPopupAnim.Show(root);
         SetStatus(string.Empty, infoColor);
 
         if (GamePlayController.Instance != null)
@@ -103,7 +103,7 @@ public class PauseMenuController : MonoBehaviour
         if (!IsOpen)
             return;
 
-        root.SetActive(false);
+        UIPopupAnim.Hide(root);
 
         if (GamePlayController.Instance != null)
             GamePlayController.Instance.Resume();
@@ -129,8 +129,9 @@ public class PauseMenuController : MonoBehaviour
             return;
         }
 
-        SetStatus("Đang lưu...", infoColor);
-        manager.SaveGame();
+        // Chọn ô lưu trong cửa sổ Lưu game (SaveGame_Mockup)
+        SetStatus(string.Empty, infoColor);
+        SaveLoadWindow.Open(SaveLoadWindow.Mode.Save);
     }
 
     public void LoadGame()
@@ -142,14 +143,17 @@ public class PauseMenuController : MonoBehaviour
             return;
         }
 
-        if (!manager.HasSaveFile())
+        if (manager.GetLatestSlot() < 0)
         {
             SetStatus("Chưa có bản lưu nào.", errorColor);
             return;
         }
 
-        SetStatus("Đang tải...", infoColor);
-        manager.LoadGame();
+        SaveLoadWindow.Open(SaveLoadWindow.Mode.Load, slot =>
+        {
+            SetStatus("Đang tải...", infoColor);
+            manager.LoadFromSlot(slot);
+        });
     }
 
     private void OnSaveCompleted(object param)

@@ -72,7 +72,7 @@ public class EdictConditionRowView : MonoBehaviour
     private void RefreshLink()
     {
         if (txtLink != null)
-            txtLink.text = EdictRuleCatalog.GetLinkName(Link);
+            txtLink.text = isFirst ? EdictRuleCatalog.GetLinkLabel(LogicalLink.None) : EdictRuleCatalog.GetLinkLabel(Link);
     }
 
     private static void Fill(TMP_Dropdown dropdown, List<string> options)

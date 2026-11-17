@@ -9,14 +9,14 @@ public static class UIActions
     public static void OpenEdicts()
     {
         var edicts = Object.FindFirstObjectByType<EdictPopupController>(FindObjectsInactive.Include);
-        if (edicts != null && !edicts.gameObject.activeSelf)
+        if (edicts != null && !UIPopupAnim.IsVisible(edicts.gameObject))
             edicts.Show();
     }
 
     public static void OpenResearch()
     {
         var research = Object.FindFirstObjectByType<ResearchTreePopupController>(FindObjectsInactive.Include);
-        if (research != null && !research.gameObject.activeSelf)
+        if (research != null && !UIPopupAnim.IsVisible(research.gameObject))
             research.Show();
     }
 

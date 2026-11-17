@@ -174,6 +174,33 @@ public static class ImmigrationRules
         return Bio.ToString();
     }
 
+    /// <summary>
+    /// Hồ sơ dạng bảng (nhãn, giá trị) cho màn Cổng kiểu mockup. Tên hiển thị riêng ở thẻ tên;
+    /// gợi ý + "Vì sao" hiển thị riêng ở cuối bảng.
+    /// </summary>
+    public static void AppendProfileRows(in ResidentData applicant, bool hasThermometer, System.Collections.Generic.List<(string label, string value)> rows)
+    {
+        rows.Add(("Tuổi:", applicant.age.ToString()));
+        rows.Add(("Giới tính:", applicant.gender == GenderType.Female ? "Nữ" : "Nam"));
+        rows.Add(("Nghề nghiệp:", ResidentInfoPopup.GetProfessionName(applicant.professionType)));
+        rows.Add(("Xuất thân:", OriginLabel(applicant.originRegion)));
+        rows.Add(("Phe phái:", FactionLabel(applicant.factionType)));
+        rows.Add(("Tài sản:", applicant.wealth.ToString()));
+        rows.Add(("Thể chất:", $"Sức {applicant.strength} · Bền {applicant.endurance} · Trí {applicant.intellect}"));
+
+        if (hasThermometer)
+        {
+            string temp = applicant.bodyTemperature.ToString("0.0") + " °C";
+            rows.Add(("Thân nhiệt:", applicant.bodyTemperature >= 37.5f ? $"<color=#E86A5A>{temp}</color>" : temp));
+        }
+        else
+        {
+            rows.Add(("Thân nhiệt:", "<i>cần nghiên cứu Nhiệt kế</i>"));
+        }
+
+        rows.Add(("Triệu chứng:", VisibleSymptomText(in applicant)));
+    }
+
     public static float GetLatentChance(OriginRegion origin) => origin switch
     {
         OriginRegion.GreenZone => 0.06f,

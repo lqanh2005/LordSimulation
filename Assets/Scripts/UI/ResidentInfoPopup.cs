@@ -192,12 +192,12 @@ public class ResidentInfoPopup : MonoBehaviour
         _sb.Append("Nghề: <b>").Append(GetProfessionName(r.professionType)).Append("</b>\n");
         _sb.Append("Sức khỏe: ").Append(DescribeHealth(in r)).Append('\n');
         _sb.Append("Hạnh phúc: ").Append(ColorPercent(r.happiness)).Append('\n');
-        _sb.Append("Nhà ở: ").Append(DescribeBuilding(r.assignedHouseID, "<color=#C0392B>Vô gia cư</color>")).Append('\n');
+        _sb.Append("Nhà ở: ").Append(DescribeBuilding(r.assignedHouseID, "<color=#E86A5A>Vô gia cư</color>")).Append('\n');
         _sb.Append("Nơi làm: ").Append(DescribeBuilding(r.assignedWorkID, "Không có")).Append('\n');
 
         if (r.hungerMonths > 0 || r.coldMonths > 0)
         {
-            _sb.Append("<color=#C0392B>");
+            _sb.Append("<color=#E86A5A>");
             if (r.hungerMonths > 0)
                 _sb.Append("Đói ").Append(r.hungerMonths).Append(" tháng");
             if (r.hungerMonths > 0 && r.coldMonths > 0)
@@ -219,13 +219,13 @@ public class ResidentInfoPopup : MonoBehaviour
         switch (r.healthStatus)
         {
             case HealthStatus.Incubating:
-                return "<color=#B7950B>Ủ bệnh</color>";
+                return "<color=#F0C24B>Ủ bệnh</color>";
             case HealthStatus.ActiveInfected:
-                return $"<color=#C0392B>Đang bệnh — {GetDiseaseName(r.diseaseType)} ({r.bodyTemperature:0.0}°C)</color>";
+                return $"<color=#E86A5A>Đang bệnh — {GetDiseaseName(r.diseaseType)} ({r.bodyTemperature:0.0}°C)</color>";
             case HealthStatus.Treated:
-                return "<color=#2471A3>Đang điều trị</color>";
+                return "<color=#6FB3E8>Đang điều trị</color>";
             default:
-                return "<color=#1E8449>Khỏe mạnh</color>";
+                return "<color=#5CCB6A>Khỏe mạnh</color>";
         }
     }
 
@@ -246,7 +246,7 @@ public class ResidentInfoPopup : MonoBehaviour
     private static string ColorPercent(float value01)
     {
         int pct = Mathf.RoundToInt(Mathf.Clamp01(value01) * 100f);
-        string color = pct >= 60 ? "#1E8449" : pct >= 30 ? "#B7950B" : "#C0392B";
+        string color = pct >= 60 ? "#5CCB6A" : pct >= 30 ? "#F0C24B" : "#E86A5A";
         return $"<color={color}><b>{pct}%</b></color>";
     }
 

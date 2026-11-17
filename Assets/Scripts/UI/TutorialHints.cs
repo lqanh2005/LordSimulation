@@ -178,10 +178,10 @@ public class TutorialHints : MonoBehaviour
         _panel.pivot = new Vector2(0.5f, 1f);
         _panel.anchoredPosition = new Vector2(0f, -130f);
         _panel.sizeDelta = new Vector2(900f, 54f);
-        go.GetComponent<Image>().color = new Color32(0xFF, 0xF4, 0xD6, 0xF0);
+        RuntimeUIKit.StylePanel(go.GetComponent<Image>());
 
         HorizontalLayoutGroup row = go.GetComponent<HorizontalLayoutGroup>();
-        row.padding = new RectOffset(14, 8, 6, 6);
+        row.padding = new RectOffset(24, 12, 8, 8);
         row.spacing = 10f;
         row.childControlWidth = row.childControlHeight = true;
         row.childForceExpandWidth = false;

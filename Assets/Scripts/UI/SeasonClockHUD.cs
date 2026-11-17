@@ -18,6 +18,10 @@ public class SeasonClockHUD : MonoBehaviour
     [SerializeField] private TMP_Text txtMonthAndYear;     // "Tháng 3 - Năm 1"
     [SerializeField, Min(1)] private int daysPerMonth = 30;
 
+    [Header("Kiểu mockup: \"Mùa Xuân, Năm 1\" + thanh tiến trình mùa")]
+    [SerializeField] private Image seasonProgressFill;     // Image Filled ngang, 0..1 trong 3 tháng của mùa
+    [SerializeField] private TMP_Text txtSeasonAndYear;    // "Mùa Xuân, Năm 1"
+
     private float currentAngle;
     private bool hasAngle;
     private int shownDay = -1;
@@ -49,6 +53,8 @@ public class SeasonClockHUD : MonoBehaviour
         int month = Mathf.Clamp(data.currentMonth, 1, 12);
 
         UpdateRing(month, monthProgress);
+        if (seasonProgressFill != null)
+            seasonProgressFill.fillAmount = ((month - 1) % 3 + monthProgress) / 3f;
 
         int day = Mathf.Clamp(Mathf.FloorToInt(monthProgress * daysPerMonth) + 1, 1, daysPerMonth);
         if (day != shownDay || month != shownMonth || data.currentYear != shownYear)
@@ -91,6 +97,9 @@ public class SeasonClockHUD : MonoBehaviour
         };
 
         string dayText = $"Ngày {day}, Mùa {seasonName}";
+
+        if (txtSeasonAndYear != null)
+            txtSeasonAndYear.text = $"Mùa {seasonName}, Năm {year}";
 
         if (txtMonthAndYear != null)
         {

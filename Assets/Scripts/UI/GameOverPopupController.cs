@@ -37,7 +37,7 @@ public class GameOverPopupController : MonoBehaviour
 
     private readonly List<Button> _visibleButtons = new List<Button>(4);
 
-    public bool IsOpen => root != null && root.activeSelf;
+    public bool IsOpen => UIPopupAnim.IsVisible(root);
 
     private void Awake()
     {
@@ -117,7 +117,7 @@ public class GameOverPopupController : MonoBehaviour
             return false;
 
         transform.SetAsLastSibling();
-        root.SetActive(true);
+        UIPopupAnim.Show(root);
         return true;
     }
 
@@ -168,7 +168,7 @@ public class GameOverPopupController : MonoBehaviour
     public void ContinuePlaying()
     {
         if (root != null)
-            root.SetActive(false);
+            UIPopupAnim.Hide(root);
 
         if (GamePlayController.Instance != null)
             GamePlayController.Instance.ContinueAfterVictory();

@@ -164,9 +164,9 @@ public class BuildingInfoPopup : MonoBehaviour
         BuildingStatusLevel level = BuildingStatusRules.Evaluate(in b, in globalData, connected, out string reason);
         string color = level switch
         {
-            BuildingStatusLevel.Ok => "#1E8449",
-            BuildingStatusLevel.Limited => "#B7950B",
-            _ => "#C0392B"
+            BuildingStatusLevel.Ok => "#5CCB6A",
+            BuildingStatusLevel.Limited => "#F0C24B",
+            _ => "#E86A5A"
         };
         _sb.Append("<color=").Append(color).Append("><b>").Append(reason).Append("</b></color>\n");
 
@@ -188,7 +188,7 @@ public class BuildingInfoPopup : MonoBehaviour
         }
 
         if (b.maxOccupancy == 0 && b.maxWorkers == 0)
-            _sb.Append("<color=#7F8C8D>Công trình hỗ trợ, không cần người</color>\n");
+            _sb.Append("<color=#A59D8A>Công trình hỗ trợ, không cần người</color>\n");
 
         bool canDemolish = _placement.CanDemolish(b.buildingID);
         if (canDemolish)
@@ -198,7 +198,7 @@ public class BuildingInfoPopup : MonoBehaviour
         }
         else
         {
-            _sb.Append("<size=14><color=#7F8C8D>Không thể phá công trình này</color></size>");
+            _sb.Append("<size=14><color=#A59D8A>Không thể phá công trình này</color></size>");
         }
 
         _body.text = _sb.ToString();
@@ -206,10 +206,10 @@ public class BuildingInfoPopup : MonoBehaviour
         bool canToggle = BuildingStatusRules.CanToggle(b.buildingType) && !BuildingRules.IsUnderConstruction(in b);
         _toggleButton.gameObject.SetActive(canToggle);
         _toggleLabel.text = b.isOperational ? "Tạm dừng" : "Chạy lại";
-        _toggleButton.color = b.isOperational ? RuntimeUIKit.ButtonColor : RuntimeUIKit.ActiveButtonColor;
+        RuntimeUIKit.SetButtonStyle(_toggleButton, b.isOperational ? RuntimeUIKit.ButtonStyle.Normal : RuntimeUIKit.ButtonStyle.Active);
 
         _demolishButton.gameObject.SetActive(canDemolish);
-        _demolishButton.color = _confirmDemolish ? RuntimeUIKit.DangerButtonColor : RuntimeUIKit.ButtonColor;
+        RuntimeUIKit.SetButtonStyle(_demolishButton, _confirmDemolish ? RuntimeUIKit.ButtonStyle.Danger : RuntimeUIKit.ButtonStyle.Normal);
         _demolishLabel.text = _confirmDemolish ? "Xác nhận phá?" : "Phá dỡ";
     }
 
@@ -247,7 +247,7 @@ public class BuildingInfoPopup : MonoBehaviour
 
     private static string FormatRatio(int current, int max)
     {
-        string color = current >= max ? "#1E8449" : current == 0 ? "#C0392B" : "#B7950B";
+        string color = current >= max ? "#5CCB6A" : current == 0 ? "#E86A5A" : "#F0C24B";
         return $"<color={color}><b>{current}/{max}</b></color>";
     }
 
