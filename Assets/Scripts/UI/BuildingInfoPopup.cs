@@ -19,6 +19,8 @@ public class BuildingInfoPopup : MonoBehaviour
     private TextMeshProUGUI _title;
     private TextMeshProUGUI _body;
     private Image _demolishButton;
+    private Image _toggleButton;
+    private TextMeshProUGUI _toggleLabel;
     private TextMeshProUGUI _demolishLabel;
     private readonly StringBuilder _sb = new StringBuilder(256);
 
@@ -156,19 +158,21 @@ public class BuildingInfoPopup : MonoBehaviour
         _title.text = $"{GetBuildingName(_placement, b.buildingType)} #{b.buildingID}";
 
         _sb.Clear();
-        if (BuildingRules.IsUnderConstruction(in b))
+        GlobalSystemManager global = HUDLocator.ResolveGlobalSystem(null);
+        GlobalSystemData globalData = global != null ? global.GetGlobalDataRef() : default;
+        bool connected = RoadNetwork.IsConnected(_placement.buildingManager, b.buildingID);
+        BuildingStatusLevel level = BuildingStatusRules.Evaluate(in b, in globalData, connected, out string reason);
+        string color = level switch
         {
-            int pct = Mathf.RoundToInt(Mathf.Clamp01(b.constructionProgress) * 100f);
-            _sb.Append("Trạng thái: <color=#B7950B><b>Đang xây</b></color> (").Append(pct).Append("%)\n");
-        }
-        else if (b.isOperational)
-        {
-            _sb.Append("Trạng thái: <color=#1E8449><b>Hoạt động</b></color>\n");
-        }
-        else
-        {
-            _sb.Append("Trạng thái: <color=#C0392B><b>Ngừng hoạt động</b></color>\n");
-        }
+            BuildingStatusLevel.Ok => "#1E8449",
+            BuildingStatusLevel.Limited => "#B7950B",
+            _ => "#C0392B"
+        };
+        _sb.Append("<color=").Append(color).Append("><b>").Append(reason).Append("</b></color>\n");
+
+        string output = BuildingStatusRules.DescribeOutput(in b);
+        if (!string.IsNullOrEmpty(output))
+            _sb.Append(output).Append('\n');
 
         if (b.maxOccupancy > 0)
             _sb.Append("Cư dân: ").Append(FormatRatio(b.currentOccupancy, b.maxOccupancy)).Append('\n');
@@ -190,9 +194,31 @@ public class BuildingInfoPopup : MonoBehaviour
 
         _body.text = _sb.ToString();
 
+        bool canToggle = BuildingStatusRules.CanToggle(b.buildingType) && !BuildingRules.IsUnderConstruction(in b);
+        _toggleButton.gameObject.SetActive(canToggle);
+        _toggleLabel.text = b.isOperational ? "Tạm dừng" : "Chạy lại";
+        _toggleButton.color = b.isOperational ? RuntimeUIKit.ButtonColor : RuntimeUIKit.ActiveButtonColor;
+
         _demolishButton.gameObject.SetActive(canDemolish);
         _demolishButton.color = _confirmDemolish ? RuntimeUIKit.DangerButtonColor : RuntimeUIKit.ButtonColor;
         _demolishLabel.text = _confirmDemolish ? "Xác nhận phá?" : "Phá dỡ";
+    }
+
+    /// <summary>GDD 7.2 Enable / Disable: tạm dừng thì công nhân rời đi ở tháng sau, không sản xuất.</summary>
+    private void OnToggleClicked()
+    {
+        if (!TryGetBuilding(_buildingId, out int index))
+            return;
+
+        ref BuildingData b = ref _placement.buildingManager.GetBuildingRef(index);
+        if (!BuildingStatusRules.CanToggle(b.buildingType) || BuildingRules.IsUnderConstruction(in b))
+            return;
+
+        b.isOperational = !b.isOperational;
+        NotificationFeed.Show(
+            $"{GetBuildingName(_placement, b.buildingType)} #{b.buildingID} {(b.isOperational ? "hoạt động trở lại" : "đã tạm dừng")}",
+            NoticeLevel.Info, "toggle:" + b.buildingID);
+        Refresh();
     }
 
     private void OnDemolishClicked()
@@ -256,6 +282,8 @@ public class BuildingInfoPopup : MonoBehaviour
         _body.lineSpacing = 4f;
 
         RectTransform buttons = RuntimeUIKit.CreateRow(_panel, "Buttons", 38f);
+        _toggleButton = RuntimeUIKit.CreateButton(buttons, "Toggle", "Tạm dừng", OnToggleClicked);
+        _toggleLabel = _toggleButton.GetComponentInChildren<TextMeshProUGUI>();
         _demolishButton = RuntimeUIKit.CreateButton(buttons, "Demolish", "Phá dỡ", OnDemolishClicked);
         _demolishLabel = _demolishButton.GetComponentInChildren<TextMeshProUGUI>();
 

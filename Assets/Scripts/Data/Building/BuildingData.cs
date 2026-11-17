@@ -4,7 +4,8 @@ public enum BuildingType : byte
 {
     None = 0, House = 1, QuarantineWard = 2, Farm = 3, Mine = 4, Clinic = 5, Furnace = 6, School = 7, GuardPost = 8, LumberCamp = 9, Tent = 10,
     CityHall = 11, WaterWell = 12, CoalStore = 13, Campfire = 14, CoalCart = 15, HerbFarm = 16,
-    LargeHouse = 17, Forge = 18
+    LargeHouse = 17, Forge = 18,
+    Road = 19   // GDD: Road Connectivity — đường đất 1x1, đi qua được
 }
 public enum CropType : byte
 {

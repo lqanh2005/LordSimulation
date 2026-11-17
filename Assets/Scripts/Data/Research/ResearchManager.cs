@@ -56,7 +56,11 @@ public class ResearchManager : MonoBehaviour
     public void Init()
     {
         ApplySaveData(default);
+        // Điều kiện "Thân nhiệt" của sắc lệnh chỉ dùng được khi đã có Nhiệt kế
+        EdictRules.IsVariableUnlocked = v => v != RuleVariable.ApplicantBodyTemp || IsCompleted(ResearchID.Thermometer);
     }
+
+    public bool HasThermometer => IsCompleted(ResearchID.Thermometer);
 
     public ResearchSaveData GetSaveData() => state;
 

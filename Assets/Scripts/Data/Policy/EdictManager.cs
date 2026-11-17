@@ -4,7 +4,8 @@ using UnityEngine;
 
 public class EdictManager : MonoBehaviour
 {
-    public const int MAX_EDICTS = 64;
+    public const int MAX_EDICTS = 64;   // Kích thước mảng / save
+    public const int RuleLimit = 3;     // GDD MVP: tối đa 3 sắc lệnh
 
     [Header("Danh Sách Sắc Lệnh")]
     public EdictRuleData[] allEdicts = new EdictRuleData[MAX_EDICTS];
@@ -42,7 +43,7 @@ public class EdictManager : MonoBehaviour
 
     public int CreateRule(in EdictRuleData rule)
     {
-        if (activeCount >= MAX_EDICTS)
+        if (activeCount >= RuleLimit || activeCount >= MAX_EDICTS)
             return -1;
 
         int index = activeCount;

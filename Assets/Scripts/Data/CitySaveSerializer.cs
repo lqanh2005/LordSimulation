@@ -4,7 +4,7 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 8;
+    public const int SaveVersion = 9;
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,
@@ -95,6 +95,11 @@ public static class CitySaveSerializer
 
         // 9. Thương nhân (v8+)
         merchant.Write(writer);
+
+        // 10. Chuỗi khủng hoảng (v9+)
+        writer.Write(globalData.corpsesFresh);
+        writer.Write(globalData.corpsesRotting);
+        writer.Write(globalData.miasma);
     }
 
     // --- ĐỌC TOÀN BỘ GAME (LOAD) ---
@@ -186,5 +191,13 @@ public static class CitySaveSerializer
         // 9. Thương nhân (v8+) — save cũ: chưa có thương nhân
         if (version >= 8)
             merchant = MerchantSaveData.Read(reader);
+
+        // 10. Chuỗi khủng hoảng (v9+)
+        if (version >= 9)
+        {
+            globalData.corpsesFresh = reader.ReadInt32();
+            globalData.corpsesRotting = reader.ReadInt32();
+            globalData.miasma = reader.ReadSingle();
+        }
     }
 }

@@ -57,7 +57,9 @@ public static class EdictRuleCatalog
             RuleVariable.Month => "Tháng",
             RuleVariable.Season => "Mùa",
             RuleVariable.Weather => "Thời tiết",
-            RuleVariable.ApplicantBodyTemp => "Thân nhiệt người nhập cư",
+            RuleVariable.ApplicantBodyTemp => EdictRules.IsUnlocked(RuleVariable.ApplicantBodyTemp)
+                ? "Thân nhiệt người nhập cư"
+                : "Thân nhiệt (cần nghiên cứu Nhiệt kế)",
             RuleVariable.ApplicantWealth => "Tài sản người nhập cư",
             RuleVariable.ApplicantOrigin => "Vùng xuất thân",
             RuleVariable.ApplicantProfession => "Nghề nghiệp",

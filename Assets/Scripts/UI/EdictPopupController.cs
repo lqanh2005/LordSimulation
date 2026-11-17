@@ -258,9 +258,9 @@ public class EdictPopupController : MonoBehaviour
             return;
         }
 
-        if (edictManager.activeCount >= EdictManager.MAX_EDICTS)
+        if (edictManager.activeCount >= EdictManager.RuleLimit)
         {
-            SetStatus($"Đã đạt tối đa {EdictManager.MAX_EDICTS} luật.", errorColor);
+            SetStatus($"Đã đạt tối đa {EdictManager.RuleLimit} sắc lệnh. Xoá bớt luật cũ để thêm luật mới.", errorColor);
             return;
         }
 

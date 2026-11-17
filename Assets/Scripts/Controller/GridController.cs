@@ -682,6 +682,27 @@ public class GridController : MonoBehaviour
         OccupancyVersion++;
     }
 
+    /// <summary>
+    /// Ô đường: ghi id công trình (để click / phá dỡ / chặn xây chồng) nhưng KHÔNG chặn đường đi của cư dân.
+    /// </summary>
+    public void SetRoad(int x, int y, ushort buildingId)
+    {
+        EnsureCells();
+        if (!IsInside(x, y))
+            return;
+
+        ref GridCell cell = ref cells[y * width + x];
+        if (!cell.IsOccupied && cell.OccupantBuildingId == buildingId)
+            return;
+
+        cell.IsOccupied = false;
+        cell.OccupantBuildingId = buildingId;
+        OccupancyVersion++;
+    }
+
+    /// <summary>Thứ tự vẽ cho đường: ngay trên nền đất, dưới cư dân và công trình.</summary>
+    public int RoadSortingOrder => groundDecorOrder + 1;
+
     public void SetOccupied(Vector2Int origin, Vector2Int size, ushort buildingId)
     {
         for (int dx = 0; dx < size.x; dx++)

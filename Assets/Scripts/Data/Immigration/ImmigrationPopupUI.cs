@@ -69,20 +69,20 @@ public class ImmigrationPopupUI : MonoBehaviour
         if (!_manager.TryGetCurrent(out _))
             return;
         if (queueText != null)
-            queueText.text = $"Waiting: {_manager.waitingCount}";
+            queueText.text = FormatQueue(_manager.waitingCount);
     }
 
-    public void ShowApplicant(in ResidentData applicant, RuleAction suggested, int waitingCount)
+    public void ShowApplicant(in ResidentData applicant, RuleAction suggested, int waitingCount, string edictReason = null, bool hasThermometer = false)
     {
         EnsureUi();
         root.SetActive(true);
         if (titleText != null)
-            titleText.text = "City Gate — Immigration Check";
+            titleText.text = "Cổng thành — Kiểm duyệt nhập cư";
         if (queueText != null)
             queueText.text = FormatQueue(waitingCount);
         if (bodyText != null)
         {
-            string profile = ImmigrationRules.FormatProfile(in applicant, suggested);
+            string profile = ImmigrationRules.FormatProfile(in applicant, suggested, edictReason, hasThermometer);
             if (applicant.hungerMonths > 0)
                 profile += $"\n<color=#C0392B>Đói trong hàng chờ: {applicant.hungerMonths} tháng (sắp bỏ đi)</color>";
             bodyText.text = profile;
@@ -91,10 +91,10 @@ public class ImmigrationPopupUI : MonoBehaviour
         HighlightSuggestion(suggested);
     }
 
-    /// <summary>"Waiting: 20/32" — đỏ khi hàng đông tới mức gây bất ổn.</summary>
+    /// <summary>"Hàng chờ: 20/32" — đỏ khi hàng đông tới mức gây bất ổn.</summary>
     private static string FormatQueue(int waitingCount)
     {
-        string text = $"Waiting: {waitingCount}/{ImmigrationRules.MaxWaiting}";
+        string text = $"Hàng chờ: {waitingCount}/{ImmigrationRules.MaxWaiting}";
         bool crowded = waitingCount > ImmigrationRules.MaxWaiting * ImmigrationRules.YardCrowdThreshold;
         return crowded ? $"<color=#C0392B>{text} — quá đông!</color>" : text;
     }
@@ -104,11 +104,11 @@ public class ImmigrationPopupUI : MonoBehaviour
         EnsureUi();
         root.SetActive(true);
         if (titleText != null)
-            titleText.text = "City Gate";
+            titleText.text = "Cổng thành";
         if (queueText != null)
-            queueText.text = "Waiting: 0";
+            queueText.text = FormatQueue(0);
         if (bodyText != null)
-            bodyText.text = "No arrivals waiting at the gate.";
+            bodyText.text = "Không có ai đang chờ ở Cổng.";
         SetButtons(false);
     }
 
@@ -232,10 +232,10 @@ public class ImmigrationPopupUI : MonoBehaviour
         bodyText = CreateText(root.transform, "Body", new Vector2(0f, 20f), 16, FontStyle.Normal, 460f, 240f);
         bodyText.alignment = TextAnchor.UpperLeft;
 
-        acceptButton = CreateButton(root.transform, "Accept", "Accept", new Vector2(-160f, -180f), new Color(0.25f, 0.55f, 0.28f));
-        denyButton = CreateButton(root.transform, "Deny", "Deny", new Vector2(0f, -180f), new Color(0.6f, 0.22f, 0.22f));
-        quarantineButton = CreateButton(root.transform, "Quarantine", "Quarantine", new Vector2(160f, -180f), new Color(0.65f, 0.5f, 0.15f));
-        closeButton = CreateButton(root.transform, "Close", "Close", new Vector2(210f, 190f), new Color(0.3f, 0.3f, 0.32f));
+        acceptButton = CreateButton(root.transform, "Accept", "Cho vào", new Vector2(-160f, -180f), new Color(0.25f, 0.55f, 0.28f));
+        denyButton = CreateButton(root.transform, "Deny", "Từ chối", new Vector2(0f, -180f), new Color(0.6f, 0.22f, 0.22f));
+        quarantineButton = CreateButton(root.transform, "Quarantine", "Cách ly", new Vector2(160f, -180f), new Color(0.65f, 0.5f, 0.15f));
+        closeButton = CreateButton(root.transform, "Close", "Đóng", new Vector2(210f, 190f), new Color(0.3f, 0.3f, 0.32f));
         RectTransform closeRt = closeButton.GetComponent<RectTransform>();
         closeRt.sizeDelta = new Vector2(80f, 32f);
     }

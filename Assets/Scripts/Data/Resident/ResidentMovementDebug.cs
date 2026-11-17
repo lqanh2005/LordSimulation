@@ -27,7 +27,10 @@ public class ResidentMovementDebug : MonoBehaviour
     private LineRenderer _pathLine;
     private LineRenderer _selectRing;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    // Công cụ test (F2) chỉ có trong Editor / bản Development, không lọt vào bản phát hành
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+#endif
     private static void Bootstrap()
     {
         if (FindFirstObjectByType<ResidentMovementDebug>() != null)

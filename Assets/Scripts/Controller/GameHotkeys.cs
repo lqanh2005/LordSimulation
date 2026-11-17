@@ -116,6 +116,12 @@ public class GameHotkeys : MonoBehaviour
         if (_placement != null && (_placement.isPlacing || _placement.IsDemolishing))
             return;
 
+        if (SettingsPopup.AnyOpen)
+        {
+            SettingsPopup.CloseIfOpen();
+            return;
+        }
+
         if (_pauseMenu != null && _pauseMenu.IsOpen)
         {
             _pauseMenu.Resume();

@@ -2,6 +2,11 @@ using UnityEngine;
 
 public static class EdictRules
 {
+    /// <summary>Do ResearchManager gán: biến điều kiện đã được mở khoá chưa (null = mở hết).</summary>
+    public static System.Func<RuleVariable, bool> IsVariableUnlocked;
+
+    public static bool IsUnlocked(RuleVariable variable) => IsVariableUnlocked == null || IsVariableUnlocked(variable);
+
     private const float Epsilon = 0.0001f;
 
     public static bool IsApplicantVariable(RuleVariable variable)
@@ -80,6 +85,8 @@ public static class EdictRules
         bool hasApplicant)
     {
         if (IsApplicantVariable(condition.variable) && !hasApplicant)
+            return false;
+        if (!IsUnlocked(condition.variable))
             return false;
 
         float value = GetValue(condition.variable, in global, in applicant);

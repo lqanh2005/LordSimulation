@@ -60,7 +60,8 @@ public static class BuildMenuSetup
         new BuildingSpec(BuildingType.CoalStore, "Kho than", 2, 30, 20, new Color(0.3f, 0.3f, 0.3f)),
         new BuildingSpec(BuildingType.Campfire, "Lửa trại", 1, 5, 0, new Color(0.95f, 0.5f, 0.1f)),
         new BuildingSpec(BuildingType.CoalCart, "Xe goòng", 1, 5, 5, new Color(0.6f, 0.45f, 0.2f)),
-        new BuildingSpec(BuildingType.HerbFarm, "Vườn thuốc", 4, 25, 30, new Color(0.4f, 0.7f, 0.5f))
+        new BuildingSpec(BuildingType.HerbFarm, "Vườn thuốc", 4, 25, 30, new Color(0.4f, 0.7f, 0.5f)),
+        new BuildingSpec(BuildingType.Road, "Đường đất", 1, 2, 0, new Color(0.55f, 0.55f, 0.52f))
     };
 
     private static readonly (string label, BuildingType[] types)[] Categories =
@@ -70,7 +71,7 @@ public static class BuildMenuSetup
             BuildingType.Tent, BuildingType.House, BuildingType.LargeHouse, BuildingType.LumberCamp, BuildingType.Farm,
             BuildingType.Mine, BuildingType.CoalStore, BuildingType.Furnace, BuildingType.Forge, BuildingType.CityHall, BuildingType.Clinic,
             BuildingType.School, BuildingType.GuardPost, BuildingType.QuarantineWard, BuildingType.WaterWell,
-            BuildingType.Campfire, BuildingType.CoalCart
+            BuildingType.Campfire, BuildingType.CoalCart, BuildingType.Road
         }),
         ("Nhà ở", new[] { BuildingType.Tent, BuildingType.House, BuildingType.LargeHouse }),
         ("Sản xuất", new[] { BuildingType.LumberCamp, BuildingType.Mine, BuildingType.CoalStore, BuildingType.Furnace, BuildingType.Forge }),
@@ -78,7 +79,7 @@ public static class BuildMenuSetup
         ("Nông nghiệp", new[] { BuildingType.Farm }),
         ("Hạ tầng", new[]
         {
-            BuildingType.CityHall, BuildingType.Clinic, BuildingType.School, BuildingType.GuardPost,
+            BuildingType.Road, BuildingType.CityHall, BuildingType.Clinic, BuildingType.School, BuildingType.GuardPost,
             BuildingType.QuarantineWard, BuildingType.WaterWell, BuildingType.Campfire
         }),
         ("Trang trí", new[] { BuildingType.CoalCart })

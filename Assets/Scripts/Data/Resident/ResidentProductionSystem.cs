@@ -73,7 +73,8 @@ public static class ResidentProductionSystem
             float power = WorkerPowerByBuilding[i];
             if (power <= 0f
                 || !ResidentProductionRules.IsProductionBuilding(building.buildingType)
-                || !ResidentAssignmentRules.IsBuildingAcceptingResidents(in building))
+                || !ResidentAssignmentRules.IsBuildingAcceptingResidents(in building)
+                || !RoadNetwork.IsConnected(buildings, buildingCount, building.buildingID))
             {
                 if (ResidentProductionRules.IsProductionBuilding(building.buildingType))
                     building.outputStored = 0;

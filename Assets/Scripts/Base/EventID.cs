@@ -14,6 +14,7 @@ public enum EventID
     DiseasePressure = 203,
     PopulationChanged = 204,
     ResidentsDied = 205,            // param: ResidentsDiedPayload
+    CrisisReport = 206,             // param: CrisisReportPayload (thi thể / Miasma mỗi tháng)
 
     SaveStarted = 300,
     SaveCompleted = 301,

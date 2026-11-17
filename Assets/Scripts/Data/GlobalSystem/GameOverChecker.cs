@@ -16,7 +16,7 @@ public class GameOverChecker : MonoBehaviour
     [Tooltip("Thanh bạo loạn >= giá trị này thì tính là đang bạo loạn")]
     [SerializeField, Range(1f, 100f)] private float riotThreshold = 100f;
     [Tooltip("Số tháng liên tiếp ở mức bạo loạn trước khi thua (1 = thua ngay cuối tháng chạm đỉnh)")]
-    [SerializeField, Min(1)] private int riotMonthsToLose = 2;
+    [SerializeField, Min(1)] private int riotMonthsToLose = 1;   // GDD: Riot 100% = Lose
 
     [Header("Chiến thắng (GDD MVP: sống sót qua mùa đông đầu tiên)")]
     [Tooltip("Số mùa đông phải vượt qua. Game bắt đầu Năm 1 Tháng 1, mùa đông là tháng 10-12 -> sang Năm 2 là đã qua 1 mùa đông")]

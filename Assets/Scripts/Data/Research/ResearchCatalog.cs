@@ -25,7 +25,8 @@ public enum ResearchID : byte
     Quarantine = 23,
     Masonry = 24,
     Insulation = 25,
-    Administration = 26
+    Administration = 26,
+    Thermometer = 27        // GDD Tier 1: đo thân nhiệt người nhập cư tại Cổng
 }
 
 public enum ResearchBranch : byte { Agriculture = 0, Industry = 1, Society = 2 }
@@ -141,6 +142,8 @@ public static class ResearchCatalog
             ResearchEffect.Production(BuildingType.Mine, 10f)),
 
         // ===== XÃ HỘI & Y TẾ (hàng 4-6) =====
+        new ResearchNode(ResearchID.Thermometer, ResearchBranch.Society, "Nhiệt kế",
+            "Đo thân nhiệt người xin vào tại Cổng. Mở điều kiện \"Thân nhiệt\" trong Sắc lệnh.", 12, 0, 6f, NoPrereq),
         new ResearchNode(ResearchID.Sanitation, ResearchBranch.Society, "Vệ sinh",
             "Đun nước sôi, dọn rác thải để hạn chế dịch bệnh.", 20, 0, 4.5f, NoPrereq,
             ResearchEffect.Disease(0.006f)),
@@ -235,6 +238,7 @@ public static class ResearchCatalog
         BuildingType.Campfire => "Lửa trại",
         BuildingType.CoalCart => "Xe goòng",
         BuildingType.HerbFarm => "Vườn thuốc",
+        BuildingType.Road => "Đường đất",
         _ => type.ToString()
     };
 

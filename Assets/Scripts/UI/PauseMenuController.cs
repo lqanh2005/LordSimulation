@@ -200,7 +200,7 @@ public class PauseMenuController : MonoBehaviour
     {
         if (onSettings.GetPersistentEventCount() == 0)
         {
-            SetStatus("Cài đặt chưa sẵn có.", infoColor);
+            SettingsPopup.Open();
             return;
         }
 

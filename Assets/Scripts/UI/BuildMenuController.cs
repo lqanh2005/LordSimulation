@@ -101,6 +101,16 @@ public class BuildMenuController : MonoBehaviour
     }
 
     public bool IsOpen => openCategory >= 0;
+
+    public int FindCategory(string categoryName)
+    {
+        if (categories == null)
+            return -1;
+        for (int i = 0; i < categories.Length; i++)
+            if (categories[i].name == categoryName)
+                return i;
+        return -1;
+    }
     public int CategoryCount => categories != null ? categories.Length : 0;
 
     public void ToggleCategory(int index)

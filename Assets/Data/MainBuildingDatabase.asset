@@ -175,3 +175,12 @@ MonoBehaviour:
     maxOccupancy: 0
     maxWorkers: 0
     visualPrefab: {fileID: 97292550082179324, guid: 5547a16099bcf5c439f4f010497b35af, type: 3}
+  - type: 19
+    displayName: "\u0110\u01B0\u1EDDng \u0111\u1EA5t"
+    size: 1
+    costWood: 2
+    costGold: 0
+    constructionMonths: 0
+    maxOccupancy: 0
+    maxWorkers: 0
+    visualPrefab: {fileID: 4266857400868516723, guid: b6aaeb77711232e40ab11ac8e71c848f, type: 3}

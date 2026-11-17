@@ -7,6 +7,7 @@ public static class BuildingRules
     public static int GetDefaultConstructionMonths(BuildingType type) => type switch
     {
         BuildingType.Tent => 0,
+        BuildingType.Road => 0,
         BuildingType.Campfire => 0,
         BuildingType.CoalCart => 0,
         BuildingType.WaterWell => 1,

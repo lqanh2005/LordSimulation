@@ -484,7 +484,46 @@ public class ImmigrationManager : MonoBehaviour
         if (popupUi == null || !TryGetCurrent(out ResidentData applicant))
             return;
 
-        popupUi.ShowApplicant(in applicant, GetSuggestedAction(in applicant), waitingCount);
+        RuleAction suggested = ExplainSuggestion(in applicant, out string reason);
+        ResearchManager research = GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
+            ? GamePlayController.Instance.playerContain.researchManager
+            : null;
+        popupUi.ShowApplicant(in applicant, suggested, waitingCount, reason, research != null && research.HasThermometer);
+    }
+
+    /// <summary>GDD 3.5: "Why was this NPC processed?" — sắc lệnh nào khớp (ưu tiên trên → dưới) và vì sao.</summary>
+    public RuleAction ExplainSuggestion(in ResidentData applicant, out string reason)
+    {
+        if (edictManager == null || globalSystemManager == null || edictManager.activeCount <= 0)
+        {
+            reason = "Chưa có sắc lệnh nhập cư — bạn tự quyết định.";
+            return RuleAction.Admit;
+        }
+
+        if (!EdictRules.TryResolveImmigration(
+                edictManager.allEdicts,
+                edictManager.activeCount,
+                in applicant,
+                in globalSystemManager.GetGlobalDataRef(),
+                out RuleActionData action,
+                out int index))
+        {
+            reason = "Không sắc lệnh nào khớp với người này → mặc định Cho vào.";
+            return RuleAction.Admit;
+        }
+
+        ref EdictRuleData rule = ref edictManager.GetEdictRef(index);
+        var sb = new System.Text.StringBuilder(128);
+        string name = string.IsNullOrEmpty(rule.ruleName) ? $"#{rule.ruleID}" : rule.ruleName;
+        sb.Append("Sắc lệnh \"").Append(name).Append("\" (ưu tiên ").Append(rule.executionOrder + 1).Append(") khớp: ");
+        for (int i = 0; i < rule.ConditionCount; i++)
+        {
+            if (i > 0) sb.Append(' ');
+            sb.Append(EdictRuleCatalog.DescribeCondition(in rule.conditions[i], i == 0).Replace('\t', ' '));
+        }
+        sb.Append(" → ").Append(EdictRuleCatalog.DescribeAction(in action));
+        reason = sb.ToString();
+        return EdictRules.ToRuleAction(action.type);
     }
 
     private void NotifyQueueChanged()

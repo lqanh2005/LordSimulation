@@ -7643,7 +7643,7 @@ MonoBehaviour:
   categories:
   - name: "X\xE2y d\u1EF1ng"
     button: {fileID: 2102098556}
-    types: 0a01110903040d06120b050708020c0e0f
+    types: 0a01110903040d06120b050708020c0e0f13
   - name: "Nh\xE0 \u1EDF"
     button: {fileID: 727581241}
     types: 0a0111
@@ -7655,7 +7655,7 @@ MonoBehaviour:
     types: 03
   - name: "H\u1EA1 t\u1EA7ng"
     button: {fileID: 1351294952}
-    types: 0b050708020c0e
+    types: 130b050708020c0e
   - name: "Trang tr\xED"
     button: {fileID: 844101609}
     types: 0f
@@ -132010,6 +132010,8 @@ MonoBehaviour:
   tradeManager: {fileID: 1123660550}
   immigrationManager: {fileID: 0}
   researchManager: {fileID: 0}
+  merchantManager: {fileID: 0}
+  crisisManager: {fileID: 0}
 --- !u!114 &1983704460
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -132025,7 +132027,7 @@ MonoBehaviour:
   globalSystemManager: {fileID: 2003796639}
   residentManager: {fileID: 2102195161}
   riotThreshold: 100
-  riotMonthsToLose: 2
+  riotMonthsToLose: 1
   wintersToSurvive: 1
   minPopulationToWin: 20
 --- !u!1 &1996669121
@@ -132336,6 +132338,9 @@ MonoBehaviour:
     totalInfected: 0
     overallHappiness: 0
     victoryAchieved: 0
+    corpsesFresh: 0
+    corpsesRotting: 0
+    miasma: 0
   buildingManager: {fileID: 0}
 --- !u!1 &2009386171
 GameObject:

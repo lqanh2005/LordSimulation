@@ -139,23 +139,38 @@ public static class ImmigrationRules
         return applicant;
     }
 
-    public static string FormatProfile(in ResidentData applicant, RuleAction suggested)
+    /// <summary>Hồ sơ người xin vào hiển thị ở Cổng. Thân nhiệt chỉ đo được khi đã có Nhiệt kế (GDD Tier 1).</summary>
+    public static string FormatProfile(in ResidentData applicant, RuleAction suggested, string edictReason, bool hasThermometer)
     {
         Bio.Clear();
-        Bio.Append(NameDatabase.GetFullName(applicant.firstNameID, applicant.lastNameID));
-        Bio.Append(applicant.gender == GenderType.Female ? "  (Female)\n" : "  (Male)\n");
-        Bio.Append("Age: ").Append(applicant.age);
-        Bio.Append("   Faction: ").Append(applicant.factionType).Append('\n');
-        Bio.Append("Origin: ").Append(OriginLabel(applicant.originRegion));
-        Bio.Append("   Profession: ").Append(applicant.professionType).Append('\n');
-        Bio.Append("Wealth: ").Append(applicant.wealth);
-        Bio.Append("   Happiness: ").Append((applicant.happiness * 100f).ToString("0")).Append("%\n");
-        Bio.Append("STR ").Append(applicant.strength);
-        Bio.Append("  END ").Append(applicant.endurance);
-        Bio.Append("  INT ").Append(applicant.intellect).Append('\n');
-        Bio.Append("Temperature: ").Append(applicant.bodyTemperature.ToString("0.0")).Append(" C\n");
-        Bio.Append("Symptoms: ").Append(VisibleSymptomText(in applicant)).Append('\n');
-        Bio.Append("Edict suggestion: ").Append(ActionLabel(suggested));
+        Bio.Append("<b>").Append(NameDatabase.GetFullName(applicant.firstNameID, applicant.lastNameID)).Append("</b>");
+        Bio.Append(applicant.gender == GenderType.Female ? "  (Nữ)\n" : "  (Nam)\n");
+        Bio.Append("Tuổi: ").Append(applicant.age);
+        Bio.Append("   Phe phái: ").Append(FactionLabel(applicant.factionType)).Append('\n');
+        Bio.Append("Xuất thân: ").Append(OriginLabel(applicant.originRegion));
+        Bio.Append("   Nghề: ").Append(ResidentInfoPopup.GetProfessionName(applicant.professionType)).Append('\n');
+        Bio.Append("Tài sản: ").Append(applicant.wealth);
+        Bio.Append("   Hạnh phúc: ").Append((applicant.happiness * 100f).ToString("0")).Append("%\n");
+        Bio.Append("Sức mạnh ").Append(applicant.strength);
+        Bio.Append("  Bền ").Append(applicant.endurance);
+        Bio.Append("  Trí ").Append(applicant.intellect).Append('\n');
+        if (hasThermometer)
+        {
+            bool fever = applicant.bodyTemperature >= 37.5f;
+            Bio.Append("Thân nhiệt: ");
+            if (fever) Bio.Append("<color=#E74C3C>");
+            Bio.Append(applicant.bodyTemperature.ToString("0.0")).Append(" °C");
+            if (fever) Bio.Append("</color>");
+            Bio.Append('\n');
+        }
+        else
+        {
+            Bio.Append("Thân nhiệt: <i>chưa đo được (cần nghiên cứu Nhiệt kế)</i>\n");
+        }
+        Bio.Append("Triệu chứng: ").Append(VisibleSymptomText(in applicant)).Append('\n');
+        Bio.Append("Gợi ý: <b>").Append(ActionLabel(suggested)).Append("</b>");
+        if (!string.IsNullOrEmpty(edictReason))
+            Bio.Append("\n<size=13><i>Vì sao: ").Append(edictReason).Append("</i></size>");
         return Bio.ToString();
     }
 
@@ -192,30 +207,39 @@ public static class ImmigrationRules
         return FactionType.Aristocrat;
     }
 
-    private static string OriginLabel(OriginRegion origin) => origin switch
+    public static string OriginLabel(OriginRegion origin) => origin switch
     {
-        OriginRegion.GreenZone => "GreenZone",
-        OriginRegion.RedZone => "RedZone",
-        _ => "YellowZone"
+        OriginRegion.GreenZone => "Vùng Xanh",
+        OriginRegion.RedZone => "Vùng Đỏ",
+        _ => "Vùng Vàng"
     };
 
-    private static string ActionLabel(RuleAction action) => action switch
+    public static string FactionLabel(FactionType faction) => faction switch
     {
-        RuleAction.Deny => "Deny",
-        RuleAction.Quarantine => "Quarantine",
-        RuleAction.EscortToDesk => "Escort to desk",
-        _ => "Admit"
+        FactionType.Commoner => "Thường dân",
+        FactionType.Aristocrat => "Quý tộc",
+        FactionType.Scholar => "Học giả",
+        FactionType.Zealot => "Cuồng tín",
+        _ => "Không"
+    };
+
+    public static string ActionLabel(RuleAction action) => action switch
+    {
+        RuleAction.Deny => "Từ chối",
+        RuleAction.Quarantine => "Cách ly",
+        RuleAction.EscortToDesk => "Áp giải tới bàn thẩm vấn",
+        _ => "Cho vào"
     };
 
     private static string VisibleSymptomText(in ResidentData applicant)
     {
         if (applicant.healthStatus == HealthStatus.Incubating
             || applicant.symptoms == SymptomFlags.None)
-            return "None apparent";
+            return "Không thấy biểu hiện";
 
-        if (applicant.HasSymptom(SymptomFlags.Fever)) return "Fever";
-        if (applicant.HasSymptom(SymptomFlags.Cough)) return "Cough";
-        if (applicant.HasSymptom(SymptomFlags.Fatigue)) return "Fatigue";
-        return "Unusual";
+        if (applicant.HasSymptom(SymptomFlags.Fever)) return "<color=#E74C3C>Sốt</color>";
+        if (applicant.HasSymptom(SymptomFlags.Cough)) return "<color=#E74C3C>Ho</color>";
+        if (applicant.HasSymptom(SymptomFlags.Fatigue)) return "<color=#E67E22>Mệt mỏi</color>";
+        return "<color=#E67E22>Bất thường</color>";
     }
 }

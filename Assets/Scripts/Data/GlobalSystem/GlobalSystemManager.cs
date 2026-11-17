@@ -224,6 +224,7 @@ public class GlobalSystemManager : MonoBehaviour
 
         pressure += LastHungryRate * 0.03f;
         pressure += LastColdRate * 0.03f;
+        pressure += CrisisManager.GetDiseasePressure(in data);   // GDD 3.7: Miasma từ xác chưa thu gom
         pressure -= LastBuildingEffects.diseaseReduction;
 
         return Mathf.Clamp01(pressure);

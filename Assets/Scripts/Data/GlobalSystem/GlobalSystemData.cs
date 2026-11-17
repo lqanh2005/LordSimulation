@@ -26,6 +26,11 @@ public struct GlobalSystemData
     public int totalInfected;
     public float overallHappiness;
     public bool victoryAchieved;   // Đã đạt mục tiêu MVP (sống qua mùa đông đầu) — lưu từ save v7
+
+    // Chuỗi khủng hoảng (GDD 3.7) — lưu từ save v9
+    public int corpsesFresh;       // Thi thể chết trong tháng này, chưa thu gom
+    public int corpsesRotting;     // Thi thể đã để quá 1 tháng -> sinh khí độc
+    public float miasma;           // Mức khí độc Miasma: tăng áp lực dịch bệnh
     public SeasonType CurrentSeason => (currentMonth - 1) switch
     {
         >= 0 and <= 2 => SeasonType.Spring,

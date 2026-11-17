@@ -107,6 +107,7 @@ public class PlacementManager : MonoBehaviour
         ResidentInfoPopup.EnsureInstance(this);
         NotificationFeed.EnsureInstance(this);
         MerchantPopup.EnsureInstance();
+        TutorialHints.EnsureInstance();
         GameHotkeys.EnsureInstance(this);   // tạo sau cùng để tìm thấy các popup ở trên
     }
 
@@ -245,8 +246,18 @@ public class PlacementManager : MonoBehaviour
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
             TryPlaceBuilding(origin, config);
+            _lastRoadPaintCell = origin;
+        }
+        else if (config.type == BuildingType.Road && Mouse.current.leftButton.isPressed
+                 && origin != _lastRoadPaintCell && canPlace)
+        {
+            // Giữ chuột trái và kéo để vẽ đường liên tục
+            TryPlaceBuilding(origin, config);
+            _lastRoadPaintCell = origin;
         }
     }
+
+    private Vector2Int _lastRoadPaintCell = new Vector2Int(int.MinValue, int.MinValue);
 
     public void BeginPlacement(BuildingType type)
     {
@@ -390,6 +401,7 @@ public class PlacementManager : MonoBehaviour
         };
         RefundResources(in removed, ref payload);
 
+        RoadNetwork.MarkDirty();
         GameEvents.Post(EventID.BuildingDemolished, payload);
         return true;
     }
@@ -465,7 +477,8 @@ public class PlacementManager : MonoBehaviour
                     return false;
                 }
 
-                if (grid.IsOccupied(cx, cy))
+                // Ô đường không chặn đi lại nhưng vẫn có chủ -> không xây chồng
+                if (grid.IsOccupied(cx, cy) || grid.GetOccupantId(cx, cy) != 0)
                 {
                     return false;
                 }
@@ -492,6 +505,7 @@ public class PlacementManager : MonoBehaviour
 
     public void RebuildVisuals()
     {
+        RoadNetwork.MarkDirty();
         foreach (BuildingView view in buildingViews.Values)
         {
             if (view != null)
@@ -519,7 +533,7 @@ public class PlacementManager : MonoBehaviour
 
             Vector2Int origin = new Vector2Int(data.coordX, data.coordY);
             Vector2Int footprint = BuildingRules.GetFootprint(in data);
-            MarkCells(origin, footprint, data.buildingID);
+            MarkCells(origin, footprint, data.buildingID, data.buildingType);
             BuildingView view = SpawnBuildingView(data.buildingID, data.buildingType, origin, footprint);
             ApplyConstructionVisual(view, BuildingRules.IsUnderConstruction(in data));
         }
@@ -607,7 +621,8 @@ public class PlacementManager : MonoBehaviour
 
         newData.isAllocated = true;
         SpendResources(config);
-        MarkCells(origin, footprint, newData.buildingID);
+        MarkCells(origin, footprint, newData.buildingID, config.type);
+        RoadNetwork.MarkDirty();
         BuildingView view = SpawnBuildingView(newData.buildingID, config.type, origin, footprint);
         ApplyConstructionVisual(view, BuildingRules.IsUnderConstruction(in newData));
         OnBuildingPlaced?.Invoke(newData);
@@ -643,10 +658,20 @@ public class PlacementManager : MonoBehaviour
         });
     }
 
-    private void MarkCells(Vector2Int origin, Vector2Int size, ushort buildingId)
+    private void MarkCells(Vector2Int origin, Vector2Int size, ushort buildingId, BuildingType type)
     {
-        // Đánh dấu IsOccupied cho từng ô của footprint → cư dân tìm đường sẽ né
-        grid.SetOccupied(origin, size, buildingId);
+        // Đánh dấu IsOccupied cho từng ô của footprint → cư dân tìm đường sẽ né.
+        // Đường thì đi qua được: chỉ ghi id (để click / phá / chặn xây chồng).
+        if (type == BuildingType.Road)
+        {
+            for (int dx = 0; dx < size.x; dx++)
+                for (int dy = 0; dy < size.y; dy++)
+                    grid.SetRoad(origin.x + dx, origin.y + dy, buildingId);
+        }
+        else
+        {
+            grid.SetOccupied(origin, size, buildingId);
+        }
         for (int x = 0; x < size.x; x++)
         {
             for (int y = 0; y < size.y; y++)
@@ -674,7 +699,8 @@ public class PlacementManager : MonoBehaviour
             view = go.AddComponent<BuildingView>();
         }
 
-        view.Init(buildingId, type, origin, size, grid.SortingLayerName, grid.GetFootprintSortingOrder(origin, size));
+        int order = type == BuildingType.Road ? grid.RoadSortingOrder : grid.GetFootprintSortingOrder(origin, size);
+        view.Init(buildingId, type, origin, size, grid.SortingLayerName, order);
         buildingViews[buildingId] = view;
         return view;
     }

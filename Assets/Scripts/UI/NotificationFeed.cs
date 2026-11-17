@@ -6,7 +6,8 @@ using UnityEngine.UI;
 public enum NoticeLevel : byte
 {
     Info = 0,       // Dùng mẫu Notice_Reminder
-    Warning = 1     // Dùng mẫu Notice_Warning
+    Warning = 1,    // Dùng mẫu Notice_Warning
+    Critical = 2    // Mẫu Warning tô đỏ đậm, hiện lâu hơn (GDD 7.3: Disease Outbreak, Riot Critical…)
 }
 
 /// <summary>
@@ -62,10 +63,11 @@ public class NotificationFeed : MonoBehaviour
     }
 
     /// <summary>Hiện một thông báo. <paramref name="key"/> dùng để chống lặp trong vài giây.</summary>
-    public static void Show(string message, NoticeLevel level = NoticeLevel.Info, string key = null)
+    /// <summary>Hiện thông báo. <paramref name="onClick"/>: bấm vào thông báo để tới nơi liên quan (GDD 7.3).</summary>
+    public static void Show(string message, NoticeLevel level = NoticeLevel.Info, string key = null, System.Action onClick = null)
     {
         if (Instance != null)
-            Instance.Push(message, level, key);
+            Instance.Push(message, level, key, onClick);
     }
 
     private void Awake()
@@ -99,6 +101,7 @@ public class NotificationFeed : MonoBehaviour
         GameEvents.Listen(EventID.MerchantArrived, OnMerchantArrived);
         GameEvents.Listen(EventID.MerchantLeft, OnMerchantLeft);
         GameEvents.Listen(EventID.WaitingYardReport, OnWaitingYardReport);
+        GameEvents.Listen(EventID.CrisisReport, OnCrisisReport);
     }
 
     private void OnDisable()
@@ -115,6 +118,21 @@ public class NotificationFeed : MonoBehaviour
         GameEvents.Unlisten(EventID.MerchantArrived, OnMerchantArrived);
         GameEvents.Unlisten(EventID.MerchantLeft, OnMerchantLeft);
         GameEvents.Unlisten(EventID.WaitingYardReport, OnWaitingYardReport);
+        GameEvents.Unlisten(EventID.CrisisReport, OnCrisisReport);
+    }
+
+    private void OnCrisisReport(object param)
+    {
+        if (!(param is CrisisReportPayload p))
+            return;
+
+        if (p.rotting > 0)
+            Push($"{p.rotting} thi thể chưa được thu gom đang phân hủy — cần thêm lính gác", NoticeLevel.Warning, "corpses",
+                () => UIActions.OpenBuildCategory("Hạ tầng"));
+        if (p.miasma >= 5f)
+            Push($"Khí độc Miasma lan khắp thành: áp lực dịch bệnh +{p.diseasePressureAdded * 100f:0.#}%", NoticeLevel.Critical, "miasma");
+        else if (p.miasma >= 1f)
+            Push($"Khí độc Miasma xuất hiện (mức {p.miasma:0.#})", NoticeLevel.Warning, "miasma");
     }
 
     private void OnWaitingYardReport(object param)
@@ -123,15 +141,15 @@ public class NotificationFeed : MonoBehaviour
             return;
 
         if (p.left > 0)
-            Push($"{p.left} người trong hàng chờ bỏ đi vì đói (giảm uy tín)", NoticeLevel.Warning, "yard-left");
+            Push($"{p.left} người trong hàng chờ bỏ đi vì đói (giảm uy tín)", NoticeLevel.Warning, "yard-left", UIActions.OpenGate);
         if (p.hungry > 0)
-            Push($"Không đủ lương thực cho hàng chờ: {p.hungry} người bị đói", NoticeLevel.Warning, "yard-hungry");
+            Push($"Không đủ lương thực cho hàng chờ: {p.hungry} người bị đói", NoticeLevel.Warning, "yard-hungry", UIActions.OpenGate);
         if (p.newlyInfected > 0)
-            Push($"Bệnh lây trong hàng chờ: thêm {p.newlyInfected} người nhiễm", NoticeLevel.Warning, "yard-infect");
+            Push($"Bệnh lây trong hàng chờ: thêm {p.newlyInfected} người nhiễm", NoticeLevel.Warning, "yard-infect", UIActions.OpenGate);
         if (p.riotAdded >= 1f)
-            Push($"Hàng chờ quá đông ({p.waiting}/{ImmigrationRules.MaxWaiting}): bạo loạn +{p.riotAdded:0.#}", NoticeLevel.Warning, "yard-crowd");
+            Push($"Hàng chờ quá đông ({p.waiting}/{ImmigrationRules.MaxWaiting}): bạo loạn +{p.riotAdded:0.#}", NoticeLevel.Warning, "yard-crowd", UIActions.OpenGate);
         else if (p.waiting > 0 && p.foodEaten > 0 && p.waiting * 2 >= ImmigrationRules.MaxWaiting)
-            Push($"Hàng chờ đã ăn {p.foodEaten} lương thực tháng này", NoticeLevel.Info, "yard-food");
+            Push($"Hàng chờ đã ăn {p.foodEaten} lương thực tháng này", NoticeLevel.Info, "yard-food", UIActions.OpenGate);
     }
 
     private void OnMerchantArrived(object param)
@@ -141,7 +159,7 @@ public class NotificationFeed : MonoBehaviour
 
         PlayerContain contain = FindFirstObjectByType<PlayerContain>();
         int months = contain != null && contain.merchantManager != null ? contain.merchantManager.MonthsLeft : 0;
-        Push($"Thương nhân đã tới Cổng thành, ở lại {months} tháng", NoticeLevel.Info, "merchant");
+        Push($"Thương nhân đã tới Cổng thành, ở lại {months} tháng", NoticeLevel.Info, "merchant", UIActions.OpenMerchant);
     }
 
     private void OnMerchantLeft(object param)
@@ -170,7 +188,8 @@ public class NotificationFeed : MonoBehaviour
             _ => $"Không thể xây {name}"
         };
 
-        Push(msg, NoticeLevel.Warning, "place:" + p.type + ":" + p.reason);
+        Push(msg, NoticeLevel.Warning, "place:" + p.type + ":" + p.reason,
+            p.reason == BuildingPlaceFailReason.NotResearched ? UIActions.OpenResearch : (System.Action)null);
     }
 
     private void OnBuildingCompleted(object param)
@@ -183,7 +202,12 @@ public class NotificationFeed : MonoBehaviour
             return;
 
         BuildingType type = _placement.buildingManager.GetBuildingRef(index).buildingType;
-        Push($"Đã xây xong {GetBuildingName(type)}", NoticeLevel.Info, "built:" + id);
+        if (type == BuildingType.Road)
+            return; // Vẽ đường từng ô -> không báo từng ô
+
+        Push($"Đã xây xong {GetBuildingName(type)}", NoticeLevel.Info, "built:" + id, () => UIActions.FocusBuilding(id));
+        if (type == BuildingType.CityHall && RoadNetwork.Enabled)
+            Push("Từ giờ công trình sản xuất phải nối đường tới Tòa thị chính để hoạt động", NoticeLevel.Warning, "road-rule");
     }
 
     private void OnEdictTriggered(object param)
@@ -200,7 +224,7 @@ public class NotificationFeed : MonoBehaviour
                 name = edicts.GetEdictRef(index).ruleName;
         }
 
-        Push($"Sắc lệnh \"{name}\" đã được thi hành", NoticeLevel.Info, "edict:" + ruleId);
+        Push($"Sắc lệnh \"{name}\" đã được thi hành", NoticeLevel.Info, "edict:" + ruleId, UIActions.OpenEdicts);
     }
 
     private void OnResearchCompleted(object param)
@@ -208,7 +232,7 @@ public class NotificationFeed : MonoBehaviour
         if (!(param is ResearchID id))
             return;
 
-        Push($"Nghiên cứu hoàn thành: {GetResearchName(id)}", NoticeLevel.Info, "research:" + id);
+        Push($"Nghiên cứu hoàn thành: {GetResearchName(id)}", NoticeLevel.Info, "research:" + id, UIActions.OpenResearch);
     }
 
     private void OnHunger(object param)
@@ -216,7 +240,7 @@ public class NotificationFeed : MonoBehaviour
         if (!(param is float rate) || rate <= 0f)
             return;
 
-        Push($"Thiếu lương thực: {Mathf.RoundToInt(rate * 100f)}% dân bị đói", NoticeLevel.Warning, "hunger");
+        Push($"Thiếu lương thực: {Mathf.RoundToInt(rate * 100f)}% dân bị đói", NoticeLevel.Warning, "hunger", () => UIActions.OpenBuildCategory("Nông nghiệp"));
     }
 
     private void OnCold(object param)
@@ -303,7 +327,7 @@ public class NotificationFeed : MonoBehaviour
         // Dịch bệnh
         float infectedPct = pop > 0 ? d.totalInfected * 100f / pop : 0f;
         if (infectedPct >= 10f)
-            Push($"Dịch bệnh bùng phát: {Mathf.RoundToInt(infectedPct)}% dân đang nhiễm bệnh", NoticeLevel.Warning, "disease");
+            Push($"Dịch bệnh bùng phát: {Mathf.RoundToInt(infectedPct)}% dân đang nhiễm bệnh", NoticeLevel.Critical, "disease");
         else if (d.totalInfected > _lastInfected)
             Push($"Có thêm ca bệnh mới ({d.totalInfected} người đang bệnh)", NoticeLevel.Info, "disease");
         _lastInfected = d.totalInfected;
@@ -312,16 +336,17 @@ public class NotificationFeed : MonoBehaviour
         SeasonType nextSeason = d.currentMonth == 12 ? SeasonType.Spring : (SeasonType)((d.currentMonth) / 3);
         int foodNeed = pop * (nextSeason == SeasonType.Winter ? 2 : 1);
         if (pop > 0 && d.stockFood < foodNeed)
-            Push($"Lương thực sắp cạn: còn {d.stockFood}, tháng tới cần {foodNeed}", NoticeLevel.Info, "food-low");
+            Push($"Lương thực sắp cạn: còn {d.stockFood}, tháng tới cần {foodNeed}", NoticeLevel.Info, "food-low", () => UIActions.OpenBuildCategory("Nông nghiệp"));
 
         // Than: mùa đông đang tới / đang là mùa đông
         if (pop > 0 && nextSeason == SeasonType.Winter && d.stockCoal < pop)
-            Push($"Than sắp hết: còn {d.stockCoal}, mùa đông cần {pop}/tháng", NoticeLevel.Info, "coal-low");
+            Push($"Than sắp hết: còn {d.stockCoal}, mùa đông cần {pop}/tháng", NoticeLevel.Info, "coal-low", () => UIActions.OpenBuildCategory("Sản xuất"));
 
         // Thuốc khi có bệnh
         if (d.totalInfected > 0 && d.stockMedicine <= 0)
             Push("Hết thuốc men: người bệnh không được chữa trị", NoticeLevel.Warning, "medicine");
 
+        ReportHomelessAndIdleBuildings(pop);
         ReportObjective(in d);
 
         // Bạo loạn
@@ -331,11 +356,65 @@ public class NotificationFeed : MonoBehaviour
             int left = checker.RiotMonthsToLose - checker.RiotMonths;
             Push(left > 0
                     ? $"Bạo loạn đã bùng nổ! Còn {left} tháng để dẹp yên trước khi bị lật đổ"
-                    : "Bạo loạn đã bùng nổ!", NoticeLevel.Warning, "riot");
+                    : "Bạo loạn đã bùng nổ!", NoticeLevel.Critical, "riot-critical", UIActions.OpenEdicts);
         }
         else if (d.riotRiskMeter >= 75f)
         {
-            Push($"Dân chúng bất mãn: nguy cơ bạo loạn {Mathf.RoundToInt(d.riotRiskMeter)}%", NoticeLevel.Warning, "riot");
+            Push($"Dân chúng bất mãn: nguy cơ bạo loạn {Mathf.RoundToInt(d.riotRiskMeter)}%", NoticeLevel.Warning, "riot", UIActions.OpenEdicts);
+        }
+    }
+
+    /// <summary>GDD 7.3 Warning: "Homeless", "Building Missing Workers" — bấm để tới nơi xử lý.</summary>
+    private void ReportHomelessAndIdleBuildings(int population)
+    {
+        PlayerContain contain = FindFirstObjectByType<PlayerContain>();
+        if (contain == null)
+            return;
+
+        ResidentManager residents = contain.residentManager;
+        if (residents != null)
+        {
+            int alive = 0, homeless = 0;
+            for (int i = 0; i < residents.activeCount; i++)
+            {
+                ref ResidentData r = ref residents.GetResidentRef(i);
+                if (!r.isAlive)
+                    continue;
+                alive++;
+                if (r.assignedHouseID < 0)
+                    homeless++;
+            }
+
+            if (homeless > 0 && alive > 0)
+            {
+                int scaled = Mathf.Max(homeless, Mathf.RoundToInt(homeless * (float)Mathf.Max(population, alive) / alive));
+                Push($"{scaled} cư dân vô gia cư: dễ bệnh, mất vui và chết rét mùa đông", NoticeLevel.Warning, "homeless",
+                    () => UIActions.OpenBuildCategory("Nhà ở"));
+            }
+        }
+
+        BuildingManager buildings = contain.buildingManager;
+        if (buildings != null)
+        {
+            int idle = 0;
+            ushort firstIdle = 0;
+            for (int i = 0; i < buildings.activeCount; i++)
+            {
+                ref BuildingData b = ref buildings.GetBuildingRef(i);
+                if (b.maxWorkers == 0 || b.currentWorkers > 0 || !b.isOperational
+                    || b.buildingState != BuildingState.Active)
+                    continue;
+                idle++;
+                if (firstIdle == 0)
+                    firstIdle = b.buildingID;
+            }
+
+            if (idle > 0)
+            {
+                ushort target = firstIdle;
+                Push($"{idle} công trình không có công nhân", NoticeLevel.Warning, "idle-buildings",
+                    () => UIActions.FocusBuilding(target));
+            }
         }
     }
 
@@ -380,7 +459,10 @@ public class NotificationFeed : MonoBehaviour
     // HIỂN THỊ
     // ==========================================
 
-    private void Push(string message, NoticeLevel level, string key)
+    private const float CriticalDuration = 12f;
+    private static readonly Color CriticalColor = new Color32(0xC0, 0x39, 0x2B, 0xF5);
+
+    private void Push(string message, NoticeLevel level, string key, System.Action onClick = null)
     {
         if (string.IsNullOrEmpty(message))
             return;
@@ -396,17 +478,39 @@ public class NotificationFeed : MonoBehaviour
         if (!EnsureContainer())
             return;
 
+        if (onClick != null)
+            message += "  <b>›</b>";
+
         RectTransform rect = CreateNoticeView(level, message);
         if (rect == null)
             return;
 
-        var notice = new Notice { rect = rect, expireAt = now + DefaultDuration };
+        float duration = level == NoticeLevel.Critical ? CriticalDuration : DefaultDuration;
+        var notice = new Notice { rect = rect, expireAt = now + duration };
         Button close = rect.GetComponentInChildren<Button>(true);
         if (close != null)
         {
             close.onClick.RemoveAllListeners();
             close.onClick.AddListener(() => Remove(notice));
         }
+
+        if (onClick != null)
+        {
+            // Bấm vào thân thông báo -> tới nơi liên quan rồi tắt thông báo
+            Button body = rect.GetComponent<Button>();
+            if (body == null)
+                body = rect.gameObject.AddComponent<Button>();
+            body.targetGraphic = rect.GetComponent<Image>();
+            body.onClick.RemoveAllListeners();
+            body.onClick.AddListener(() =>
+            {
+                onClick();
+                Remove(notice);
+            });
+        }
+
+        if (level != NoticeLevel.Info && MusicManager.Instance != null)
+            MusicManager.Instance.PlayNotice(level == NoticeLevel.Critical);
 
         _active.Insert(0, notice);
         while (_active.Count > MaxVisible)
@@ -449,7 +553,7 @@ public class NotificationFeed : MonoBehaviour
 
     private RectTransform CreateNoticeView(NoticeLevel level, string message)
     {
-        GameObject template = level == NoticeLevel.Warning ? _warningTemplate : _infoTemplate;
+        GameObject template = level == NoticeLevel.Info ? _infoTemplate : _warningTemplate;
         GameObject go = template != null ? Instantiate(template, _container) : CreateFallbackNotice(level);
         go.name = "Notice";
         go.SetActive(true);
@@ -461,6 +565,18 @@ public class NotificationFeed : MonoBehaviour
         TMP_Text text = go.transform.Find("Txt_Message")?.GetComponent<TMP_Text>();
         if (text == null)
             text = go.GetComponentInChildren<TMP_Text>(true);
+
+        if (level == NoticeLevel.Critical)
+        {
+            Image bg = go.GetComponent<Image>();
+            if (bg != null)
+                bg.color = CriticalColor;
+            if (text != null)
+            {
+                text.color = Color.white;
+                text.fontStyle |= FontStyles.Bold;
+            }
+        }
         if (text != null)
         {
             text.text = message;
