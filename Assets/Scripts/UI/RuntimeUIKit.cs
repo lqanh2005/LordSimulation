@@ -95,7 +95,9 @@ public static class RuntimeUIKit
         go.transform.SetParent(parent, false);
         Image image = go.GetComponent<Image>();
         image.color = ButtonColor;
-        go.GetComponent<Button>().onClick.AddListener(onClick);
+        Button button = go.GetComponent<Button>();
+        button.onClick.AddListener(PlayClick);
+        button.onClick.AddListener(onClick);
 
         TextMeshProUGUI text = CreateText(go.transform, "Label", 16f, FontStyles.Bold, TextAlignmentOptions.Center);
         RectTransform rt = text.rectTransform;
@@ -104,6 +106,13 @@ public static class RuntimeUIKit
         rt.offsetMin = rt.offsetMax = Vector2.zero;
         text.text = label;
         return image;
+    }
+
+    /// <summary>Tiếng click chung cho mọi nút dựng bằng kit này.</summary>
+    public static void PlayClick()
+    {
+        if (MusicManager.Instance != null)
+            MusicManager.Instance.PlayUiClick();
     }
 
     /// <summary>Header: tiêu đề + nút X.</summary>
