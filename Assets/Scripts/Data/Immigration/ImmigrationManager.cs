@@ -207,22 +207,41 @@ public class ImmigrationManager : MonoBehaviour
         if (gate != null)
             return;
 
+        // Cổng vòm tạm (2 cột + xà ngang + mái) — chưa có art. Vị trí do ImmigrationGate tự đặt
+        // theo GridController.GateCell (mép bản đồ, đầu lối mòn) khi bản đồ sinh / tải xong.
         GameObject go = new GameObject("CityGate");
         go.transform.SetParent(transform, false);
-        go.transform.position = new Vector3(-4f, 0f, 0f);
-        go.transform.localScale = new Vector3(3.5f, 5.5f, 1f);
-        SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
-        renderer.color = new Color(0.75f, 0.55f, 0.25f);
-        renderer.sprite = CreateGateSprite();
+        Sprite block = CreateGateSprite();
+        Color wood = new Color(0.45f, 0.3f, 0.18f);
+        Color roof = new Color(0.62f, 0.22f, 0.16f);
+        AddGatePart(go.transform, "PostLeft", block, wood, new Vector2(-0.42f, 0.55f), new Vector2(0.14f, 1.1f), 0);
+        AddGatePart(go.transform, "PostRight", block, wood, new Vector2(0.42f, 0.55f), new Vector2(0.14f, 1.1f), 0);
+        AddGatePart(go.transform, "Beam", block, wood, new Vector2(0f, 1.08f), new Vector2(1.06f, 0.14f), 1);
+        AddGatePart(go.transform, "Roof", block, roof, new Vector2(0f, 1.24f), new Vector2(1.2f, 0.18f), 2);
         BoxCollider2D col = go.AddComponent<BoxCollider2D>();
-        col.size = new Vector2(1.4f, 2.2f);
+        col.offset = new Vector2(0f, 0.65f);
+        col.size = new Vector2(1.1f, 1.4f);
         gate = go.AddComponent<ImmigrationGate>();
+    }
+
+    private static void AddGatePart(Transform parent, string name, Sprite sprite, Color color, Vector2 pos, Vector2 size, int orderOffset)
+    {
+        GameObject part = new GameObject(name);
+        part.transform.SetParent(parent, false);
+        part.transform.localPosition = pos;
+        SpriteRenderer sr = part.AddComponent<SpriteRenderer>();
+        sr.sprite = sprite;
+        sr.color = color;
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.size = size;
+        sr.sortingOrder = orderOffset;   // offset; ImmigrationGate cộng thêm thứ tự theo độ sâu ô
     }
 
     private static Sprite CreateGateSprite()
     {
         Texture2D tex = Texture2D.whiteTexture;
-        return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), 8f);
+        // FullRect để dùng được drawMode Sliced (kéo giãn theo size mà không scale transform)
+        return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), 8f, 0, SpriteMeshType.FullRect);
     }
 
     public void EnqueueMonthlyArrivals(SeasonType season)

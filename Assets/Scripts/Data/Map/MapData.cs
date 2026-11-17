@@ -20,6 +20,10 @@ public class MapData : ScriptableObject
     public int width;
     public int height;
     public int seed;
+    // Cổng thành nằm ngay ngoài mép bản đồ, ở đầu lối mòn đầu tiên
+    public bool hasGate;
+    public int gateX;
+    public int gateY;
     public List<MapDecorEntry> decors = new List<MapDecorEntry>();
 
     public bool HasData => width > 0 && height > 0;
@@ -29,6 +33,8 @@ public class MapData : ScriptableObject
         width = 0;
         height = 0;
         seed = 0;
+        hasGate = false;
+        gateX = gateY = 0;
         decors.Clear();
     }
 }

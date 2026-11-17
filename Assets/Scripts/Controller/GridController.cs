@@ -57,6 +57,26 @@ public class GridController : MonoBehaviour
     [SerializeField] private bool useRandomSeed = true;
     [SerializeField] private int seed;
 
+    [Header("Sinh map tự nhiên")]
+    [Tooltip("Id decor đất (mảng đất, lối mòn) trong danh sách Decor")]
+    [SerializeField] private string dirtDecorId = "Dirt";
+    [Tooltip("Id decor búi cỏ trong danh sách Decor")]
+    [SerializeField] private string grassDecorId = "GrassTuft";
+    [Tooltip("Ngưỡng noise để thành mảng đất (cao = ít đất)")]
+    [SerializeField, Range(0.5f, 0.95f)] private float dirtPatchThreshold = 0.7f;
+    [SerializeField, Range(0.02f, 0.4f)] private float dirtPatchScale = 0.16f;
+    [Tooltip("Số lối mòn đất chạy từ mép bản đồ vào gần trung tâm")]
+    [SerializeField, Range(0, 6)] private int trailCount = 2;
+    [Tooltip("Mật độ búi cỏ tối đa ở vùng cỏ rậm")]
+    [SerializeField, Range(0f, 1f)] private float grassMaxDensity = 0.55f;
+    [SerializeField, Range(0.02f, 0.4f)] private float grassClusterScale = 0.2f;
+    [Tooltip("Bán kính khu trung tâm để trống cho người chơi xây thành")]
+    [SerializeField, Min(0)] private int clearingRadius = 5;
+    [Tooltip("Sắc cỏ thay đổi theo vùng (0 = phẳng một màu)")]
+    [SerializeField, Range(0f, 0.3f)] private float tintStrength = 0.16f;
+    [Tooltip("Số ô tối dần ở mép bản đồ")]
+    [SerializeField, Range(0, 8)] private int edgeVignette = 4;
+
     [Header("Map Data")]
     [SerializeField] private MapData mapData;
     [SerializeField] private bool saveWhenGenerated = true;
@@ -96,7 +116,8 @@ public class GridController : MonoBehaviour
     private int[] baseTileChunk;        // index chunk của từng ô
     private int[] baseTileVertexStart;  // vertex đầu tiên của ô trong mesh chunk
     private int baseTileVertexCount;
-    private Color32[] baseTileColors;
+    private Color32[] baseTileColors;   // Lớp tô màu overlay (debug/highlight), mặc định trắng
+    private Color32[] baseTint;         // Lớp sắc tự nhiên của cỏ, sinh từ seed
     private SpriteRenderer[,] groundDecors;
     private SpriteRenderer[,] objectDecors;
     private MapDecorEntry[,] groundEntries;
@@ -109,6 +130,12 @@ public class GridController : MonoBehaviour
 
     /// <summary>Tăng mỗi khi occupancy thay đổi — cư dân dùng để biết cần tìm lại đường.</summary>
     public int OccupancyVersion { get; private set; }
+
+    /// <summary>Ô đặt Cổng thành (ngay ngoài mép, đầu lối mòn). Có thể nằm ngoài lưới.</summary>
+    public Vector2Int GateCell { get; private set; }
+
+    /// <summary>Phát sau khi sinh / tải xong bản đồ (Cổng dùng để đặt lại vị trí).</summary>
+    public static event Action<GridController> MapGenerated;
 
     public int Width => width;
     public int Height => height;
@@ -137,6 +164,9 @@ public class GridController : MonoBehaviour
     [ContextMenu("Generate New Map")]
     public void GenerateNewMap()
     {
+        if (useRandomSeed)
+            seed = Environment.TickCount & 0x7FFFFFFF;
+
         GenerateGrid();
         GenerateDecor();
 
@@ -144,6 +174,8 @@ public class GridController : MonoBehaviour
         {
             SaveMap();
         }
+
+        MapGenerated?.Invoke(this);
     }
 
     [ContextMenu("Save Map")]
@@ -169,6 +201,9 @@ public class GridController : MonoBehaviour
         mapData.width = width;
         mapData.height = height;
         mapData.seed = seed;
+        mapData.hasGate = true;
+        mapData.gateX = GateCell.x;
+        mapData.gateY = GateCell.y;
 
         for (int x = 0; x < width; x++)
         {
@@ -223,7 +258,12 @@ public class GridController : MonoBehaviour
                 PlaceDecor(entry.x, entry.y, decor, entry.offset, entry.scale, entry.flipX);
             }
         }
+
+        GateCell = mapData.hasGate ? new Vector2Int(mapData.gateX, mapData.gateY) : DefaultGateCell();
+        MapGenerated?.Invoke(this);
     }
+
+    private Vector2Int DefaultGateCell() => new Vector2Int(width / 2, -1);
 
     [ContextMenu("Clear Map")]
     public void ClearGrid()
@@ -266,6 +306,7 @@ public class GridController : MonoBehaviour
 
         BuildBaseMeshes();
         gridGenerated = true;
+        ApplyNaturalTint();
     }
 
     // ===== Nền: gộp toàn bộ tile thành vài mesh (mỗi chunk 1 renderer) thay vì 1 SpriteRenderer / ô =====
@@ -284,11 +325,70 @@ public class GridController : MonoBehaviour
             return;
 
         baseTileColors[tile] = c;
+        WriteTileVertexColor(tile);
+    }
+
+    /// <summary>Màu đỉnh thật = overlay × sắc tự nhiên.</summary>
+    private void WriteTileVertexColor(int tile)
+    {
+        Color32 overlay = baseTileColors[tile];
+        Color32 tint = baseTint != null ? baseTint[tile] : new Color32(255, 255, 255, 255);
+        Color32 c = new Color32(
+            (byte)(overlay.r * tint.r / 255),
+            (byte)(overlay.g * tint.g / 255),
+            (byte)(overlay.b * tint.b / 255),
+            overlay.a);
+
         BaseChunk chunk = baseChunks[baseTileChunk[tile]];
         int start = baseTileVertexStart[tile];
         for (int v = 0; v < baseTileVertexCount; v++)
             chunk.colors[start + v] = c;
         chunk.colorsDirty = true;
+    }
+
+    /// <summary>
+    /// Sắc cỏ thay đổi theo vùng (sáng/tối, ngả vàng/xanh) + tối dần ở mép để bản đồ có khung.
+    /// Tính từ seed nên lần tải lại cho kết quả y hệt.
+    /// </summary>
+    private void ApplyNaturalTint()
+    {
+        int count = width * height;
+        baseTint = new Color32[count];
+        float ox = (seed % 997) * 1.31f + 11.7f;
+        float oy = (seed % 991) * 0.73f + 5.3f;
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                float light = Mathf.PerlinNoise(x * 0.09f + ox, y * 0.09f + oy);
+                float warm = Mathf.PerlinNoise(x * 0.06f + oy + 40f, y * 0.06f + ox + 40f);
+                float detail = Mathf.PerlinNoise(x * 0.45f + ox + 80f, y * 0.45f + oy + 80f);
+
+                // Đặt mốc dưới 1 để cả vùng sáng lẫn tối đều thấy được (màu đỉnh bị kẹp ở 1)
+                float brightness = 1f - tintStrength * 0.6f
+                    + (light - 0.5f) * 2f * tintStrength + (detail - 0.5f) * tintStrength * 0.5f;
+                float w = (warm - 0.5f) * 2f * tintStrength;   // >0: ngả vàng khô, <0: xanh đậm
+                Color c = new Color(brightness * (1f + w * 0.6f), brightness, brightness * (1f - w * 0.9f), 1f);
+
+                if (edgeVignette > 0)
+                {
+                    int edge = Mathf.Min(Mathf.Min(x, y), Mathf.Min(width - 1 - x, height - 1 - y));
+                    if (edge < edgeVignette)
+                    {
+                        float t = (float)edge / edgeVignette;
+                        c *= Mathf.Lerp(0.72f, 1f, t * t);
+                        c.a = 1f;
+                    }
+                }
+
+                // Sprite đã sáng sẵn: kẹp về <= 1 (màu đỉnh không làm sáng hơn texture)
+                baseTint[y * width + x] = new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), 1f);
+            }
+        }
+
+        for (int i = 0; i < count; i++)
+            WriteTileVertexColor(i);
     }
 
     public Color GetBaseTileColor(int x, int y)
@@ -447,6 +547,11 @@ public class GridController : MonoBehaviour
         return defaultSpriteMaterial;
     }
 
+    /// <summary>
+    /// Sinh decor tự nhiên theo seed (thay vì rải ngẫu nhiên từng ô):
+    /// mảng đất theo noise + lối mòn uốn lượn từ mép vào trung tâm, búi cỏ mọc thành cụm,
+    /// khu trung tâm thoáng để xây thành. Decor khác (nếu thêm vào danh sách) vẫn rải theo chance như cũ.
+    /// </summary>
     public void GenerateDecor()
     {
         if (!gridGenerated)
@@ -454,12 +559,9 @@ public class GridController : MonoBehaviour
             return;
         }
 
-        if (useRandomSeed)
-        {
-            seed = Environment.TickCount;
-        }
-
         Random rng = new Random(seed);
+        TileDecor dirt = FindDecor(dirtDecorId);
+        TileDecor grass = FindDecor(grassDecorId);
 
         for (int x = 0; x < width; x++)
         {
@@ -467,20 +569,193 @@ public class GridController : MonoBehaviour
             {
                 RemoveDecor(x, y, DecorLayer.Ground);
                 RemoveDecor(x, y, DecorLayer.Object);
-
-                TileDecor ground = PickDecor(DecorLayer.Ground, rng);
-                if (ground != null)
-                {
-                    PlaceDecor(x, y, ground, rng);
-                }
-
-                TileDecor obj = PickDecor(DecorLayer.Object, rng);
-                if (obj != null)
-                {
-                    PlaceDecor(x, y, obj, rng);
-                }
             }
         }
+
+        bool[,] dirtMask = dirt != null ? BuildDirtMask(rng) : new bool[width, height];
+
+        float gx = (seed % 977) * 0.91f + 23.1f;
+        float gy = (seed % 983) * 1.17f + 7.9f;
+        Vector2 center = new Vector2((width - 1) * 0.5f, (height - 1) * 0.5f);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (dirtMask[x, y])
+                {
+                    PlaceDecor(x, y, dirt, rng);
+                    continue;
+                }
+
+                if (grass != null)
+                {
+                    // Cụm cỏ: noise mượt, rậm hơn ở mép, thưa ở khu trung tâm
+                    float n = Mathf.PerlinNoise(x * grassClusterScale + gx, y * grassClusterScale + gy);
+                    float cluster = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.35f, 0.8f, n));
+                    float density = 0.03f + grassMaxDensity * cluster;
+
+                    int edge = Mathf.Min(Mathf.Min(x, y), Mathf.Min(width - 1 - x, height - 1 - y));
+                    if (edge < 3)
+                        density += 0.15f;
+                    if (Vector2.Distance(new Vector2(x, y), center) <= clearingRadius)
+                        density *= 0.3f;
+
+                    if (rng.NextDouble() < density)
+                    {
+                        PlaceDecor(x, y, grass, rng);
+                        continue;
+                    }
+                }
+
+                // Decor khác (không phải đất / cỏ) giữ cách rải cũ
+                TileDecor other = PickOtherDecor(DecorLayer.Ground, rng);
+                if (other != null)
+                    PlaceDecor(x, y, other, rng);
+            }
+        }
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                TileDecor obj = PickOtherDecor(DecorLayer.Object, rng);
+                if (obj != null)
+                    PlaceDecor(x, y, obj, rng);
+            }
+        }
+    }
+
+    /// <summary>Mặt nạ đất: mảng theo noise + lối mòn, làm mượt để không còn ô đất lẻ.</summary>
+    private bool[,] BuildDirtMask(Random rng)
+    {
+        bool[,] mask = new bool[width, height];
+        float ox = (seed % 971) * 0.77f + 51.3f;
+        float oy = (seed % 967) * 1.09f + 19.7f;
+        Vector2 center = new Vector2((width - 1) * 0.5f, (height - 1) * 0.5f);
+
+        // 1. Mảng đất theo noise (tránh khu trung tâm và sát mép)
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (Vector2.Distance(new Vector2(x, y), center) <= clearingRadius + 1)
+                    continue;
+                float n = Mathf.PerlinNoise(x * dirtPatchScale + ox, y * dirtPatchScale + oy);
+                mask[x, y] = n > dirtPatchThreshold;
+            }
+        }
+
+        // 2. Làm mượt kiểu cellular automata: bỏ ô lẻ, lấp chỗ khuyết
+        mask = SmoothMask(mask, 2);
+
+        // 3. Lối mòn uốn lượn từ mép bản đồ tới rìa khu trung tâm (lối đầu tiên dẫn tới Cổng thành)
+        GateCell = DefaultGateCell();
+        for (int t = 0; t < trailCount; t++)
+            CarveTrail(mask, rng, center, t);
+
+        return mask;
+    }
+
+    private bool[,] SmoothMask(bool[,] mask, int passes)
+    {
+        for (int p = 0; p < passes; p++)
+        {
+            bool[,] next = new bool[width, height];
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    int n = 0;
+                    for (int dx = -1; dx <= 1; dx++)
+                        for (int dy = -1; dy <= 1; dy++)
+                            if ((dx != 0 || dy != 0) && IsInside(x + dx, y + dy) && mask[x + dx, y + dy])
+                                n++;
+                    next[x, y] = mask[x, y] ? n >= 3 : n >= 5;
+                }
+            }
+            mask = next;
+        }
+        return mask;
+    }
+
+    /// <summary>Đi từ một mép (chia đều theo chỉ số) tới rìa khu trung tâm, có lắc ngẫu nhiên để uốn lượn.</summary>
+    private void CarveTrail(bool[,] mask, Random rng, Vector2 center, int index)
+    {
+        int side = (index + rng.Next(4)) % 4;
+        int pos = rng.Next(Mathf.Max(1, width / 4), Mathf.Max(2, width * 3 / 4));
+        Vector2Int cur = side switch
+        {
+            0 => new Vector2Int(pos, 0),
+            1 => new Vector2Int(width - 1, pos),
+            2 => new Vector2Int(pos, height - 1),
+            _ => new Vector2Int(0, pos)
+        };
+
+        if (index == 0)
+        {
+            GateCell = side switch
+            {
+                0 => new Vector2Int(cur.x, -1),
+                1 => new Vector2Int(width, cur.y),
+                2 => new Vector2Int(cur.x, height),
+                _ => new Vector2Int(-1, cur.y)
+            };
+        }
+
+        int guard = width * height;
+        while (guard-- > 0)
+        {
+            mask[cur.x, cur.y] = true;
+
+            // Lối mòn chỗ rộng chỗ hẹp cho đỡ răng cưa
+            if (rng.NextDouble() < 0.35)
+            {
+                Vector2Int side2 = rng.Next(4) switch
+                {
+                    0 => Vector2Int.up,
+                    1 => Vector2Int.down,
+                    2 => Vector2Int.left,
+                    _ => Vector2Int.right
+                };
+                Vector2Int w = cur + side2;
+                if (IsInside(w.x, w.y))
+                    mask[w.x, w.y] = true;
+            }
+            Vector2 toCenter = center - (Vector2)cur;
+            if (toCenter.magnitude <= clearingRadius)
+                break;
+
+            // Ưu tiên bước về phía trung tâm, thỉnh thoảng rẽ ngang để uốn
+            Vector2Int step;
+            bool alongX = Mathf.Abs(toCenter.x) > Mathf.Abs(toCenter.y);
+            if (rng.NextDouble() < 0.3)
+                alongX = !alongX;
+            if (alongX)
+                step = new Vector2Int(toCenter.x > 0 ? 1 : -1, 0);
+            else
+                step = new Vector2Int(0, toCenter.y > 0 ? 1 : -1);
+
+            Vector2Int next = cur + step;
+            if (!IsInside(next.x, next.y))
+                break;
+            cur = next;
+        }
+    }
+
+    /// <summary>Decor cùng layer nhưng KHÔNG phải đất / cỏ (đã sinh riêng).</summary>
+    private TileDecor PickOtherDecor(DecorLayer layer, Random rng)
+    {
+        foreach (TileDecor decor in decors)
+        {
+            if (decor.layer != layer || decor.sprite == null)
+                continue;
+            if (decor.Key == dirtDecorId || decor.Key == grassDecorId)
+                continue;
+            if (rng.NextDouble() < decor.chance)
+                return decor;
+        }
+        return null;
     }
 
     public bool PlaceDecor(int x, int y, string decorId)

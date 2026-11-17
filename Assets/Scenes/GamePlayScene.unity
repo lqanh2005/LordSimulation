@@ -11970,8 +11970,8 @@ Camera:
   m_GameObject: {fileID: 890089290}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0.13, g: 0.16, b: 0.11, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -13058,6 +13058,16 @@ MonoBehaviour:
     randomFlipX: 1
   useRandomSeed: 1
   seed: 0
+  dirtDecorId: Dirt
+  grassDecorId: GrassTuft
+  dirtPatchThreshold: 0.7
+  dirtPatchScale: 0.16
+  trailCount: 2
+  grassMaxDensity: 0.55
+  grassClusterScale: 0.2
+  clearingRadius: 5
+  tintStrength: 0.12
+  edgeVignette: 4
   mapData: {fileID: 11400000, guid: 7b92169f2d7e3f24cafbd6adf5136bfb, type: 2}
   saveWhenGenerated: 1
   loadSavedMapOnStart: 1
