@@ -66,13 +66,6 @@ public static class BuildMenuSetup
 
     private static readonly (string label, BuildingType[] types)[] Categories =
     {
-        ("Xây dựng", new[]
-        {
-            BuildingType.Tent, BuildingType.House, BuildingType.LargeHouse, BuildingType.LumberCamp, BuildingType.Farm,
-            BuildingType.Mine, BuildingType.CoalStore, BuildingType.Furnace, BuildingType.Forge, BuildingType.CityHall, BuildingType.Clinic,
-            BuildingType.School, BuildingType.GuardPost, BuildingType.QuarantineWard, BuildingType.WaterWell,
-            BuildingType.Campfire, BuildingType.CoalCart, BuildingType.Road
-        }),
         ("Nhà ở", new[] { BuildingType.Tent, BuildingType.House, BuildingType.LargeHouse }),
         ("Sản xuất", new[] { BuildingType.LumberCamp, BuildingType.Mine, BuildingType.CoalStore, BuildingType.Furnace, BuildingType.Forge }),
         // Vườn thuốc gộp vào Farm (click Farm -> trồng thuốc); HerbFarm giữ lại cho save cũ
@@ -81,8 +74,8 @@ public static class BuildMenuSetup
         {
             BuildingType.Road, BuildingType.CityHall, BuildingType.Clinic, BuildingType.School, BuildingType.GuardPost,
             BuildingType.QuarantineWard, BuildingType.WaterWell, BuildingType.Campfire
-        }),
-        ("Trang trí", new[] { BuildingType.CoalCart })
+        })
+        // Xe goòng gộp vào Mỏ (art của Mỏ đã có xe); CoalCart giữ lại cho save cũ
     };
 
     private static Sprite panelSprite;

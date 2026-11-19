@@ -55,7 +55,7 @@ public class NotificationFeed : MonoBehaviour
 
     private readonly List<Notice> _active = new List<Notice>();
     private readonly Dictionary<string, float> _recentKeys = new Dictionary<string, float>();
-    private readonly int[] _deathsThisFrame = new int[4];
+    private readonly int[] _deathsThisFrame = new int[5];   // theo DeathCause
     private bool _hasPendingDeaths;
     private bool _pendingMonthReport;
     private int _lastInfected;
@@ -111,6 +111,7 @@ public class NotificationFeed : MonoBehaviour
         GameEvents.Listen(EventID.EdictTriggered, OnEdictTriggered);
         GameEvents.Listen(EventID.ResearchCompleted, OnResearchCompleted);
         GameEvents.Listen(EventID.HungerResolved, OnHunger);
+        GameEvents.Listen(EventID.ThirstResolved, OnThirst);
         GameEvents.Listen(EventID.ColderResolved, OnCold);
         GameEvents.Listen(EventID.ResidentsDied, OnResidentsDied);
         GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
@@ -128,6 +129,7 @@ public class NotificationFeed : MonoBehaviour
         GameEvents.Unlisten(EventID.EdictTriggered, OnEdictTriggered);
         GameEvents.Unlisten(EventID.ResearchCompleted, OnResearchCompleted);
         GameEvents.Unlisten(EventID.HungerResolved, OnHunger);
+        GameEvents.Unlisten(EventID.ThirstResolved, OnThirst);
         GameEvents.Unlisten(EventID.ColderResolved, OnCold);
         GameEvents.Unlisten(EventID.ResidentsDied, OnResidentsDied);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
@@ -262,6 +264,25 @@ public class NotificationFeed : MonoBehaviour
         Push($"Thiếu lương thực: {Mathf.RoundToInt(rate * 100f)}% dân bị đói", NoticeLevel.Warning, "hunger", () => UIActions.OpenBuildCategory("Nông nghiệp"));
     }
 
+    private void OnThirst(object param)
+    {
+        if (!(param is float rate) || rate <= 0f)
+            return;
+
+        string extra = "";
+        GlobalSystemManager global = HUDLocator.ResolveGlobalSystem(null);
+        if (global != null)
+        {
+            int need = WaterRules.WellsNeeded(global.GetGlobalDataRef().totalPopulation, global.CurrentWaterCapacity);
+            if (need > 0)
+                extra = $" — cần thêm {need} Giếng nước";
+        }
+
+        // Khát nặng (>= 1/3 dân) là nguy cấp: khát 2 tháng liền có thể chết
+        NoticeLevel level = rate >= 0.34f ? NoticeLevel.Critical : NoticeLevel.Warning;
+        Push($"Thiếu nước: {Mathf.RoundToInt(rate * 100f)}% dân bị khát{extra}", level, "thirst", () => UIActions.OpenBuildCategory("Hạ tầng"));
+    }
+
     private void OnCold(object param)
     {
         if (!(param is float rate) || rate <= 0f)
@@ -327,6 +348,7 @@ public class NotificationFeed : MonoBehaviour
                 DeathCause.Starvation => "chết đói",
                 DeathCause.Cold => "chết rét",
                 DeathCause.Disease => "chết vì bệnh",
+                DeathCause.Thirst => "chết khát",
                 _ => "qua đời vì tuổi già"
             };
             NoticeLevel level = (DeathCause)i == DeathCause.OldAge ? NoticeLevel.Info : NoticeLevel.Warning;
@@ -347,7 +369,7 @@ public class NotificationFeed : MonoBehaviour
         // Bão tuyết (GDD 3.7 giai đoạn 1)
         if (d.currentWeather == WeatherEvent.Blizzard && _lastWeather != WeatherEvent.Blizzard)
             Push($"Bão tuyết ập tới ({d.weatherDuration} tháng): nhiệt độ {d.environmentTemperature:0}°C, than tiêu hao tăng mạnh",
-                NoticeLevel.Critical, "blizzard", () => UIActions.OpenBuildCategory("Năng lượng"));
+                NoticeLevel.Critical, "blizzard", () => UIActions.OpenBuildCategory("Sản xuất"));
         _lastWeather = d.currentWeather;
 
         // Dịch bệnh
@@ -363,6 +385,15 @@ public class NotificationFeed : MonoBehaviour
         int foodNeed = pop * (nextSeason == SeasonType.Winter ? 2 : 1);
         if (pop > 0 && d.stockFood < foodNeed)
             Push($"Lương thực sắp cạn: còn {d.stockFood}, tháng tới cần {foodNeed}", NoticeLevel.Info, "food-low", () => UIActions.OpenBuildCategory("Nông nghiệp"));
+
+        // Nước: dân sắp vượt sức cấp nước của Giếng (chưa khát nhưng sắp)
+        GlobalSystemManager waterGlobal = HUDLocator.ResolveGlobalSystem(null);
+        if (pop > 0 && waterGlobal != null)
+        {
+            int waterCapacity = waterGlobal.CurrentWaterCapacity;
+            if (pop <= waterCapacity && pop >= waterCapacity - 2)
+                Push($"Nước sắp không đủ: {pop}/{waterCapacity} người — xây thêm Giếng nước", NoticeLevel.Info, "water-low", () => UIActions.OpenBuildCategory("Hạ tầng"));
+        }
 
         // Than: mùa đông đang tới / đang là mùa đông
         if (pop > 0 && nextSeason == SeasonType.Winter && d.stockCoal < pop)

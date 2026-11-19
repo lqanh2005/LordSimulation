@@ -131,7 +131,7 @@ public static class ResidentSocialRules
         else if (ageGroup == AgeGroupType.Adult)
             delta = -1;
 
-        if (resident.hungerMonths > 0 || resident.coldMonths > 0)
+        if (resident.hungerMonths > 0 || resident.coldMonths > 0 || resident.thirstMonths > 0)
             delta--;
 
         return delta;

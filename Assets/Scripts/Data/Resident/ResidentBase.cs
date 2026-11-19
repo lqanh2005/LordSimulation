@@ -436,7 +436,10 @@ public class ResidentBase : MonoBehaviour
 
         _statusIcon = iconGo.GetComponent<SpriteRenderer>();
         if (_statusIcon == null)
+        {
             _statusIcon = iconGo.AddComponent<SpriteRenderer>();
+            DayNightOverlay.MakeUnlit(_statusIcon);   // Icon không tối theo đêm
+        }
 
         // Icon luôn nằm trên map/building để dễ thấy
         _statusIcon.sortingLayerID = _overlaySortingLayerId;

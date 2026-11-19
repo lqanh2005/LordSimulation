@@ -10,14 +10,15 @@ public static class BuildingEffectRules
     public const int CityHallGoldPerMonth = 30;
     public const float CityHallReputationPerMonth = 0.5f;
 
-    // Giếng nước: giảm áp lực dịch bệnh
+    // Giếng nước: giảm áp lực dịch bệnh + nơi dân tụ tập, giảm nguy cơ bạo loạn (nhận lại từ Xe goòng cũ)
     public const float WellDiseaseReduction = 0.004f;
     public const float WellDiseaseReductionMax = 0.012f;
+    public const float WellRiotReduction = 0.3f;
 
     // Lửa trại: sưởi ấm miễn phí vào mùa đông (không tốn than)
     public const int CampfireWarmPeople = 6;
 
-    // Trang trí: giảm nguy cơ bạo loạn
+    // Trang trí (Xe goòng trong save cũ): giảm nguy cơ bạo loạn. Trần chung với Giếng nước.
     public const float DecorRiotReduction = 0.3f;
     public const float DecorRiotReductionMax = 2f;
 
@@ -28,6 +29,7 @@ public static class BuildingEffectRules
         public float diseaseReduction;
         public int warmPeople;
         public float riotReduction;
+        public int wells;   // Số Giếng nước đang hoạt động -> sức cấp nước (WaterRules)
     }
 
     public static bool IsUnique(BuildingType type) => type == BuildingType.CityHall;
@@ -59,6 +61,8 @@ public static class BuildingEffectRules
                     break;
                 case BuildingType.WaterWell:
                     fx.diseaseReduction += WellDiseaseReduction;
+                    fx.riotReduction += WellRiotReduction;
+                    fx.wells++;
                     break;
                 case BuildingType.Campfire:
                     fx.warmPeople += CampfireWarmPeople;

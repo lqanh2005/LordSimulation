@@ -19,6 +19,8 @@ public static class ResidentAgingRules
             chance += 0.05f;
         if (resident.coldMonths > 0)
             chance += 0.05f;
+        if (resident.thirstMonths > 0)
+            chance += WaterRules.ThirstAgingDeathBonus;
         if (resident.healthStatus == HealthStatus.ActiveInfected)
             chance += 0.08f;
         if (resident.endurance < 30)

@@ -29,6 +29,7 @@ public static class ResidentDataSerializer
         writer.Write(residentData.intellect);
         writer.Write((byte)residentData.gender);
         writer.Write(residentData.quarantineMonths);   // v10+
+        writer.Write(residentData.thirstMonths);       // v11+
     }
 
     public static void ReadResident(BinaryReader reader, out ResidentData residentData, int saveVersion)
@@ -63,5 +64,7 @@ public static class ResidentDataSerializer
             residentData.gender = (GenderType)(residentData.residentID & 1);
         if (saveVersion >= 10)
             residentData.quarantineMonths = reader.ReadByte();
+        if (saveVersion >= 11)
+            residentData.thirstMonths = reader.ReadByte();
     }
 }

@@ -55,6 +55,19 @@ public class BuildingView : MonoBehaviour
         }
     }
 
+    private BuildingNightLight[] nightLights;
+
+    public bool HasNightLight => NightLights.Length > 0;
+
+    private BuildingNightLight[] NightLights => nightLights ??= GetComponentsInChildren<BuildingNightLight>(true);
+
+    /// <summary>Bật/tắt đèn đêm của công trình (lửa trại, lò, cửa sổ nhà).</summary>
+    public void SetLit(bool lit)
+    {
+        foreach (BuildingNightLight nightLight in NightLights)
+            nightLight.SetLit(lit);
+    }
+
     public void SetColor(Color color)
     {
         foreach (SpriteRenderer sr in Renderers)

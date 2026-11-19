@@ -333,6 +333,7 @@ public class SettingsPopup : MonoBehaviour
             "<color=#FFD77E>Mục tiêu</color>: sống sót qua mùa đông đầu tiên mà thành không sụp đổ.\n\n" +
             "• Kiểm duyệt người tị nạn ở Cổng: Cho vào / Từ chối / Cách ly — mỗi lựa chọn đều có cái giá.\n" +
             "• Dự trữ Than trước mùa đông, thiếu sưởi dân sẽ chết cóng.\n" +
+            "• Mỗi Giếng nước cấp nước cho 15 người; thiếu giếng dân sẽ khát và uống nước bẩn.\n" +
             "• Thi thể không thu gom sinh Miasma → dịch bệnh → bạo loạn.\n" +
             "• Ban hành Luật để tự động hoá việc kiểm duyệt ở Cổng.\n" +
             "• Bấm vào thông báo để tới ngay nơi đang có vấn đề.",

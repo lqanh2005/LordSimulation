@@ -15,6 +15,7 @@ public enum EventID
     PopulationChanged = 204,
     ResidentsDied = 205,            // param: ResidentsDiedPayload
     CrisisReport = 206,             // param: CrisisReportPayload (thi thể / Miasma mỗi tháng)
+    ThirstResolved = 207,           // param: float tỉ lệ dân bị khát (0..1)
 
     SaveStarted = 300,
     SaveCompleted = 301,
@@ -113,7 +114,8 @@ public enum DeathCause : byte
     OldAge = 0,
     Starvation = 1,
     Cold = 2,
-    Disease = 3
+    Disease = 3,
+    Thirst = 4
 }
 
 public struct ResidentsDiedPayload

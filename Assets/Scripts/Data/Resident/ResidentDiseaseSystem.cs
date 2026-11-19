@@ -163,6 +163,8 @@ public static class ResidentDiseaseSystem
             deathChance += HungerDeathBonus;
         if (r.coldMonths > 0)
             deathChance += ColdDeathBonus;
+        if (r.thirstMonths > 0)
+            deathChance += WaterRules.ThirstDiseaseDeathBonus;
 
         if (Random.value < deathChance)
         {

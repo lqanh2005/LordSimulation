@@ -1,50 +1,83 @@
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 /// <summary>
-/// Ánh sáng sáng–tối theo vòng ngày–đêm (DayCycle: 1 tháng = 1 vòng). Chỉ để tạo không khí:
-/// một sprite phủ màu bám theo camera, vẽ trên cùng của thế giới nhưng luôn DƯỚI mọi UI (UI overlay vẽ sau camera),
-/// không bắt click. Đêm xanh thẫm, bình minh / chạng vạng ngả cam, mùa đông lạnh màu hơn.
-/// Tự dựng lúc chạy (PlacementManager.Start).
+/// Ánh sáng theo vòng ngày–đêm (DayCycle: 1 tháng = 1 vòng), dùng Global Light 2D của URP 2D Renderer.
+/// Ánh sáng NHÂN vào sprite (Sprite-Lit-Default) nên giữ được tương phản: trưa trắng, hoàng hôn vàng ấm,
+/// đêm xanh tối, mùa đông ban ngày hơi lạnh màu. UI (Canvas overlay) không bị ảnh hưởng.
+/// Sprite cần luôn rõ (icon trạng thái, bóng đặt công trình) dùng <see cref="UnlitMaterial"/>.
+/// Tự dựng lúc chạy (PlacementManager.Start). Tên lớp giữ nguyên để không đổi chỗ gọi.
 /// </summary>
 public class DayNightOverlay : MonoBehaviour
 {
-    private const short TopSortingOrder = short.MaxValue;
-
-    // Dự án dùng Linear color space: alpha trộn tuyến tính nên phải đậm hơn cảm giác (0.85 ≈ còn ~45% độ sáng)
-    [SerializeField] private Color nightColor = new Color(0.02f, 0.04f, 0.16f, 0.85f);
-    [SerializeField] private Color duskColor = new Color(0.95f, 0.42f, 0.18f, 0.35f);
-    [SerializeField] private Color winterDayColor = new Color(0.55f, 0.70f, 0.95f, 0.15f);
+    // Màu ánh sáng (nhân vào sprite) + cường độ. Chỉnh trên Inspector lúc Play để thử.
+    [SerializeField] private Color dayColor = Color.white;
+    [SerializeField, Min(0f)] private float dayIntensity = 1f;
+    [SerializeField] private Color winterDayColor = new Color(0.86f, 0.92f, 1f);
+    [SerializeField, Min(0f)] private float winterDayIntensity = 0.95f;
+    [SerializeField] private Color duskColor = new Color(1f, 0.8f, 0.58f);
+    [SerializeField, Min(0f)] private float duskIntensity = 0.92f;
+    [SerializeField] private Color nightColor = new Color(0.45f, 0.53f, 0.85f);
+    [SerializeField, Min(0f)] private float nightIntensity = 0.55f;
+    [SerializeField, Min(0f)] private float winterNightIntensity = 0.48f;   // Đêm đông tối hơn
     [SerializeField, Min(0f)] private float smoothing = 3f;
 
+    private const string UnlitShaderName = "Universal Render Pipeline/2D/Sprite-Unlit-Default";
+
     private static DayNightOverlay _instance;
-    private SpriteRenderer _renderer;
-    private Camera _camera;
+    private static Material _unlitMaterial;
+    private Light2D _light;
     private GlobalSystemManager _global;
     private float _nextResolve;
-    private Color _current;
+    private Color _currentColor;
+    private float _currentIntensity;
     private bool _hasColor;
 
     /// <summary>Độ tối hiện tại (0 = trưa, 1 = nửa đêm) — cho hiệu ứng khác dùng chung (đèn, khói…).</summary>
     public static float Darkness { get; private set; }
+
+    /// <summary>
+    /// Material sprite không nhận ánh sáng — cho thứ phải luôn dễ thấy kể cả ban đêm
+    /// (icon trạng thái cư dân, bóng đặt công trình). Null nếu shader không có trong bản build.
+    /// </summary>
+    public static Material UnlitMaterial
+    {
+        get
+        {
+            if (_unlitMaterial == null)
+            {
+                Shader shader = Shader.Find(UnlitShaderName);
+                if (shader != null)
+                    _unlitMaterial = new Material(shader) { name = "Sprite-Unlit (runtime)" };
+            }
+            return _unlitMaterial;
+        }
+    }
+
+    /// <summary>Gán material không nhận ánh sáng cho sprite (bỏ qua nếu thiếu shader).</summary>
+    public static void MakeUnlit(SpriteRenderer renderer)
+    {
+        Material unlit = UnlitMaterial;
+        if (renderer != null && unlit != null)
+            renderer.sharedMaterial = unlit;
+    }
 
     public static void EnsureInstance()
     {
         if (_instance != null)
             return;
 
-        GameObject go = new GameObject("DayNightOverlay");
+        GameObject go = new GameObject("DayNightLight");
         _instance = go.AddComponent<DayNightOverlay>();
-        SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
-        Texture2D tex = Texture2D.whiteTexture;
-        sr.sprite = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), tex.width);
-        sr.color = Color.clear;
 
-        // Lớp sorting cao nhất của dự án, order tối đa -> phủ lên map / công trình / cư dân
-        SortingLayer[] layers = SortingLayer.layers;
-        if (layers.Length > 0)
-            sr.sortingLayerID = layers[layers.Length - 1].id;
-        sr.sortingOrder = TopSortingOrder;
-        _instance._renderer = sr;
+        Light2D light = go.AddComponent<Light2D>();
+        light.lightType = Light2D.LightType.Global;
+        light.blendStyleIndex = 0;   // Multiply
+        foreach (SortingLayer layer in SortingLayer.layers)
+            light.AddTargetSortingLayer(layer.id);
+        light.color = Color.white;
+        light.intensity = 1f;
+        _instance._light = light;
     }
 
     private void OnDestroy()
@@ -55,11 +88,9 @@ public class DayNightOverlay : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (_renderer == null)
+        if (_light == null)
             return;
 
-        if (_camera == null)
-            _camera = Camera.main;
         if (_global == null)
         {
             if (Time.unscaledTime < _nextResolve)
@@ -70,49 +101,46 @@ public class DayNightOverlay : MonoBehaviour
                 return;
         }
 
-        FollowCamera();
-
         ref GlobalSystemData data = ref _global.GetGlobalDataRef();
         SeasonType season = data.CurrentSeason;
+        bool winter = season == SeasonType.Winter;
         float dark = DayCycle.GetDarkness(DayCycle.GetHour(in data), season);
         Darkness = dark;
 
-        // Ngày: trong suốt (mùa đông hơi lạnh màu) -> chạng vạng ngả cam -> đêm xanh thẫm
-        Color day = season == SeasonType.Winter ? winterDayColor : new Color(duskColor.r, duskColor.g, duskColor.b, 0f);
-        Color target = dark < 0.5f
-            ? Color.Lerp(day, duskColor, dark * 2f)
-            : Color.Lerp(duskColor, nightColor, (dark - 0.5f) * 2f);
-        if (season == SeasonType.Winter && dark >= 0.5f)
-            target.a = Mathf.Min(0.9f, target.a + 0.04f);   // Đêm đông dài và tối hơn
+        // Ngày -> hoàng hôn (đúng lúc mặt trời lặn/mọc) -> đêm
+        Color day = winter ? winterDayColor : dayColor;
+        float dayI = winter ? winterDayIntensity : dayIntensity;
+        float nightI = winter ? winterNightIntensity : nightIntensity;
+        Color targetColor;
+        float targetIntensity;
+        if (dark < 0.5f)
+        {
+            float t = dark * 2f;
+            targetColor = Color.Lerp(day, duskColor, t);
+            targetIntensity = Mathf.Lerp(dayI, duskIntensity, t);
+        }
+        else
+        {
+            float t = (dark - 0.5f) * 2f;
+            targetColor = Color.Lerp(duskColor, nightColor, t);
+            targetIntensity = Mathf.Lerp(duskIntensity, nightI, t);
+        }
 
         if (!_hasColor || smoothing <= 0f)
         {
-            _current = target;
+            _currentColor = targetColor;
+            _currentIntensity = targetIntensity;
             _hasColor = true;
         }
         else
         {
             // unscaled: tải save / đổi tốc độ không làm màu nhảy đột ngột
-            float t = 1f - Mathf.Exp(-smoothing * Time.unscaledDeltaTime);
-            _current = Color.Lerp(_current, target, t);
+            float k = 1f - Mathf.Exp(-smoothing * Time.unscaledDeltaTime);
+            _currentColor = Color.Lerp(_currentColor, targetColor, k);
+            _currentIntensity = Mathf.Lerp(_currentIntensity, targetIntensity, k);
         }
 
-        _renderer.color = _current;
-    }
-
-    /// <summary>Phủ kín khung nhìn camera (theo zoom), nằm ngay trước camera.</summary>
-    private void FollowCamera()
-    {
-        if (_camera == null)
-            return;
-
-        Transform cam = _camera.transform;
-        float height = _camera.orthographic
-            ? _camera.orthographicSize * 2f
-            : 2f * 50f * Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-        float width = height * _camera.aspect;
-        Vector3 pos = cam.position + cam.forward * Mathf.Max(_camera.nearClipPlane + 0.05f, 1f);
-        transform.SetPositionAndRotation(pos, cam.rotation);
-        transform.localScale = new Vector3(width * 1.1f, height * 1.1f, 1f);
+        _light.color = _currentColor;
+        _light.intensity = _currentIntensity;
     }
 }

@@ -198,15 +198,13 @@ public class ResidentInfoPopup : MonoBehaviour
         _sb.Append("Nhà ở: ").Append(DescribeBuilding(r.assignedHouseID, "<color=#E86A5A>Vô gia cư</color>")).Append('\n');
         _sb.Append("Nơi làm: ").Append(DescribeBuilding(r.assignedWorkID, "Không có")).Append('\n');
 
-        if (r.hungerMonths > 0 || r.coldMonths > 0)
+        if (r.hungerMonths > 0 || r.coldMonths > 0 || r.thirstMonths > 0)
         {
             _sb.Append("<color=#E86A5A>");
-            if (r.hungerMonths > 0)
-                _sb.Append("Đói ").Append(r.hungerMonths).Append(" tháng");
-            if (r.hungerMonths > 0 && r.coldMonths > 0)
-                _sb.Append(" · ");
-            if (r.coldMonths > 0)
-                _sb.Append("Lạnh ").Append(r.coldMonths).Append(" tháng");
+            bool first = true;
+            AppendNeed(ref first, "Đói", r.hungerMonths);
+            AppendNeed(ref first, "Khát", r.thirstMonths);
+            AppendNeed(ref first, "Lạnh", r.coldMonths);
             _sb.Append("</color>\n");
         }
 
@@ -215,6 +213,16 @@ public class ResidentInfoPopup : MonoBehaviour
            .Append(" · Trí ").Append(r.intellect).Append("</size>");
 
         _body.text = _sb.ToString();
+    }
+
+    private void AppendNeed(ref bool first, string label, byte months)
+    {
+        if (months == 0)
+            return;
+        if (!first)
+            _sb.Append(" · ");
+        _sb.Append(label).Append(' ').Append(months).Append(" tháng");
+        first = false;
     }
 
     private string DescribeHealth(in ResidentData r)

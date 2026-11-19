@@ -326,28 +326,54 @@ public static partial class UISkinApplier
         }
     }
 
-    private static readonly string[] BuildButtons = { "Xây dựng", "Nhà ở", "Sản xuất", "Nông nghiệp", "Hạ tầng", "Trang trí", "Phá dỡ" };
+    // Bỏ nhóm "Xây dựng" (gộp mọi công trình) và "Trang trí" — chỉ giữ nhóm theo loại
+    private static readonly string[] BuildButtons = { "Nhà ở", "Sản xuất", "Nông nghiệp", "Hạ tầng", "Phá dỡ" };
+    private static readonly string[] RemovedBuildButtons = { "Xây dựng", "Trang trí" };   // Trang trí chỉ có Xe goòng, nay gộp vào Mỏ
+
+    private const float BuildButtonSize = 66f;
+    private const float BuildLabelHeight = 18f;
 
     private static void StyleBuildBar(Transform hud)
     {
         RectTransform bar = R(hud, "BuildBar");
         if (bar == null) return;
 
-        const float size = 66f;
-        const float spacing = 8f;
-        const float pad = 22f;
-        float width = pad * 2f + BuildButtons.Length * size + (BuildButtons.Length - 1) * spacing;
-        Place(bar, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 28f), new Vector2(width, size + pad * 1.4f));
+        foreach (string removed in RemovedBuildButtons)
+        {
+            RectTransform old = R(bar, "Btn_" + removed);
+            if (old != null)
+                Undo.DestroyObjectImmediate(old.gameObject);
+        }
+
+        const float size = BuildButtonSize;
+        const float spacing = 16f;        // rộng hơn để chữ dưới icon không chạm nhau
+        const float padX = 22f;
+        const float padTop = 14f;
+        const float labelGap = 3f;
+        const float padBottom = 10f;
+        float width = padX * 2f + BuildButtons.Length * size + (BuildButtons.Length - 1) * spacing;
+        float height = padTop + size + labelGap + BuildLabelHeight + padBottom;
+        Place(bar, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 28f), new Vector2(width, height));
         UISkin.SetSliced(bar.GetComponent<Image>(), skin.popupFrame, Color.white, 3f);
 
-        Sprite[] icons = { skin.iconBuild, skin.iconHouse, skin.iconProduct, skin.iconAgriculture, skin.iconInfrastructure, skin.iconDecor, skin.deleteIcon };
+        Sprite[] icons = { skin.iconHouse, skin.iconProduct, skin.iconAgriculture, skin.iconInfrastructure, skin.deleteIcon };
         for (int i = 0; i < BuildButtons.Length; i++)
         {
             RectTransform btn = R(bar, "Btn_" + BuildButtons[i]);
             if (btn == null) continue;
-            Place(btn, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(pad + i * (size + spacing), 0f), new Vector2(size, size));
+            Place(btn, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(padX + i * (size + spacing), -padTop), new Vector2(size, size));
             SquareButton(btn, icons[i], 34f, 34f);
-            Hide(btn, "Label");
+
+            // Tên nhóm nằm ngay dưới nút (ngoài khung nút)
+            TMP_Text label = Tmp(btn, "Label", BuildButtons[i]);
+            Undo.RecordObject(label, "Apply UI Skin");
+            label.text = BuildButtons[i];
+            label.raycastTarget = false;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Overflow;
+            Place(label.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(0f, -labelGap), new Vector2(size + spacing, BuildLabelHeight));
+            StyleTmp(label, 14f, UISkin.Cream, TextAlignmentOptions.Center);
+            SetActive(btn, "Label", true);
         }
 
         BuildMenuController menu = bar.GetComponent<BuildMenuController>();
@@ -361,6 +387,10 @@ public static partial class UISkinApplier
     {
         RectTransform options = R(hud, "BuildOptions");
         if (options == null) return;
+
+        // Bảng công trình nằm ngay trên thanh xây dựng (thanh cao hơn vì có chữ)
+        Undo.RecordObject(options, "Apply UI Skin");
+        options.anchoredPosition = new Vector2(options.anchoredPosition.x, bar.anchoredPosition.y + bar.sizeDelta.y + 12f);
 
         UISkin.SetSliced(options.GetComponent<Image>(), skin.popupFrame, Color.white, HudFramePpu);
         GridLayoutGroup grid = options.GetComponent<GridLayoutGroup>();

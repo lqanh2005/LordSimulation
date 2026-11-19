@@ -169,8 +169,142 @@ public static class ArtAssetSync
         // Farm gameplay: ruộng trống đổi theo mùa, click để trồng Lúa/Thuốc
         count += CreateFarmComposite("Farm_Field", "Assets/Texture/Farm/Dirt_1.png", true) ? 1 : 0;
 
+        AttachMineCart();
+        AddNightLights();
+
         AssetDatabase.SaveAssets();
         Debug.Log($"[ArtAssetSync] Đã tạo {count} prefab trong {PrefabRoot}");
+    }
+
+    // Xe goòng là một phần của Mỏ: đặt trên đường ray trước cửa hầm (vị trí tính theo tỉ lệ ảnh CoalCave).
+    private static readonly Vector2 MineCartImageFraction = new Vector2(0.4663f, 0.733f);   // (x từ trái, y từ trên)
+    private const float MineCartScale = 0.8f;
+
+    [MenuItem("LordSim/Art/6. Attach Cart To Mine")]
+    public static void AttachMineCart()
+    {
+        const string minePath = PrefabRoot + "/Coal/CoalCave.prefab";
+        Sprite mine = LoadSprite("Assets/Texture/Coal/CoalCave.png");
+        Sprite cart = LoadSprite("Assets/Texture/Coal/CoalCart.png");
+        if (mine == null || cart == null || AssetDatabase.LoadAssetAtPath<GameObject>(minePath) == null)
+        {
+            Debug.LogWarning("[ArtAssetSync] Thiếu art Mỏ / Xe goòng");
+            return;
+        }
+
+        // Toạ độ ảnh -> toạ độ cục bộ (gốc = pivot sprite Mỏ = góc footprint)
+        Rect rect = mine.rect;
+        float ppu = mine.pixelsPerUnit;
+        Vector2 local = new Vector2(
+            (MineCartImageFraction.x * rect.width - mine.pivot.x) / ppu,
+            ((1f - MineCartImageFraction.y) * rect.height - mine.pivot.y) / ppu);
+
+        GameObject root = PrefabUtility.LoadPrefabContents(minePath);
+        Transform old = root.transform.Find("Cart");
+        if (old != null)
+            Object.DestroyImmediate(old.gameObject);
+
+        GameObject cartGo = new GameObject("Cart");
+        cartGo.transform.SetParent(root.transform, false);
+        cartGo.transform.localPosition = local;
+        cartGo.transform.localScale = Vector3.one * MineCartScale;
+        SpriteRenderer sr = cartGo.AddComponent<SpriteRenderer>();
+        sr.sprite = cart;
+        sr.sortingOrder = 1;   // offset tương đối: vẽ trên Mỏ
+
+        PrefabUtility.SaveAsPrefabAsset(root, minePath);
+        PrefabUtility.UnloadPrefabContents(root);
+        Debug.Log($"[ArtAssetSync] Đã gắn xe goòng vào Mỏ tại {local}");
+    }
+
+    // Đèn đêm (Point Light 2D): prefab, vị trí so với gốc footprint (unit), bán kính ngoài, màu, cường độ đêm, độ lập loè.
+    // Vị trí đo từ ảnh: x = (px - pivotX) / 400, y = (cao ảnh - py) / 400.
+    private struct NightLightSpec
+    {
+        public string prefab;
+        public Vector2 offset;
+        public float radius;
+        public Color color;
+        public float nightIntensity;
+        public float flicker;
+
+        public NightLightSpec(string prefab, float x, float y, float radius, Color color, float nightIntensity, float flicker)
+        {
+            this.prefab = prefab;
+            offset = new Vector2(x, y);
+            this.radius = radius;
+            this.color = color;
+            this.nightIntensity = nightIntensity;
+            this.flicker = flicker;
+        }
+    }
+
+    private static readonly Color FireColor = new Color(1f, 0.62f, 0.28f);
+    private static readonly Color FurnaceColor = new Color(1f, 0.52f, 0.2f);
+    private static readonly Color WindowColor = new Color(1f, 0.82f, 0.5f);
+
+    private static readonly NightLightSpec[] NightLights =
+    {
+        new NightLightSpec("Building/Campfire", 0f, 0.3f, 1.8f, FireColor, 1.6f, 0.12f),
+        new NightLightSpec("Building/Fireplace", 0.07f, 1.3f, 2.6f, FurnaceColor, 1.5f, 0.08f),   // Xưởng lò: lò cao giữa
+        new NightLightSpec("Building/Forge", 0.4f, 0.4f, 1.6f, FurnaceColor, 1.4f, 0.12f),        // Lò rèn: miệng lò
+        new NightLightSpec("Building/Housing", 0.4f, 0.58f, 1.3f, WindowColor, 1.25f, 0.03f),      // Nhà dân: cửa sổ + cửa
+        new NightLightSpec("Building/Housing_3x3", 0.53f, 0.84f, 1.7f, WindowColor, 1f, 0.03f),   // Nhà lớn: cửa + đèn lồng
+        new NightLightSpec("Coal/CoalCave", -1.98f, 1.57f, 1.5f, WindowColor, 1.1f, 0.05f),        // Mỏ: đèn lồng cửa hầm
+    };
+
+    [MenuItem("LordSim/Art/5. Add Night Lights")]
+    public static void AddNightLights()
+    {
+        int count = 0;
+        foreach (NightLightSpec spec in NightLights)
+        {
+            string path = $"{PrefabRoot}/{spec.prefab}.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
+            {
+                Debug.LogWarning($"[ArtAssetSync] Thiếu prefab {path}");
+                continue;
+            }
+
+            GameObject root = PrefabUtility.LoadPrefabContents(path);
+            Transform old = root.transform.Find("NightLight");
+            if (old != null)
+                Object.DestroyImmediate(old.gameObject);
+            BuildingNightLight oldRootLight = root.GetComponent<BuildingNightLight>();
+            if (oldRootLight != null)
+                Object.DestroyImmediate(oldRootLight);   // Bản cũ gắn trên gốc
+
+            GameObject lightGo = new GameObject("NightLight");
+            lightGo.transform.SetParent(root.transform, false);
+            lightGo.transform.localPosition = spec.offset;
+
+            var light = lightGo.AddComponent<UnityEngine.Rendering.Universal.Light2D>();
+            light.lightType = UnityEngine.Rendering.Universal.Light2D.LightType.Point;
+            light.blendStyleIndex = 0;   // Cộng vào cùng kênh Multiply với Global Light
+            light.color = spec.color;
+            light.intensity = 1f;
+            light.pointLightInnerRadius = spec.radius * 0.15f;
+            light.pointLightOuterRadius = spec.radius;
+            light.falloffIntensity = 0.6f;
+            foreach (SortingLayer layer in SortingLayer.layers)
+                light.AddTargetSortingLayer(layer.id);
+            light.enabled = false;   // PlacementManager bật khi công trình đang hoạt động
+
+            BuildingNightLight night = lightGo.AddComponent<BuildingNightLight>();
+            SerializedObject so = new SerializedObject(night);
+            so.FindProperty("lightSource").objectReferenceValue = light;
+            so.FindProperty("nightIntensity").floatValue = spec.nightIntensity;
+            so.FindProperty("dayIntensity").floatValue = spec.color == WindowColor ? 0f : 0.15f;   // Cửa sổ ban ngày không sáng
+            so.FindProperty("flickerAmount").floatValue = spec.flicker;
+            so.FindProperty("radiusFlicker").floatValue = spec.flicker * 0.5f;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            PrefabUtility.UnloadPrefabContents(root);
+            count++;
+        }
+
+        Debug.Log($"[ArtAssetSync] Đã gắn đèn đêm cho {count} prefab.");
     }
 
     private static bool CreateFarmComposite(string prefabName, string cropPath, bool cropSwappable = false)

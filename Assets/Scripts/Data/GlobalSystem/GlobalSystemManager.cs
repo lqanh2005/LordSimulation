@@ -20,6 +20,12 @@ public class GlobalSystemManager : MonoBehaviour
 
     public float LastHungryRate { get; private set; }
     public float LastColdRate { get; private set; }
+    public float LastThirstyRate { get; private set; }
+    /// <summary>Sức cấp nước tháng gần nhất (số người): suối + Giếng nước.</summary>
+    public int LastWaterCapacity { get; private set; } = WaterRules.BaseWaterCapacity;
+
+    /// <summary>Sức cấp nước hiện tại (theo các Giếng đang hoạt động) — cho UI.</summary>
+    public int CurrentWaterCapacity => WaterRules.GetCapacity(CollectBuildingEffects().wells);
     public float LastDiseasePressure { get; private set; }
     public BuildingEffectRules.MonthlyEffects LastBuildingEffects { get; private set; }
 
@@ -240,6 +246,12 @@ public class GlobalSystemManager : MonoBehaviour
         data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastHungryRate * 10f);
         GameEvents.Post(EventID.HungerResolved, LastHungryRate);
 
+        // Nước: Giếng nước cấp cho dân, thiếu thì một phần dân bị khát
+        LastWaterCapacity = WaterRules.GetCapacity(fx.wells);
+        LastThirstyRate = WaterRules.GetThirstyRate(data.totalPopulation, LastWaterCapacity);
+        data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastThirstyRate * WaterRules.ThirstRiotFactor);
+        GameEvents.Post(EventID.ThirstResolved, LastThirstyRate);
+
         int coalPerCapita = data.CurrentSeason == SeasonType.Winter ? 1 : 0;
         if (data.currentWeather == WeatherEvent.Blizzard)
             coalPerCapita += blizzardExtraCoalPerCapita;
@@ -275,6 +287,7 @@ public class GlobalSystemManager : MonoBehaviour
 
         pressure += LastHungryRate * 0.03f;
         pressure += LastColdRate * 0.03f;
+        pressure += LastThirstyRate * WaterRules.ThirstDiseaseFactor;   // Thiếu giếng -> uống nước bẩn
         pressure += CrisisManager.GetDiseasePressure(in data);   // GDD 3.7: Miasma từ xác chưa thu gom
         pressure -= LastBuildingEffects.diseaseReduction;
 

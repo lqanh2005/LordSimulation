@@ -136,7 +136,50 @@ public class PlacementManager : MonoBehaviour
         if (view != null)
         {
             view.SetTint(constructing ? constructingColor : Color.white);
+            view.SetLit(!constructing && ShouldLight(view));
             RefreshFarmVisual(view);
+        }
+    }
+
+    // ==========================================
+    // ĐÈN ĐÊM (lửa trại, lò, cửa sổ nhà)
+    // ==========================================
+
+    private const float NightLightRefreshInterval = 0.5f;
+    private float nextNightLightRefresh;
+
+    /// <summary>Công trình có nên sáng đèn: xây xong, đang bật; nhà phải có người ở, nơi làm việc phải có người làm.</summary>
+    private bool ShouldLight(BuildingView view)
+    {
+        if (view == null || !view.HasNightLight)
+            return false;
+        if (buildingManager == null)
+            return true;
+
+        int index = buildingManager.FindBuildingIndexById(view.BuildingId);
+        if (index < 0)
+            return false;
+
+        ref BuildingData data = ref buildingManager.GetBuildingRef(index);
+        if (BuildingRules.IsUnderConstruction(in data) || !data.isOperational)
+            return false;
+        if (data.maxOccupancy > 0)
+            return data.currentOccupancy > 0;   // Nhà trống thì tối đèn
+        if (data.maxWorkers > 0)
+            return data.currentWorkers > 0;     // Lò không ai làm thì tắt lửa
+        return true;                            // Lửa trại: luôn cháy
+    }
+
+    private void RefreshNightLights()
+    {
+        if (Time.unscaledTime < nextNightLightRefresh)
+            return;
+        nextNightLightRefresh = Time.unscaledTime + NightLightRefreshInterval;
+
+        foreach (BuildingView view in buildingViews.Values)
+        {
+            if (view != null && view.HasNightLight)
+                view.SetLit(ShouldLight(view));
         }
     }
 
@@ -195,6 +238,8 @@ public class PlacementManager : MonoBehaviour
 
     private void Update()
     {
+        RefreshNightLights();
+
         if (Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame)
         {
             ToggleDemolish();
@@ -862,6 +907,7 @@ public class PlacementManager : MonoBehaviour
             sr.sprite = grid.BaseSprite;
             sr.sortingLayerName = grid.SortingLayerName;
             sr.sortingOrder = ghostSortingOrder - 1;
+            DayNightOverlay.MakeUnlit(sr);   // Ô đặt công trình luôn rõ kể cả ban đêm
             footprintGhosts.Add(sr);
         }
     }

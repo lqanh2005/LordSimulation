@@ -536,7 +536,7 @@ public class GridController : MonoBehaviour
         if (baseTileMaterial != null)
             return baseTileMaterial;
 
-        // Lấy đúng material sprite mặc định của pipeline hiện tại (URP 2D: Sprite-Unlit-Default)
+        // Lấy đúng material sprite mặc định của pipeline hiện tại (URP 2D Renderer: Sprite-Lit-Default, nhận ánh sáng ngày–đêm)
         if (defaultSpriteMaterial == null)
         {
             GameObject probe = new GameObject("SpriteMaterialProbe") { hideFlags = HideFlags.HideAndDontSave };

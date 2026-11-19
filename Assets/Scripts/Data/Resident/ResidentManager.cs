@@ -147,6 +147,7 @@ public class ResidentManager : MonoBehaviour
     private void SubscribeEvents()
     {
         GameEvents.Unlisten(EventID.HungerResolved, OnHungerResolved);
+        GameEvents.Unlisten(EventID.ThirstResolved, OnThirstResolved);
         GameEvents.Unlisten(EventID.ColderResolved, OnColderResolved);
         GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
         GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
@@ -155,6 +156,7 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Unlisten(EventID.BuildingCompleted, OnBuildingCompleted);
 
         GameEvents.Listen(EventID.HungerResolved, OnHungerResolved);
+        GameEvents.Listen(EventID.ThirstResolved, OnThirstResolved);
         GameEvents.Listen(EventID.ColderResolved, OnColderResolved);
         GameEvents.Listen(EventID.DiseasePressure, OnDiseasePressure);
         GameEvents.Listen(EventID.YearChanged, OnYearChanged);
@@ -166,6 +168,7 @@ public class ResidentManager : MonoBehaviour
     private void UnsubscribeEvents()
     {
         GameEvents.Unlisten(EventID.HungerResolved, OnHungerResolved);
+        GameEvents.Unlisten(EventID.ThirstResolved, OnThirstResolved);
         GameEvents.Unlisten(EventID.ColderResolved, OnColderResolved);
         GameEvents.Unlisten(EventID.DiseasePressure, OnDiseasePressure);
         GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
@@ -472,6 +475,11 @@ public class ResidentManager : MonoBehaviour
         ProcessMonthlyHunger((float)param);
     }
 
+    private void OnThirstResolved(object param)
+    {
+        ProcessMonthlyThirst((float)param);
+    }
+
     private void OnColderResolved(object param)
     {
         ProcessMonthlyColder((float)param);
@@ -532,6 +540,49 @@ public class ResidentManager : MonoBehaviour
 
         RefreshVisualPopulation();
     }
+    /// <summary>Khát (thiếu Giếng nước): như đói — trừ hạnh phúc, khát liên tiếp thì có thể chết.</summary>
+    public void ProcessMonthlyThirst(float thirstyRate)
+    {
+        thirstyRate = Mathf.Clamp01(thirstyRate);
+
+        int aliveBefore = 0;
+        int deaths = 0;
+
+        for (int i = 0; i < activeCount; i++)
+        {
+            ref ResidentData r = ref allResidents[i];
+            if (!r.isAlive)
+                continue;
+
+            aliveBefore++;
+
+            bool thirstyThisMonth = thirstyRate > 0f && UnityEngine.Random.value < thirstyRate;
+            if (thirstyThisMonth)
+            {
+                if (r.thirstMonths < byte.MaxValue)
+                    r.thirstMonths++;
+
+                r.happiness = Mathf.Max(0f, r.happiness - WaterRules.ThirstHappinessPenalty);
+            }
+            else
+            {
+                r.thirstMonths = 0;
+            }
+
+            if (r.thirstMonths >= WaterRules.ThirstMonthsBeforeDeathRisk
+                && UnityEngine.Random.value < WaterRules.ThirstDeathChance)
+            {
+                r.isAlive = false;
+                r.thirstMonths = 0;
+                deaths++;
+            }
+        }
+
+        ApplyMacroDeaths(deaths, aliveBefore, DeathCause.Thirst);
+
+        RefreshVisualPopulation();
+    }
+
     public void ProcessMonthlyColder(float coldRate)
     {
         coldRate = Mathf.Clamp01(coldRate);

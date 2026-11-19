@@ -696,7 +696,7 @@ public static class GameplayHUDBuilder
     // ==========================================
     private static void BuildBottomBar(Transform parent)
     {
-        string[] labels = { "Xây dựng", "Nhà ở", "Sản xuất", "Nông nghiệp", "Hạ tầng", "Trang trí" };
+        string[] labels = { "Nhà ở", "Sản xuất", "Nông nghiệp", "Hạ tầng" };
         const float buttonSize = 84f;
         const float spacing = 8f;
         const float padding = 10f;

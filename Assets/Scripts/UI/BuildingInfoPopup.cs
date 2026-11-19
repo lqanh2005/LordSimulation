@@ -185,6 +185,17 @@ public class BuildingInfoPopup : MonoBehaviour
                 _sb.Append(crisis.DescribeCollection(in b)).Append('\n');
         }
 
+        // Giếng nước: cho thấy sức cấp nước của cả thành
+        if (b.buildingType == BuildingType.WaterWell && global != null)
+        {
+            int capacity = global.CurrentWaterCapacity;
+            int population = globalData.totalPopulation;
+            string waterColor = population > capacity ? "#E86A5A" : "#5CCB6A";
+            _sb.Append("Cấp nước cho ").Append(WaterRules.WellWaterCapacity).Append(" người\n");
+            _sb.Append("Nước toàn thành: <color=").Append(waterColor).Append('>')
+               .Append(population).Append('/').Append(capacity).Append(" người</color>\n");
+        }
+
         if (b.maxOccupancy == 0 && b.maxWorkers == 0)
             _sb.Append("<color=#A59D8A>Công trình hỗ trợ, không cần người</color>\n");
 

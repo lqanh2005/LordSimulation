@@ -51,11 +51,11 @@ public class TutorialHints : MonoBehaviour
         {
             new Step { text = "Người tị nạn đang chờ ở Cổng. Bấm <b>G</b> để kiểm duyệt: Cho vào / Từ chối / Cách ly.",
                        done = t => t._gateOpened },
-            new Step { text = "Dân cần chỗ ở, vô gia cư sẽ chết rét mùa đông. Bấm <b>2</b> (Nhà ở) và xây Lều tạm hoặc Nhà dân.",
+            new Step { text = "Dân cần chỗ ở, vô gia cư sẽ chết rét mùa đông. Bấm <b>1</b> (Nhà ở) và xây Lều tạm hoặc Nhà dân.",
                        done = t => t.HasBuilding(b => ResidentAssignmentRules.IsNormalHousing(b.buildingType)) },
-            new Step { text = "Cần lương thực: bấm <b>4</b> (Nông nghiệp) xây Nông trại rồi bấm vào nó để chọn trồng Lúa.",
+            new Step { text = "Cần lương thực: bấm <b>3</b> (Nông nghiệp) xây Nông trại rồi bấm vào nó để chọn trồng Lúa.",
                        done = t => t.HasBuilding(b => b.buildingType == BuildingType.Farm && b.cropType != CropType.None) },
-            new Step { text = "Gỗ để xây, than để sưởi mùa đông: bấm <b>3</b> (Sản xuất) xây Trại gỗ và Mỏ.",
+            new Step { text = "Gỗ để xây, than để sưởi mùa đông: bấm <b>2</b> (Sản xuất) xây Trại gỗ và Mỏ.",
                        done = t => t.HasBuilding(b => b.buildingType == BuildingType.LumberCamp || b.buildingType == BuildingType.Mine) },
             new Step { text = "Bấm <b>T</b> mở Cây nghiên cứu. Nghiên cứu <b>Bộ luật</b> để ban hành Sắc lệnh, <b>Nhiệt kế</b> để đo thân nhiệt.",
                        done = t => t._contain != null && t._contain.researchManager != null

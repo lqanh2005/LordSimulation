@@ -29,7 +29,7 @@ public static class ResidentReproductionRules
         if (ResidentAssignmentRules.NeedsQuarantineHousing(in resident))
             return false;
 
-        if (resident.hungerMonths > 0 || resident.coldMonths > 0)
+        if (resident.hungerMonths > 0 || resident.coldMonths > 0 || resident.thirstMonths > 0)
             return false;
 
         return resident.happiness >= MinHappiness;
