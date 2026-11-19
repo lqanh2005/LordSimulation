@@ -57,12 +57,13 @@ public class TutorialHints : MonoBehaviour
                        done = t => t.HasBuilding(b => b.buildingType == BuildingType.Farm && b.cropType != CropType.None) },
             new Step { text = "Gỗ để xây, than để sưởi mùa đông: bấm <b>3</b> (Sản xuất) xây Trại gỗ và Mỏ.",
                        done = t => t.HasBuilding(b => b.buildingType == BuildingType.LumberCamp || b.buildingType == BuildingType.Mine) },
-            new Step { text = "Bấm <b>T</b> mở Cây nghiên cứu. Nghiên cứu <b>Nhiệt kế</b> để đo thân nhiệt người xin vào.",
+            new Step { text = "Bấm <b>T</b> mở Cây nghiên cứu. Nghiên cứu <b>Bộ luật</b> để ban hành Sắc lệnh, <b>Nhiệt kế</b> để đo thân nhiệt.",
                        done = t => t._contain != null && t._contain.researchManager != null
                                    && t._contain.researchManager.CurrentResearch != ResearchID.None
                                    || t.ResearchDone() },
-            new Step { text = "Bấm <b>E</b> đặt Sắc lệnh để tự động gợi ý quyết định ở Cổng (tối đa 3 luật).",
-                       done = t => t._contain != null && t._contain.edictManager != null && t._contain.edictManager.activeCount > 0 },
+            new Step { text = "Nghiên cứu xong <b>Bộ luật</b> thì bấm <b>E</b> đặt Sắc lệnh để gợi ý quyết định ở Cổng (tối đa 3 luật).",
+                       done = t => t._contain != null && t._contain.edictManager != null && t._contain.edictManager.activeCount > 0
+                                   || t.Month() >= 10 || t.Year() >= 2 },
             new Step { text = "Mục tiêu: sống qua mùa đông đầu (tháng 10–12) với ≥20 dân. Tích trữ than & lương thực! (Space: dừng, Tab: tốc độ)",
                        done = t => t.Month() >= 10 || t.Year() >= 2 },
         };

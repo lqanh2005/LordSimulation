@@ -743,8 +743,9 @@ MonoBehaviour:
   winterMusicKey: Music/Winter
   fadeSeconds: 1.5
   uiClick: {fileID: 8300000, guid: 1bee4b36d2951f04d9798cf614cb6b3a, type: 3}
-  notice: {fileID: 8300000, guid: 3a1a44362ca81f14ca4605d06b643057, type: 3}
-  alarm: {fileID: 8300000, guid: 42983c76331af0e489829fe75a69d35e, type: 3}
+  alertInfo: {fileID: 0}
+  alertWarning: {fileID: 0}
+  alertCritical: {fileID: 0}
 --- !u!4 &530643650
 Transform:
   m_ObjectHideFlags: 0

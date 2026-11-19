@@ -6,11 +6,10 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Click trái vào công trình (trừ Nông trại — đã có FarmCropPopup) -> popup hiện trạng thái,
-/// số cư dân / công nhân, và nút phá dỡ (bấm 2 lần để xác nhận).
+/// số cư dân / công nhân, và nút phá dỡ (bấm 2 lần để xác nhận). Popup cố định ở góc phải dưới màn hình.
 /// </summary>
 public class BuildingInfoPopup : MonoBehaviour
 {
-    private const float PanelWidth = 280f;
     private const float RefreshInterval = 0.25f;
 
     private PlacementManager _placement;
@@ -70,7 +69,8 @@ public class BuildingInfoPopup : MonoBehaviour
         if (!(param is ushort id))
             return;
 
-        // Chờ tới LateUpdate: nếu click cùng frame trúng cư dân thì ưu tiên popup cư dân
+        // Chờ tới LateUpdate: công trình thường luôn được ưu tiên (popup cư dân tự nhường),
+        // riêng ô đường mà click trúng cư dân đang đi trên đó thì nhường popup cư dân
         _pendingClickId = id;
         _pendingClickFrame = Time.frameCount;
     }
@@ -112,7 +112,6 @@ public class BuildingInfoPopup : MonoBehaviour
         _clickedOutside = false;
         if (Time.unscaledTime >= _nextRefresh)
             Refresh();
-        Follow();
     }
 
     private void TryOpen(ushort id)
@@ -138,7 +137,6 @@ public class BuildingInfoPopup : MonoBehaviour
         _panel.SetAsLastSibling();
         Refresh();
         LayoutRebuilder.ForceRebuildLayoutImmediate(_panel);
-        Follow();
     }
 
     public void Hide()
@@ -194,11 +192,11 @@ public class BuildingInfoPopup : MonoBehaviour
         if (canDemolish)
         {
             _placement.GetDemolishRefund(in b, out int wood, out int gold);
-            _sb.Append("<size=14>Phá dỡ hoàn lại: ").Append(wood).Append(" gỗ, ").Append(gold).Append(" vàng</size>");
+            _sb.Append("<size=88%>Phá dỡ hoàn lại: ").Append(wood).Append(" gỗ, ").Append(gold).Append(" vàng</size>");
         }
         else
         {
-            _sb.Append("<size=14><color=#A59D8A>Không thể phá công trình này</color></size>");
+            _sb.Append("<size=88%><color=#A59D8A>Không thể phá công trình này</color></size>");
         }
 
         _body.text = _sb.ToString();
@@ -224,6 +222,7 @@ public class BuildingInfoPopup : MonoBehaviour
             return;
 
         b.isOperational = !b.isOperational;
+        RequestResidentReassign();   // Thợ rời đi / quay lại làm ngay, không đợi sang tháng
         NotificationFeed.Show(
             $"{GetBuildingName(_placement, b.buildingType)} #{b.buildingID} {(b.isOperational ? "hoạt động trở lại" : "đã tạm dừng")}",
             NoticeLevel.Info, "toggle:" + b.buildingID);
@@ -251,19 +250,6 @@ public class BuildingInfoPopup : MonoBehaviour
         return $"<color={color}><b>{current}/{max}</b></color>";
     }
 
-    private void Follow()
-    {
-        BuildingView view = _placement != null ? _placement.GetBuildingView(_buildingId) : null;
-        if (view == null)
-            return;
-
-        // Neo tại tâm footprint (pivot của view là góc dưới footprint)
-        Vector3 world = view.transform.position;
-        Vector2Int size = view.Footprint;
-        world.y += (size.x + size.y) * 0.125f;
-        RuntimeUIKit.PlaceAtWorld(_panel, _canvas, world);
-    }
-
     private bool TryGetBuilding(ushort id, out int index)
     {
         index = -1;
@@ -285,7 +271,7 @@ public class BuildingInfoPopup : MonoBehaviour
         if (_canvas == null)
             return;
 
-        _panel = RuntimeUIKit.CreatePanel(_canvas.transform, "BuildingInfoPanel", PanelWidth);
+        _panel = RuntimeUIKit.CreatePanel(_canvas.transform, "BuildingInfoPanel", RuntimeUIKit.InfoPopupWidth);
         _title = RuntimeUIKit.CreateHeader(_panel, Hide);
         _body = RuntimeUIKit.CreateText(_panel, "Body", 16f, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         _body.lineSpacing = 4f;
@@ -296,6 +282,14 @@ public class BuildingInfoPopup : MonoBehaviour
         _demolishButton = RuntimeUIKit.CreateButton(buttons, "Demolish", "Phá dỡ", OnDemolishClicked);
         _demolishLabel = _demolishButton.GetComponentInChildren<TextMeshProUGUI>();
 
+        RuntimeUIKit.SetupInfoPopup(_panel);
         _panel.gameObject.SetActive(false);
+    }
+
+    private static void RequestResidentReassign()
+    {
+        PlayerContain contain = GamePlayController.Instance != null ? GamePlayController.Instance.playerContain : null;
+        if (contain != null && contain.residentManager != null)
+            contain.residentManager.RequestReassign();
     }
 }

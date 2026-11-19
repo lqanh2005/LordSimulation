@@ -137,6 +137,15 @@ public class ImmigrationManager : MonoBehaviour
                         report.newlySymptomatic++;
                     }
                     break;
+
+                case HealthStatus.ActiveInfected:
+                    // Phát bệnh trong hàng chờ: không có thầy thuốc -> có thể chết (trước đây bệnh mãi không đổi)
+                    float deathChance = ResidentDiseaseRules.GetDeathChance(a.diseaseType) * ImmigrationRules.YardSickDeathMultiplier;
+                    if (a.hungerMonths > 0)
+                        deathChance += ImmigrationRules.YardSickHungryDeathBonus;
+                    if (Random.value < deathChance)
+                        a.isAlive = false;
+                    break;
             }
         }
 
@@ -148,35 +157,49 @@ public class ImmigrationManager : MonoBehaviour
             global.riotRiskMeter = Mathf.Min(100f, global.riotRiskMeter + report.riotAdded);
         }
 
-        // 4. Đói quá lâu -> bỏ đi, tiếng xấu lan ra ngoài
+        // 4. Chết bệnh -> thi thể ở Cổng (vào chuỗi khủng hoảng); đói quá lâu -> bỏ đi, tiếng xấu lan ra ngoài
         for (int i = waitingCount - 1; i >= 0; i--)
         {
+            if (!waitingApplicants[i].isAlive)
+            {
+                RemoveAt(i);
+                report.died++;
+                continue;
+            }
+
             if (waitingApplicants[i].hungerMonths < ImmigrationRules.YardLeaveHungerMonths)
                 continue;
 
             RemoveAt(i);
             report.left++;
         }
+        CrisisManager.AddCorpses(report.died);
         if (report.left > 0 && globalSystemManager != null)
             globalSystemManager.ModifyReputation(-report.left * ImmigrationRules.YardLeaveReputationPenalty);
 
         report.waiting = waitingCount;
-        if (report.left > 0)
+        if (report.left > 0 || report.died > 0)
             NotifyQueueChanged();
         GameEvents.Post(EventID.WaitingYardReport, report);
     }
 
-    /// <summary>Xoá người ở vị trí index (đổi chỗ với người cuối), giữ InspectIndex hợp lệ.</summary>
+    /// <summary>
+    /// Xoá người ở vị trí index, dồn những người phía sau lên (giữ đúng thứ tự hàng).
+    /// InspectIndex vẫn trỏ đúng người đang xét nếu người bị xoá đứng trước họ.
+    /// </summary>
     private void RemoveAt(int index)
     {
         if ((uint)index >= (uint)waitingCount)
             return;
 
-        int last = waitingCount - 1;
-        if (index != last)
-            waitingApplicants[index] = waitingApplicants[last];
-        waitingApplicants[last] = default;
+        int tail = waitingCount - index - 1;
+        if (tail > 0)
+            System.Array.Copy(waitingApplicants, index + 1, waitingApplicants, index, tail);
         waitingCount--;
+        waitingApplicants[waitingCount] = default;
+
+        if (index < InspectIndex)
+            InspectIndex--;
         InspectIndex = waitingCount > 0 ? Mathf.Clamp(InspectIndex, 0, waitingCount - 1) : 0;
     }
 
@@ -273,6 +296,7 @@ public class ImmigrationManager : MonoBehaviour
 
     public void RefreshAfterLoad()
     {
+        _interrogated.Clear();
         if (globalSystemManager != null)
         {
             ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
@@ -349,7 +373,8 @@ public class ImmigrationManager : MonoBehaviour
             return;
 
         if (globalSystemManager != null)
-            globalSystemManager.ModifyReputation(ImmigrationRules.GetDenyReputationGain(in applicant));
+            globalSystemManager.ModifyReputation(ImmigrationRules.GetDenyReputationChange(
+                in applicant, globalSystemManager.GetGlobalDataRef().CurrentSeason));
 
         RemoveCurrent();
     }
@@ -359,14 +384,61 @@ public class ImmigrationManager : MonoBehaviour
         if (!TryGetCurrent(out ResidentData applicant))
             return;
 
+        // Không còn chỗ trong Trạm cách ly -> không cho "cách ly" (trước đây người đó lọt vào thành như dân thường)
+        if (FindFreeQuarantineWard() < 0)
+        {
+            ConfirmDialog.Alert("Không còn chỗ trong Trạm cách ly.\nHãy xây thêm Trạm cách ly, hoặc chọn Cho vào / Từ chối.");
+            return;
+        }
+
         CollectEntryTax(ref applicant, out int tax);
+        applicant.quarantineMonths = ResolveQuarantineMonths(in applicant);
         if (!Admit(in applicant, true))
             return;
 
         if (tax > 0 && globalSystemManager != null)
             globalSystemManager.ModifyGold(tax);
-        ConsumeQuarantineSupplies(1);
         RemoveCurrent();
+    }
+
+    /// <summary>Thời hạn cách ly: lấy từ sắc lệnh Cách ly đang khớp (nếu có), không thì mặc định 3 tháng.</summary>
+    private byte ResolveQuarantineMonths(in ResidentData applicant)
+    {
+        if (edictManager != null && globalSystemManager != null
+            && EdictRules.TryResolveImmigration(
+                edictManager.allEdicts,
+                edictManager.activeCount,
+                in applicant,
+                in globalSystemManager.GetGlobalDataRef(),
+                out RuleActionData action,
+                out _,
+                out _)
+            && action.type == RuleActionType.ImmigrationQuarantine
+            && action.param0 >= 1f)
+            return (byte)Mathf.Clamp(Mathf.RoundToInt(action.param0), 1, 24);
+
+        return ImmigrationRules.DefaultQuarantineMonths;
+    }
+
+    /// <summary>Có Trạm cách ly nào còn chỗ không (để nút Cách ly / sắc lệnh biết trước).</summary>
+    public bool HasQuarantineSpace => FindFreeQuarantineWard() >= 0;
+
+    private int FindFreeQuarantineWard()
+    {
+        if (buildingManager == null)
+            ResolveDependencies();
+        if (buildingManager == null)
+            return -1;
+
+        for (int i = 0; i < buildingManager.activeCount; i++)
+        {
+            ref BuildingData building = ref buildingManager.GetBuildingRef(i);
+            if (building.buildingType == BuildingType.QuarantineWard
+                && ResidentAssignmentRules.HasHousingSlot(in building))
+                return i;
+        }
+
+        return -1;
     }
 
     private bool Admit(in ResidentData applicant, bool quarantine)
@@ -377,6 +449,8 @@ public class ImmigrationManager : MonoBehaviour
             return false;
 
         ResidentData admitted = applicant;
+        // Cấp số hiệu mới lớn hơn mọi cư dân + người chờ: trẻ sinh ra có thể đã lấy trùng số của người đang chờ
+        admitted.residentID = NextApplicantId();
         int index = residentManager.AddResident(in admitted);
         if (index < 0)
             return false;
@@ -412,6 +486,7 @@ public class ImmigrationManager : MonoBehaviour
                 in applicant,
                 in globalSystemManager.GetGlobalDataRef(),
                 out RuleActionData action,
+                out _,
                 out _))
             return ImmigrationRules.DefaultTariffPercent;
 
@@ -419,17 +494,11 @@ public class ImmigrationManager : MonoBehaviour
         return tariff > 0f ? tariff : ImmigrationRules.DefaultTariffPercent;
     }
 
-    private void ConsumeQuarantineSupplies(int people)
-    {
-        if (people <= 0 || globalSystemManager == null)
-            return;
-
-        globalSystemManager.ConsumeAvailable(
-            ResourceType.Food, people * ImmigrationRules.QuarantineFoodPerMonth);
-        globalSystemManager.ConsumeAvailable(
-            ResourceType.Medicine, people * ImmigrationRules.QuarantineMedicinePerMonth);
-    }
-
+    /// <summary>
+    /// Chi phí + đếm ngược cách ly mỗi tháng. Lương thực của người cách ly đã nằm trong tiêu thụ chung
+    /// của dân số (GlobalSystemManager) nên ở đây chỉ trừ thuốc, tránh ăn hai lần.
+    /// Hết hạn: người khoẻ được ra nhập thành (ResidentAssignmentSystem chuyển nhà), người bệnh ở lại cách ly.
+    /// </summary>
     private void ProcessQuarantineUpkeep()
     {
         if (residentManager == null || buildingManager == null)
@@ -443,12 +512,20 @@ public class ImmigrationManager : MonoBehaviour
             ref ResidentData r = ref residentManager.GetResidentRef(i);
             if (!r.isAlive)
                 continue;
+            if (r.quarantineMonths > 0)
+                r.quarantineMonths--;
             if (ResidentAssignmentRules.IsHousedInQuarantine(
                     in r, buildingManager.allBuildings, buildingManager.activeCount))
                 quarantined++;
         }
 
-        ConsumeQuarantineSupplies(quarantined);
+        if (quarantined > 0)
+        {
+            float scale = ResidentProfessionEffectSystem.GetSampleScale(
+                residentManager.allResidents, residentManager.activeCount, globalSystemManager);
+            globalSystemManager.ConsumeAvailable(
+                ResourceType.Medicine, Mathf.RoundToInt(quarantined * scale * ImmigrationRules.QuarantineMedicinePerMonth));
+        }
     }
 
     private void TryAssignQuarantine(int residentIndex)
@@ -457,18 +534,7 @@ public class ImmigrationManager : MonoBehaviour
             return;
 
         ref ResidentData resident = ref residentManager.GetResidentRef(residentIndex);
-        int best = -1;
-        for (int i = 0; i < buildingManager.activeCount; i++)
-        {
-            ref BuildingData building = ref buildingManager.GetBuildingRef(i);
-            if (building.buildingType != BuildingType.QuarantineWard)
-                continue;
-            if (!ResidentAssignmentRules.HasHousingSlot(in building))
-                continue;
-            best = i;
-            break;
-        }
-
+        int best = FindFreeQuarantineWard();
         if (best < 0)
             return;
 
@@ -482,14 +548,10 @@ public class ImmigrationManager : MonoBehaviour
         if (waitingCount <= 0)
             return;
 
-        int last = waitingCount - 1;
-        if (InspectIndex != last)
-            waitingApplicants[InspectIndex] = waitingApplicants[last];
-        waitingCount--;
-        if (InspectIndex >= waitingCount)
-            InspectIndex = waitingCount - 1;
-        if (InspectIndex < 0)
-            InspectIndex = 0;
+        _interrogated.Remove(waitingApplicants[InspectIndex].residentID);
+
+        // Dồn hàng: người kế tiếp lên đúng vị trí vừa xét (trước đây lấy người cuối hàng chen lên)
+        RemoveAt(InspectIndex);
 
         NotifyQueueChanged();
         if (waitingCount > 0)
@@ -498,16 +560,84 @@ public class ImmigrationManager : MonoBehaviour
             popupUi.ShowEmpty();
     }
 
+    /// <summary>Vẽ lại người đang xét trên popup Cổng (khi hàng chờ đổi lúc popup đang mở).</summary>
+    public void RefreshCurrent()
+    {
+        if (waitingCount <= 0)
+            return;
+        InspectIndex = Mathf.Clamp(InspectIndex, 0, waitingCount - 1);
+        ShowCurrent();
+    }
+
     private void ShowCurrent()
     {
         if (popupUi == null || !TryGetCurrent(out ResidentData applicant))
             return;
 
         RuleAction suggested = ExplainSuggestion(in applicant, out string reason);
+        if (suggested == RuleAction.EscortToDesk)
+            suggested = Interrogate(in applicant, ref reason);
         ResearchManager research = GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
             ? GamePlayController.Instance.playerContain.researchManager
             : null;
         popupUi.ShowApplicant(in applicant, suggested, waitingCount, reason, research != null && research.HasThermometer);
+    }
+
+    // Người đã bị áp giải thẩm vấn (theo residentID) — chỉ trả quyền lực 1 lần / người. Không lưu save.
+    private readonly System.Collections.Generic.HashSet<int> _interrogated = new System.Collections.Generic.HashSet<int>();
+
+    /// <summary>
+    /// Sắc lệnh "Áp giải tới bàn thẩm vấn": tốn điểm Quyền lực để tra hỏi kỹ, lộ tình trạng bệnh thật
+    /// (kể cả đang ủ bệnh, chưa có triệu chứng). Đổi gợi ý theo kết quả: mang bệnh -> Cách ly, khoẻ -> Cho vào.
+    /// </summary>
+    private RuleAction Interrogate(in ResidentData applicant, ref string reason)
+    {
+        if (globalSystemManager == null)
+            return RuleAction.EscortToDesk;
+
+        ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
+        if (!_interrogated.Contains(applicant.residentID))
+        {
+            int cost = ResolveEscortCost(in applicant);
+            if (global.authorityPoints < cost)
+            {
+                reason += $"\nKhông đủ quyền lực để áp giải (cần {cost}, còn {global.authorityPoints}) — hãy tự kiểm tra.";
+                return RuleAction.EscortToDesk;
+            }
+
+            global.authorityPoints = (ushort)(global.authorityPoints - cost);
+            _interrogated.Add(applicant.residentID);
+            GameEvents.Post(EventID.ResourcesChanged);
+        }
+
+        bool carrier = applicant.healthStatus == HealthStatus.Incubating
+            || applicant.healthStatus == HealthStatus.ActiveInfected;
+        string disease = ResidentInfoPopup.GetDiseaseName(applicant.diseaseType);
+        reason += applicant.healthStatus switch
+        {
+            HealthStatus.Incubating => $"\nThẩm vấn: đang ủ bệnh {disease}, chưa lộ triệu chứng!",
+            HealthStatus.ActiveInfected => $"\nThẩm vấn: đang mắc {disease}.",
+            HealthStatus.Treated => "\nThẩm vấn: đang hồi phục sau bệnh, không còn lây.",
+            _ => "\nThẩm vấn: khoẻ mạnh, không mang bệnh."
+        };
+        reason += $" (quyền lực còn {global.authorityPoints})";
+        return carrier ? RuleAction.Quarantine : RuleAction.Admit;
+    }
+
+    private int ResolveEscortCost(in ResidentData applicant)
+    {
+        if (edictManager != null && globalSystemManager != null
+            && EdictRules.TryResolveImmigration(
+                edictManager.allEdicts,
+                edictManager.activeCount,
+                in applicant,
+                in globalSystemManager.GetGlobalDataRef(),
+                out RuleActionData action,
+                out _,
+                out _)
+            && action.type == RuleActionType.ImmigrationEscort)
+            return Mathf.Max(0, Mathf.RoundToInt(action.param0));
+        return 0;
     }
 
     /// <summary>GDD 3.5: "Why was this NPC processed?" — sắc lệnh nào khớp (ưu tiên trên → dưới) và vì sao.</summary>
@@ -525,7 +655,8 @@ public class ImmigrationManager : MonoBehaviour
                 in applicant,
                 in globalSystemManager.GetGlobalDataRef(),
                 out RuleActionData action,
-                out int index))
+                out int index,
+                out bool usedElse))
         {
             reason = "Không sắc lệnh nào khớp với người này → mặc định Cho vào.";
             return RuleAction.Admit;
@@ -534,7 +665,10 @@ public class ImmigrationManager : MonoBehaviour
         ref EdictRuleData rule = ref edictManager.GetEdictRef(index);
         var sb = new System.Text.StringBuilder(128);
         string name = string.IsNullOrEmpty(rule.ruleName) ? $"#{rule.ruleID}" : rule.ruleName;
-        sb.Append("Sắc lệnh \"").Append(name).Append("\" (ưu tiên ").Append(rule.executionOrder + 1).Append(") khớp: ");
+        sb.Append("Sắc lệnh \"").Append(name).Append("\" (ưu tiên ").Append(rule.executionOrder + 1).Append(") ");
+        sb.Append(usedElse
+            ? "— không luật nào khớp, dùng nhánh Else vì không thoả: "
+            : "khớp: ");
         for (int i = 0; i < rule.ConditionCount; i++)
         {
             if (i > 0) sb.Append(' ');

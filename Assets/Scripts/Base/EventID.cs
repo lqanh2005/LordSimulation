@@ -104,6 +104,7 @@ public struct WaitingYardReportPayload
     public int newlyInfected;    // Bị lây trong hàng chờ
     public int newlySymptomatic; // Ủ bệnh -> phát bệnh trong lúc chờ
     public int left;             // Bỏ đi vì đói
+    public int died;             // Chết bệnh trong hàng chờ (để lại thi thể ở Cổng)
     public float riotAdded;
 }
 

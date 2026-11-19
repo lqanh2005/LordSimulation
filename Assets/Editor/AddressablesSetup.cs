@@ -18,11 +18,11 @@ public static class AddressablesSetup
 
     private static readonly (string path, string key)[] MusicEntries =
     {
-        ("Assets/Audio/Music/Menu_Shakkar.ogg", GameAssets.MusicMenuKey),
-        ("Assets/Audio/Music/Spring_TheOldTowerInn_Loop.wav", GameAssets.MusicSpringKey),
-        ("Assets/Audio/Music/Summer_KingsFeast_Loop.wav", GameAssets.MusicSummerKey),
-        ("Assets/Audio/Music/Autumn_HarvestSeason.mp3", GameAssets.MusicAutumnKey),
-        ("Assets/Audio/Music/Winter_LongWinter.mp3", GameAssets.MusicWinterKey),
+        ("Assets/Audio/Music/Menu_CozyPuzzleTitle.ogg", GameAssets.MusicMenuKey),
+        ("Assets/Audio/Music/Spring_FieldsOfCabbage.ogg", GameAssets.MusicSpringKey),
+        ("Assets/Audio/Music/Summer_JoyRide.ogg", GameAssets.MusicSummerKey),
+        ("Assets/Audio/Music/Autumn_CozyPuzzleInGame3.ogg", GameAssets.MusicAutumnKey),
+        ("Assets/Audio/Music/Winter_Etirwer.ogg", GameAssets.MusicWinterKey),
     };
 
     [MenuItem("Tools/LordSimulation/Addressables/Setup Groups")]
@@ -87,7 +87,7 @@ public static class AddressablesSetup
         AudioImporterSampleSettings sample = importer.defaultSampleSettings;
         sample.loadType = AudioClipLoadType.CompressedInMemory;
         sample.compressionFormat = AudioCompressionFormat.Vorbis;
-        sample.quality = 0.6f;
+        sample.quality = 0.8f; // 0.6 làm vỡ tiếng ở cú bass/trống mạnh
         sample.preloadAudioData = false;
         importer.defaultSampleSettings = sample;
         importer.loadInBackground = true;

@@ -105,6 +105,45 @@ public static class ResidentProductionRules
         }
     }
 
+    // ===== Nguyên liệu đầu vào (GDD 3.3.4: Building + Worker + Input -> Output) =====
+    public const float FurnaceCoalPerWorker = 1f;     // Lò bào chế đốt than để nấu thuốc
+    public const float ForgeCoalPerWorker = 1f;       // Lò rèn đốt than để luyện sắt
+    public const float CoalStoreWoodPerWorker = 3f;   // Lò than củi: đốt gỗ thành than
+
+    /// <summary>Công trình chế biến cần nguyên liệu gì, bao nhiêu mỗi công nhân (theo cùng hệ số với sản lượng).</summary>
+    public static bool TryGetInput(BuildingType type, out ResourceType input, out float perWorker)
+    {
+        switch (type)
+        {
+            case BuildingType.Furnace:
+                input = ResourceType.Coal;
+                perWorker = FurnaceCoalPerWorker;
+                return true;
+            case BuildingType.Forge:
+                input = ResourceType.Coal;
+                perWorker = ForgeCoalPerWorker;
+                return true;
+            case BuildingType.CoalStore:
+                input = ResourceType.Wood;
+                perWorker = CoalStoreWoodPerWorker;
+                return true;
+            default:
+                input = ResourceType.None;
+                perWorker = 0f;
+                return false;
+        }
+    }
+
+    public static int GetStock(in GlobalSystemData global, ResourceType type) => type switch
+    {
+        ResourceType.Food => global.stockFood,
+        ResourceType.Wood => global.stockWood,
+        ResourceType.Coal => global.stockCoal,
+        ResourceType.Iron => global.stockIron,
+        ResourceType.Medicine => global.stockMedicine,
+        _ => 0
+    };
+
     public static float GetSeasonMultiplier(BuildingType type, SeasonType season)
     {
         if (type != BuildingType.Farm && type != BuildingType.HerbFarm)

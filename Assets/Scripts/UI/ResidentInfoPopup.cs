@@ -4,14 +4,12 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Click trái vào cư dân -> popup nhỏ trên đầu hiện tên, tuổi, nghề, sức khỏe, hạnh phúc, nhà, nơi làm.
+/// Click trái vào cư dân -> popup cố định ở góc phải dưới màn hình hiện tên, tuổi, nghề, sức khỏe, hạnh phúc, nhà, nơi làm.
 /// UI tự dựng lúc chạy dưới canvas HUD.
 /// </summary>
 public class ResidentInfoPopup : MonoBehaviour
 {
-    private const float PanelWidth = 320f;
     private const float RefreshInterval = 0.25f;
-    private const float HeadOffset = 0.75f;
 
     /// <summary>Frame gần nhất click trúng cư dân — popup công trình bỏ qua click này.</summary>
     public static int LastPickFrame { get; private set; } = -1;
@@ -62,6 +60,14 @@ public class ResidentInfoPopup : MonoBehaviour
         if (_placement != null && (_placement.isPlacing || _placement.IsDemolishing))
             return;
 
+        // Ưu tiên nhà / công trình: click trúng ô có công trình (trừ đường) thì để popup công trình xử lý
+        if (_placement != null && _placement.GetSolidBuildingIdUnderMouse() != 0)
+        {
+            if (IsOpen)
+                Hide();
+            return;
+        }
+
         ResidentBase picked = PickResident(mouse.position.ReadValue());
         if (picked != null)
         {
@@ -87,8 +93,6 @@ public class ResidentInfoPopup : MonoBehaviour
 
         if (Time.unscaledTime >= _nextRefresh)
             Refresh();
-
-        RuntimeUIKit.PlaceAtWorld(_panel, _canvas, _target.transform.position + Vector3.up * HeadOffset);
     }
 
     // ==========================================
@@ -114,8 +118,8 @@ public class ResidentInfoPopup : MonoBehaviour
         for (int i = 0; i < visuals.Count; i++)
         {
             ResidentBase v = visuals[i];
-            if (v == null || !v.IsBound || !v.gameObject.activeInHierarchy)
-                continue;
+            if (v == null || !v.IsBound || !v.gameObject.activeInHierarchy || v.IsIndoors)
+                continue;   // Đang ngủ trong nhà: không bấm chọn được (click sẽ rơi vào ngôi nhà)
 
             SpriteRenderer sr = v.BodyRenderer;
             if (sr == null || sr.sprite == null)
@@ -166,7 +170,6 @@ public class ResidentInfoPopup : MonoBehaviour
         _panel.SetAsLastSibling();
         Refresh();
         UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_panel);
-        RuntimeUIKit.PlaceAtWorld(_panel, _canvas, view.transform.position + Vector3.up * HeadOffset);
     }
 
     public void Hide()
@@ -207,7 +210,7 @@ public class ResidentInfoPopup : MonoBehaviour
             _sb.Append("</color>\n");
         }
 
-        _sb.Append("<size=14>Sức mạnh ").Append(r.strength)
+        _sb.Append("<size=88%>Sức mạnh ").Append(r.strength)
            .Append(" · Bền ").Append(r.endurance)
            .Append(" · Trí ").Append(r.intellect).Append("</size>");
 
@@ -291,10 +294,11 @@ public class ResidentInfoPopup : MonoBehaviour
         if (_canvas == null)
             return;
 
-        _panel = RuntimeUIKit.CreatePanel(_canvas.transform, "ResidentInfoPanel", PanelWidth);
+        _panel = RuntimeUIKit.CreatePanel(_canvas.transform, "ResidentInfoPanel", RuntimeUIKit.InfoPopupWidth);
         _title = RuntimeUIKit.CreateHeader(_panel, Hide);
         _body = RuntimeUIKit.CreateText(_panel, "Body", 16f, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         _body.lineSpacing = 4f;
+        RuntimeUIKit.SetupInfoPopup(_panel);
         _panel.gameObject.SetActive(false);
     }
 

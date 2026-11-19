@@ -23,8 +23,12 @@ public class MusicManager : MonoBehaviour
 
     [Header("Hiệu ứng")]
     [SerializeField] private AudioClip uiClick;
-    [SerializeField] private AudioClip notice;
-    [SerializeField] private AudioClip alarm;
+    [Tooltip("Thông báo mức Info (nhẹ)")]
+    [SerializeField] private AudioClip alertInfo;
+    [Tooltip("Thông báo mức Warning")]
+    [SerializeField, UnityEngine.Serialization.FormerlySerializedAs("notice")] private AudioClip alertWarning;
+    [Tooltip("Thông báo mức Critical")]
+    [SerializeField, UnityEngine.Serialization.FormerlySerializedAs("alarm")] private AudioClip alertCritical;
 
     private AudioSource _music;
     private AudioSource _sfx;
@@ -40,7 +44,7 @@ public class MusicManager : MonoBehaviour
     public System.Collections.Generic.List<AudioClip> GetSfxClips()
     {
         var clips = new System.Collections.Generic.List<AudioClip>();
-        foreach (AudioClip clip in new[] { uiClick, notice, alarm })
+        foreach (AudioClip clip in new[] { uiClick, alertInfo, alertWarning, alertCritical })
         {
             if (clip != null && !clips.Contains(clip))
                 clips.Add(clip);
@@ -66,6 +70,9 @@ public class MusicManager : MonoBehaviour
         _music.playOnAwake = false;
         _sfx = gameObject.AddComponent<AudioSource>();
         _sfx.playOnAwake = false;
+        // Tiếng click cho mọi nút UI (không cần gắn listener từng nút)
+        if (GetComponent<UIClickSound>() == null)
+            gameObject.AddComponent<UIClickSound>();
         ApplyVolumes();
     }
 
@@ -164,7 +171,27 @@ public class MusicManager : MonoBehaviour
     }
 
     public void PlayUiClick() => PlaySfx(uiClick);
-    public void PlayNotice(bool critical) => PlaySfx(critical ? alarm : notice);
+    /// <summary>Âm báo theo mức thông báo (Info / Warning / Critical).</summary>
+    /// Nhiều thông báo ra cùng lúc (vd. sang tháng mới) thì chỉ kêu một lần, trừ khi mức mới cao hơn.
+    public void PlayAlert(NoticeLevel level)
+    {
+        float now = Time.unscaledTime;
+        if (now - _lastAlertTime < AlertCooldown && level <= _lastAlertLevel)
+            return;
+        _lastAlertTime = now;
+        _lastAlertLevel = level;
+
+        PlaySfx(level switch
+        {
+            NoticeLevel.Critical => alertCritical,
+            NoticeLevel.Warning => alertWarning,
+            _ => alertInfo
+        });
+    }
+
+    private const float AlertCooldown = 0.5f;
+    private float _lastAlertTime = -10f;
+    private NoticeLevel _lastAlertLevel;
 
     public void PlaySfx(AudioClip clip)
     {

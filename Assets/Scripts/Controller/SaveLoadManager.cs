@@ -343,6 +343,8 @@ public class SaveLoadManager : MonoBehaviour
             }
 
             contain.residentManager.RebindAllVisualAgents();
+            // Tính lại chỉ số tổng (dân số, % hạnh phúc…) ngay — save cũ lưu hạnh phúc theo thang 0–1
+            contain.residentManager.RefreshMetricsCache();
             contain.buildingManager.RebuildVisualCity();
             contain.immigrationManager.RefreshAfterLoad();
             contain.edictManager.RefreshAfterLoad();

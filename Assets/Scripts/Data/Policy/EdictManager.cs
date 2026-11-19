@@ -43,6 +43,8 @@ public class EdictManager : MonoBehaviour
 
     public int CreateRule(in EdictRuleData rule)
     {
+        if (!EdictRules.EdictsUnlocked)
+            return -1;
         if (activeCount >= RuleLimit || activeCount >= MAX_EDICTS)
             return -1;
 
@@ -216,24 +218,66 @@ public class EdictManager : MonoBehaviour
 
     private void ApplyMonthlyEffect(in RuleActionData action, ref GlobalSystemData global)
     {
+        // Pillar 1: mọi sắc lệnh có lợi đều phải trả giá (vàng hoặc bất ổn). Không đủ vàng -> tháng đó không có hiệu lực.
         switch (action.type)
         {
             case RuleActionType.AddResourceMonthly:
+            {
                 ResourceType resource = (ResourceType)(byte)action.param0;
                 int amount = Mathf.RoundToInt(action.param1);
                 if (amount > 0)
+                {
+                    int cost = EdictRules.GetMonthlyGoldCost(in action);
+                    if (global.treasuryGold < cost)
+                        break;
+                    globalSystemManager.ModifyGold(-cost);
                     globalSystemManager.AddResource(resource, amount);
+                }
                 else if (amount < 0)
+                {
                     globalSystemManager.ConsumeAvailable(resource, -amount);
+                }
                 break;
+            }
             case RuleActionType.ModifyGoldMonthly:
-                globalSystemManager.ModifyGold(Mathf.RoundToInt(action.param0));
+            {
+                int gold = Mathf.RoundToInt(action.param0);
+                if (gold >= 0)
+                {
+                    // Tận thu: có tiền nhưng dân bất mãn
+                    globalSystemManager.ModifyGold(gold);
+                    global.riotRiskMeter = Mathf.Min(100f, global.riotRiskMeter + gold * EdictRules.TaxRiotPerGold);
+                }
+                else if (global.treasuryGold >= -gold)
+                {
+                    // Trợ cấp: tốn vàng, dân bớt bất mãn (hết vàng thì không trợ cấp được)
+                    globalSystemManager.ModifyGold(gold);
+                    global.riotRiskMeter = Mathf.Max(0f, global.riotRiskMeter + gold * EdictRules.SubsidyRiotPerGold);
+                }
                 break;
+            }
             case RuleActionType.ModifyReputation:
+            {
+                int cost = EdictRules.GetMonthlyGoldCost(in action);
+                if (global.treasuryGold < cost)
+                    break;
+                globalSystemManager.ModifyGold(-cost);
                 globalSystemManager.ModifyReputation(action.param0);
                 break;
+            }
             case RuleActionType.ReduceRiotRisk:
+            {
+                int cost = EdictRules.GetMonthlyGoldCost(in action);
+                if (global.treasuryGold < cost)
+                    break;
+                globalSystemManager.ModifyGold(-cost);
                 global.riotRiskMeter = Mathf.Clamp(global.riotRiskMeter - action.param0, 0f, 100f);
+                break;
+            }
+            case RuleActionType.BoostProduction:
+                // Tăng ca: thưởng sản xuất áp qua productionBonus, đổi lại dân làm quá sức -> bất ổn
+                if (action.param1 > 0f)
+                    global.riotRiskMeter = Mathf.Min(100f, global.riotRiskMeter + action.param1 * EdictRules.BoostRiotPerPercent);
                 break;
         }
     }

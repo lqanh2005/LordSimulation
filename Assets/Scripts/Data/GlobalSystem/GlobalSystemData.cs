@@ -24,7 +24,7 @@ public struct GlobalSystemData
     public float riotRiskMeter;
     public int totalPopulation;
     public int totalInfected;
-    public float overallHappiness;
+    public float overallHappiness;   // % (0–100), trung bình hạnh phúc mẫu
     public bool victoryAchieved;   // Đã đạt mục tiêu MVP (sống qua mùa đông đầu) — lưu từ save v7
 
     // Chuỗi khủng hoảng (GDD 3.7) — lưu từ save v9

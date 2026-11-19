@@ -26,7 +26,8 @@ public enum ResearchID : byte
     Masonry = 24,
     Insulation = 25,
     Administration = 26,
-    Thermometer = 27        // GDD Tier 1: đo thân nhiệt người nhập cư tại Cổng
+    Thermometer = 27,       // GDD Tier 1: đo thân nhiệt người nhập cư tại Cổng
+    CodeOfLaw = 28          // GDD Tier 1: mở hệ thống Sắc lệnh (Tier 0 = kiểm duyệt thủ công)
 }
 
 public enum ResearchBranch : byte { Agriculture = 0, Industry = 1, Society = 2 }
@@ -134,7 +135,7 @@ public static class ResearchCatalog
             "Đào sâu hơn để lấy thêm quặng sắt và than.", 30, 1, 2f, new[] { ResearchID.Forestry },
             ResearchEffect.Production(BuildingType.Mine, 20f)),
         new ResearchNode(ResearchID.CoalLogistics, ResearchBranch.Industry, "Kho vận than",
-            "Tổ chức kho bãi để tích trữ và phân phối than.", 30, 1, 3f, new[] { ResearchID.Forestry },
+            "Lò than củi: đốt gỗ thành than (tốn gỗ, ra than).", 30, 1, 3f, new[] { ResearchID.Forestry },
             ResearchEffect.Unlock(BuildingType.CoalStore)),
         new ResearchNode(ResearchID.Metallurgy, ResearchBranch.Industry, "Luyện kim",
             "Nung chảy quặng, rèn sắt thành phẩm.", 45, 2, 2f, new[] { ResearchID.DeepMining },
@@ -144,6 +145,8 @@ public static class ResearchCatalog
         // ===== XÃ HỘI & Y TẾ (hàng 4-6) =====
         new ResearchNode(ResearchID.Thermometer, ResearchBranch.Society, "Nhiệt kế",
             "Đo thân nhiệt người xin vào tại Cổng. Mở điều kiện \"Thân nhiệt\" trong Sắc lệnh.", 12, 0, 6f, NoPrereq),
+        new ResearchNode(ResearchID.CodeOfLaw, ResearchBranch.Society, "Bộ luật",
+            "Ban hành Sắc lệnh (tối đa 3 luật IF/AND) để gợi ý quyết định ở Cổng và điều hành thành.", 15, 0, 7f, NoPrereq),
         new ResearchNode(ResearchID.Sanitation, ResearchBranch.Society, "Vệ sinh",
             "Đun nước sôi, dọn rác thải để hạn chế dịch bệnh.", 20, 0, 4.5f, NoPrereq,
             ResearchEffect.Disease(0.006f)),
@@ -171,6 +174,11 @@ public static class ResearchCatalog
             ResearchEffect.Gold(20),
             ResearchEffect.Speed(25f)),
     };
+
+    /// <summary>GDD 3.8: nghiên cứu tốn tài nguyên — trả vàng khi bắt đầu (đổi / huỷ giữa chừng thì mất).</summary>
+    public const int GoldPerResearchPoint = 2;
+
+    public static int GetGoldCost(ResearchNode node) => node != null ? node.cost * GoldPerResearchPoint : 0;
 
     private static Dictionary<ResearchID, ResearchNode> byId;
     private static Dictionary<BuildingType, ResearchID> unlockByBuilding;

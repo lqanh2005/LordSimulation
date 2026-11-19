@@ -13,6 +13,7 @@ public static class ResidentAssignmentSystem
 
         ResetBuildingSlots(buildings, buildingCount);
         ValidateAndRecount(residents, residentCount, buildings, buildingCount);
+        MoveSickToQuarantine(residents, residentCount, buildings, buildingCount);
         AssignMissingHousing(residents, residentCount, buildings, buildingCount);
         AssignMissingWorkplaces(residents, residentCount, buildings, buildingCount);
     }
@@ -98,6 +99,56 @@ public static class ResidentAssignmentSystem
             return false;
 
         return ResidentAssignmentRules.IsWorkplaceFor(resident.professionType, building.buildingType);
+    }
+
+    /// <summary>
+    /// Người đang ở nhà thường mà phát bệnh rõ -> chuyển sang Trạm cách ly còn chỗ (không để lây cho cả nhà).
+    /// Hết bệnh thì IsStillValidHouse tự trả họ về nhà thường. Hết chỗ trong Trạm thì ở lại nhà.
+    /// </summary>
+    private static void MoveSickToQuarantine(
+        ResidentData[] residents,
+        int residentCount,
+        BuildingData[] buildings,
+        int buildingCount)
+    {
+        int wardIndex = FindFreeWardIndex(buildings, buildingCount, 0);
+        if (wardIndex < 0)
+            return;
+
+        for (int i = 0; i < residentCount; i++)
+        {
+            ref ResidentData r = ref residents[i];
+            if (!r.isAlive || r.assignedHouseID < 0 || !ResidentAssignmentRules.NeedsKnownQuarantine(in r))
+                continue;
+
+            int houseIndex = FindBuildingIndexById(buildings, buildingCount, (ushort)r.assignedHouseID);
+            if (houseIndex < 0 || buildings[houseIndex].buildingType == BuildingType.QuarantineWard)
+                continue;
+
+            if (!ResidentAssignmentRules.HasHousingSlot(in buildings[wardIndex]))
+            {
+                wardIndex = FindFreeWardIndex(buildings, buildingCount, wardIndex + 1);
+                if (wardIndex < 0)
+                    return;
+            }
+
+            if (buildings[houseIndex].currentOccupancy > 0)
+                buildings[houseIndex].currentOccupancy--;
+            ResidentAssignmentRules.AssignHousing(ref r, buildings[wardIndex].buildingID);
+            buildings[wardIndex].currentOccupancy++;
+        }
+    }
+
+    private static int FindFreeWardIndex(BuildingData[] buildings, int buildingCount, int start)
+    {
+        for (int i = start; i < buildingCount; i++)
+        {
+            if (buildings[i].buildingType == BuildingType.QuarantineWard
+                && ResidentAssignmentRules.HasHousingSlot(in buildings[i]))
+                return i;
+        }
+
+        return -1;
     }
 
     private static void AssignMissingHousing(

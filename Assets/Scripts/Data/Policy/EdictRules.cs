@@ -7,7 +7,52 @@ public static class EdictRules
 
     public static bool IsUnlocked(RuleVariable variable) => IsVariableUnlocked == null || IsVariableUnlocked(variable);
 
+    /// <summary>Do ResearchManager gán: đã nghiên cứu Bộ luật chưa (null = mở sẵn, vd. khi test).</summary>
+    public static System.Func<bool> AreEdictsUnlocked;
+
+    public static bool EdictsUnlocked => AreEdictsUnlocked == null || AreEdictsUnlocked();
+
+    public const string EdictsLockedMessage = "Cần nghiên cứu <b>Bộ luật</b> (phím T) để ban hành Sắc lệnh.";
+
     private const float Epsilon = 0.0001f;
+
+    // ===== Cái giá của sắc lệnh thành phố (Pillar 1) =====
+    public const float TaxRiotPerGold = 0.05f;          // Thu thêm 50 vàng -> +2.5 bạo loạn / tháng
+    public const float SubsidyRiotPerGold = 0.04f;      // Trợ cấp 50 vàng -> -2 bạo loạn / tháng
+    public const int RiotReductionGoldPerPoint = 3;     // Xoa dịu 10 điểm -> 30 vàng / tháng
+    public const int ReputationGoldPerPoint = 6;        // Uy tín +5 -> 30 vàng / tháng
+    public const int ResourceGoldPerUnit = 2;           // Thêm tài nguyên mỗi tháng = mua bằng vàng
+    public const float BoostRiotPerPercent = 0.05f;     // Tăng 20% sản xuất -> +1 bạo loạn / tháng
+
+    /// <summary>Số vàng sắc lệnh phải trả mỗi tháng để có hiệu lực (0 nếu không tốn vàng).</summary>
+    public static int GetMonthlyGoldCost(in RuleActionData action)
+    {
+        return action.type switch
+        {
+            RuleActionType.ReduceRiotRisk => Mathf.CeilToInt(Mathf.Max(0f, action.param0) * RiotReductionGoldPerPoint),
+            RuleActionType.ModifyReputation => Mathf.CeilToInt(Mathf.Max(0f, action.param0) * ReputationGoldPerPoint),
+            RuleActionType.AddResourceMonthly => Mathf.CeilToInt(Mathf.Max(0f, action.param1) * ResourceGoldPerUnit),
+            RuleActionType.ModifyGoldMonthly => action.param0 < 0f ? Mathf.RoundToInt(-action.param0) : 0,
+            _ => 0
+        };
+    }
+
+    /// <summary>Mô tả ngắn cái giá của hành động, để hiện trên thẻ sắc lệnh.</summary>
+    public static string DescribeCost(in RuleActionData action)
+    {
+        switch (action.type)
+        {
+            case RuleActionType.ModifyGoldMonthly:
+                return action.param0 >= 0f
+                    ? $"bạo loạn +{action.param0 * TaxRiotPerGold:0.#}/tháng"
+                    : $"bạo loạn -{-action.param0 * SubsidyRiotPerGold:0.#}/tháng";
+            case RuleActionType.BoostProduction:
+                return action.param1 > 0f ? $"bạo loạn +{action.param1 * BoostRiotPerPercent:0.#}/tháng" : string.Empty;
+            default:
+                int gold = GetMonthlyGoldCost(in action);
+                return gold > 0 ? $"-{gold} vàng/tháng" : string.Empty;
+        }
+    }
 
     public static bool IsApplicantVariable(RuleVariable variable)
     {
@@ -152,20 +197,30 @@ public static class EdictRules
         };
     }
 
+    /// <summary>
+    /// GDD 3.5 Conflict Resolution: xét từ trên xuống, luật đầu tiên có điều kiện IF khớp hoàn chỉnh được chạy.
+    /// Nhánh ELSE chỉ là phương án dự phòng: chỉ dùng khi KHÔNG luật nào khớp IF — khi đó lấy ELSE của luật
+    /// ưu tiên cao nhất có ELSE (để ELSE không chặn các luật bên dưới).
+    /// </summary>
     public static bool TryResolveImmigration(
         EdictRuleData[] edicts,
         int edictCount,
         in ResidentData applicant,
         in GlobalSystemData global,
         out RuleActionData action,
-        out int edictIndex)
+        out int edictIndex,
+        out bool usedElse)
     {
         action = default;
         edictIndex = -1;
+        usedElse = false;
         if (edicts == null || edictCount <= 0)
             return false;
 
-        int bestOrder = int.MaxValue;
+        int bestThenOrder = int.MaxValue;
+        int bestElseOrder = int.MaxValue;
+        int elseIndex = -1;
+        RuleActionData elseAction = default;
 
         for (int i = 0; i < edictCount; i++)
         {
@@ -173,19 +228,36 @@ public static class EdictRules
             if (!edict.isActive || !HasImmigrationAction(in edict))
                 continue;
 
-            RuleActionData resolved = Resolve(in edict, in global, in applicant, true, out _);
-            if (!IsImmigrationAction(resolved.type))
-                continue;
-
-            if (edict.executionOrder < bestOrder)
+            bool matched = EvaluateConditions(in edict, in global, in applicant, true);
+            if (matched)
             {
-                bestOrder = edict.executionOrder;
-                action = resolved;
-                edictIndex = i;
+                if (IsImmigrationAction(edict.thenAction.type) && edict.executionOrder < bestThenOrder)
+                {
+                    bestThenOrder = edict.executionOrder;
+                    action = edict.thenAction;
+                    edictIndex = i;
+                }
+            }
+            else if (IsImmigrationAction(edict.elseAction.type) && edict.executionOrder < bestElseOrder)
+            {
+                bestElseOrder = edict.executionOrder;
+                elseAction = edict.elseAction;
+                elseIndex = i;
             }
         }
 
-        return edictIndex >= 0;
+        if (edictIndex >= 0)
+            return true;
+
+        if (elseIndex >= 0)
+        {
+            action = elseAction;
+            edictIndex = elseIndex;
+            usedElse = true;
+            return true;
+        }
+
+        return false;
     }
 
     public static bool TryGetSuggestedAction(
@@ -196,7 +268,7 @@ public static class EdictRules
         out RuleAction action,
         out int edictIndex)
     {
-        bool found = TryResolveImmigration(edicts, edictCount, in applicant, in global, out RuleActionData resolved, out edictIndex);
+        bool found = TryResolveImmigration(edicts, edictCount, in applicant, in global, out RuleActionData resolved, out edictIndex, out _);
         action = found ? ToRuleAction(resolved.type) : RuleAction.Admit;
         return found;
     }

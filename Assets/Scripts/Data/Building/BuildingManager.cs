@@ -126,6 +126,7 @@ public class BuildingManager : MonoBehaviour
                 continue;
 
             completed++;
+            RoadNetwork.MarkDirty();   // Tòa thị chính xây xong mới thành trung tâm mạng đường
             GameEvents.Post(EventID.BuildingCompleted, building.buildingID);
         }
 

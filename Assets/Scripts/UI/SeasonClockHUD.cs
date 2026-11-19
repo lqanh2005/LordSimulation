@@ -14,13 +14,15 @@ public class SeasonClockHUD : MonoBehaviour
     [SerializeField, Min(0f)] private float rotateSmoothing = 8f;
 
     [Header("Text")]
-    [SerializeField] private TMP_Text txtDayAndSeason;     // "Ngày 12, Mùa Xuân"
+    [SerializeField] private TMP_Text txtDayAndSeason;     // "Buổi sáng, Mùa Xuân"
     [SerializeField] private TMP_Text txtMonthAndYear;     // "Tháng 3 - Năm 1"
-    [SerializeField, Min(1)] private int daysPerMonth = 30;
 
     [Header("Kiểu mockup: \"Mùa Xuân, Năm 1\" + thanh tiến trình mùa")]
     [SerializeField] private Image seasonProgressFill;     // Image Filled ngang, 0..1 trong 3 tháng của mùa
     [SerializeField] private TMP_Text txtSeasonAndYear;    // "Mùa Xuân, Năm 1"
+    [Tooltip("Icon mặt trời — đổi màu theo vòng ngày–đêm. Để trống thì tự tìm con tên Icon_Season")]
+    [SerializeField] private Image sunIcon;
+    private bool sunIconSearched;
 
     private float currentAngle;
     private bool hasAngle;
@@ -56,14 +58,38 @@ public class SeasonClockHUD : MonoBehaviour
         if (seasonProgressFill != null)
             seasonProgressFill.fillAmount = ((month - 1) % 3 + monthProgress) / 3f;
 
-        int day = Mathf.Clamp(Mathf.FloorToInt(monthProgress * daysPerMonth) + 1, 1, daysPerMonth);
-        if (day != shownDay || month != shownMonth || data.currentYear != shownYear)
+        // Không đếm "ngày thứ mấy" (1 tháng = 1 vòng ngày–đêm, xem DayCycle) — chỉ hiện buổi trong ngày
+        float hour = DayCycle.GetHour(in data);
+        DayPhase phase = DayCycle.GetPhase(hour, data.CurrentSeason);
+        UpdateSunIcon(DayCycle.GetDarkness(hour, data.CurrentSeason));
+        if ((int)phase != shownDay || month != shownMonth || data.currentYear != shownYear)
         {
-            shownDay = day;
+            shownDay = (int)phase;
             shownMonth = month;
             shownYear = data.currentYear;
-            RefreshTexts(day, month, data.currentYear, data.CurrentSeason);
+            RefreshTexts(phase, month, data.currentYear, data.CurrentSeason);
         }
+    }
+
+    /// <summary>Biểu tượng mặt trời đổi màu theo giờ: trắng ban ngày -> cam lúc chạng vạng -> xanh nhạt (trăng) ban đêm.</summary>
+    private void UpdateSunIcon(float darkness)
+    {
+        if (sunIcon == null)
+        {
+            if (sunIconSearched)
+                return;
+            sunIconSearched = true;
+            Transform t = transform.Find("Icon_Season");
+            sunIcon = t != null ? t.GetComponent<Image>() : null;
+            if (sunIcon == null)
+                return;
+        }
+
+        Color dusk = new Color(1f, 0.62f, 0.3f, 1f);
+        Color night = new Color(0.62f, 0.72f, 1f, 0.75f);
+        sunIcon.color = darkness < 0.5f
+            ? Color.Lerp(Color.white, dusk, darkness * 2f)
+            : Color.Lerp(dusk, night, (darkness - 0.5f) * 2f);
     }
 
     private void UpdateRing(int month, float monthProgress)
@@ -85,7 +111,7 @@ public class SeasonClockHUD : MonoBehaviour
         ringPivot.localRotation = Quaternion.Euler(0f, 0f, currentAngle);
     }
 
-    private void RefreshTexts(int day, int month, int year, SeasonType season)
+    private void RefreshTexts(DayPhase phase, int month, int year, SeasonType season)
     {
         string seasonName = season switch
         {
@@ -96,7 +122,8 @@ public class SeasonClockHUD : MonoBehaviour
             _ => ""
         };
 
-        string dayText = $"Ngày {day}, Mùa {seasonName}";
+        string phaseName = DayCycle.GetPhaseName(phase);
+        string dayText = $"{phaseName}, Mùa {seasonName}";
 
         if (txtSeasonAndYear != null)
             txtSeasonAndYear.text = $"Mùa {seasonName}, Năm {year}";

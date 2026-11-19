@@ -49,6 +49,7 @@ public struct ResidentData
     public byte strength;   // Sức mạnh: 0 - 100
     public byte endurance;  // Thể lực / Bền bỉ: 0 - 100
     public byte intellect;  // Trí lực: 0 - 100
+    public byte quarantineMonths;  // Số tháng cách ly còn lại (0 = không bị cách ly) — lưu từ save v10
 
     public readonly AgeGroupType GetAgeGroup()
     {

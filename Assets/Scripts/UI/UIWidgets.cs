@@ -128,7 +128,6 @@ public static class UIWidgets
                 Text(close, "X", "X", 24f, UISkin.Gold);
             Button button = close.gameObject.AddComponent<Button>();
             UISkin.SetButtonTint(button);
-            button.onClick.AddListener(RuntimeUIKit.PlayClick);
             button.onClick.AddListener(onClose);
         }
 
@@ -194,7 +193,6 @@ public static class UIWidgets
         rt.GetComponent<Image>().raycastTarget = true;
         Button button = rt.gameObject.AddComponent<Button>();
         UISkin.SetButtonTint(button);
-        button.onClick.AddListener(RuntimeUIKit.PlayClick);
         if (onClick != null)
             button.onClick.AddListener(onClick);
 
@@ -211,7 +209,6 @@ public static class UIWidgets
         Button button = rt.gameObject.AddComponent<Button>();
         button.targetGraphic = img;
         UISkin.SetButtonTint(button);
-        button.onClick.AddListener(RuntimeUIKit.PlayClick);
         button.onClick.AddListener(onClick);
         TextMeshProUGUI text = Text(rt, "Label", label, 19f, UISkin.Cream, TextAlignmentOptions.Center, true);
         Stretch(text.rectTransform, 8f);
@@ -249,7 +246,6 @@ public static class UIWidgets
         toggle.toggleTransition = Toggle.ToggleTransition.None;
         UISkin.SetButtonTint(toggle);
         toggle.SetIsOnWithoutNotify(value);
-        toggle.onValueChanged.AddListener(_ => RuntimeUIKit.PlayClick());
         if (onChange != null)
             toggle.onValueChanged.AddListener(onChange);
         return toggle;

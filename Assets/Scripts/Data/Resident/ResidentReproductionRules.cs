@@ -25,6 +25,10 @@ public static class ResidentReproductionRules
         if (resident.assignedHouseID < 0)
             return false;
 
+        // Đang trong thời hạn cách ly hoặc mang bệnh (ủ bệnh / điều trị) thì không sinh con
+        if (ResidentAssignmentRules.NeedsQuarantineHousing(in resident))
+            return false;
+
         if (resident.hungerMonths > 0 || resident.coldMonths > 0)
             return false;
 

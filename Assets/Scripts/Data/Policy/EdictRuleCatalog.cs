@@ -131,7 +131,7 @@ public static class EdictRuleCatalog
             BuildingType.Farm => "nông nghiệp",
             BuildingType.Mine => "khai mỏ",
             BuildingType.Clinic => "y tế",
-            BuildingType.Furnace => "lò sưởi",
+            BuildingType.Furnace => "lò bào chế",
             BuildingType.School => "giáo dục",
             BuildingType.GuardPost => "trạm gác",
             BuildingType.LumberCamp => "khai thác gỗ",
@@ -199,6 +199,13 @@ public static class EdictRuleCatalog
     }
 
     public static string DescribeAction(in RuleActionData action)
+    {
+        string text = DescribeActionCore(in action);
+        string cost = EdictRules.DescribeCost(in action);
+        return string.IsNullOrEmpty(cost) ? text : $"{text} ({cost})";
+    }
+
+    private static string DescribeActionCore(in RuleActionData action)
     {
         return action.type switch
         {

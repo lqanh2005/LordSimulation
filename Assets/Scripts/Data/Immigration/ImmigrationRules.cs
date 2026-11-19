@@ -12,12 +12,20 @@ public static class ImmigrationRules
     public const float DefaultTariffPercent = 20f;
     public const float MinReputation = -50f;
     public const float MaxReputation = 100f;
-    public const int QuarantineFoodPerMonth = 1;
-    public const int QuarantineMedicinePerMonth = 1;
+    public const int AuthorityRegenPerMonth = 5;          // Điểm Quyền lực hồi mỗi tháng (dùng cho Áp giải thẩm vấn)
+    public const int MaxAuthority = 100;
+    public const float MinArrivalMultiplier = 0.25f;      // Uy tín tệ nhất vẫn còn ~1/4 lượng người tới
+    public const float ReputationRecoveryPerMonth = 0.5f; // Uy tín âm tự hồi dần về 0 (tiếng xấu phai theo thời gian)
+    public const int QuarantineMedicinePerMonth = 1;      // Lương thực đã tính chung với dân số, chỉ thêm thuốc
+    public const byte DefaultQuarantineMonths = 3;        // GDD 3.1.6: mặc định 3 tháng (balance TBD)
+    public const float DenySickReputationGain = 0.5f;     // Từ chối người có triệu chứng rõ
+    public const float DenyHealthyReputationLoss = 1f;    // Từ chối người khoẻ (trước hệ số)
 
     // ===== Áp lực hàng chờ (Waiting Yard) — GDD 3.1.7 =====
     public const int YardFoodPerPerson = 1;               // Lương thực / người chờ / tháng (lấy từ kho thành)
     public const float YardHungerHappinessPenalty = 0.1f;
+    public const float YardSickDeathMultiplier = 2f;      // Phát bệnh trong hàng chờ: không ai chữa -> chết gấp đôi
+    public const float YardSickHungryDeathBonus = 0.05f;  // Thêm nếu đang đói
     public const int YardLeaveHungerMonths = 2;           // Đói >= N tháng thì bỏ đi
     public const float YardLeaveReputationPenalty = 0.5f; // Mỗi người bỏ đi vì đói
     public const float YardInfectChancePerCarrier = 0.05f;
@@ -57,12 +65,17 @@ public static class ImmigrationRules
         if (count > MaxMonthlyArrivals)
             count = MaxMonthlyArrivals;
 
+        // Uy tín thấp làm ít người tới, nhưng không bao giờ tắt hẳn dòng người (tránh kẹt game:
+        // không ai tới thì cũng không có cách nào lấy lại uy tín ở Cổng)
         float mult = 0.5f + Mathf.Clamp(reputation, MinReputation, MaxReputation) / 100f;
-        if (mult < 0f)
-            mult = 0f;
+        if (mult < MinArrivalMultiplier)
+            mult = MinArrivalMultiplier;
 
-        int scaled = Mathf.RoundToInt(count * mult);
-        return scaled > 0 ? scaled : 0;
+        float expected = count * mult;
+        int scaled = Mathf.FloorToInt(expected);
+        if (Random.value < expected - scaled)   // làm tròn ngẫu nhiên giữ đúng kỳ vọng
+            scaled++;
+        return scaled;
     }
 
     public static int GetEntryTax(in ResidentData applicant, float tariffPercent)
@@ -82,14 +95,29 @@ public static class ImmigrationRules
         applicant.wealth = next < 0 ? (byte)0 : (byte)next;
     }
 
-    public static float GetDenyReputationGain(in ResidentData applicant)
+    /// <summary>
+    /// GDD 3.1.5 + Pillar 1: từ chối giữ thành an toàn nhưng mất uy tín, tuỳ sức khoẻ / nghề / nguồn gốc / khủng hoảng.
+    /// - Có triệu chứng rõ ràng: thiên hạ thông cảm → cộng nhẹ.
+    /// - Người khoẻ: trừ uy tín; người có nghề quý, quý tộc, giàu có bị từ chối thì tiếng xấu lan xa hơn.
+    /// - Dân vùng đỏ bị nghi kỵ sẵn → trừ ít hơn. Mùa đông (đuổi người ra giữa trời rét) → trừ nặng hơn.
+    /// </summary>
+    public static float GetDenyReputationChange(in ResidentData applicant, SeasonType season)
     {
-        float gain = 1.5f + applicant.wealth / 40f;
+        bool visiblySick = applicant.healthStatus == HealthStatus.ActiveInfected
+            || applicant.symptoms != SymptomFlags.None;
+        if (visiblySick)
+            return DenySickReputationGain;
+
+        float loss = DenyHealthyReputationLoss + applicant.wealth / 50f;
+        if (applicant.professionType == ProfessionType.Doctor || applicant.professionType == ProfessionType.Teacher)
+            loss += 0.5f;
         if (applicant.factionType == FactionType.Aristocrat)
-            gain += 1.5f;
-        if (applicant.originRegion == OriginRegion.GreenZone)
-            gain += 0.5f;
-        return gain;
+            loss += 1f;
+        if (applicant.originRegion == OriginRegion.RedZone)
+            loss *= 0.5f;
+        if (season == SeasonType.Winter)
+            loss *= 1.5f;
+        return -loss;
     }
 
     public static ResidentData CreateApplicant(int residentId)

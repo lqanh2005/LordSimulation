@@ -6,6 +6,15 @@ public class GlobalSystemManager : MonoBehaviour
     [Tooltip("Thời gian thực (giây) cho 1 tháng in-game")]
     [SerializeField] private float realSecondsPerMonth = 120f; // 2 phút thực = 1 tháng
 
+    [Header("Bão tuyết (khủng hoảng chính MVP)")]
+    [Tooltip("Xác suất bắt đầu bão tuyết ở mỗi tháng mùa đông khi trời đang quang")]
+    [SerializeField, Range(0f, 1f)] private float blizzardChancePerWinterMonth = 0.4f;
+    [Tooltip("Số tháng bão kéo dài (min, max)")]
+    [SerializeField] private Vector2Int blizzardDurationMonths = new Vector2Int(1, 2);
+    [SerializeField] private float blizzardTempDrop = -15f;
+    [Tooltip("Than tiêu thụ thêm mỗi đầu người mỗi tháng khi có bão tuyết")]
+    [SerializeField, Min(0)] private int blizzardExtraCoalPerCapita = 1;
+
     // Dữ liệu lõi toàn cầu (65 bytes)
     [SerializeField] private GlobalSystemData data;
 
@@ -16,21 +25,24 @@ public class GlobalSystemManager : MonoBehaviour
 
     [SerializeField] private BuildingManager buildingManager;
 
+    /// <summary>Số giây thật cho 1 tháng ở tốc độ x1 (= 1 vòng ngày–đêm, xem DayCycle).</summary>
+    public float RealSecondsPerMonth => realSecondsPerMonth;
+
+    /// <summary>Hệ số tốc độ game hiện tại: 0 khi tạm dừng, 1/2/3 theo nút tốc độ.</summary>
+    public float SpeedMultiplier => data.currentGameSpeed switch
+    {
+        GameSpeed.Pause => 0f,
+        GameSpeed.Speed2x => 2f,
+        GameSpeed.Speed3x => 3f,
+        _ => 1f
+    };
+
     private void Update()
     {
         if (data.currentGameSpeed == GameSpeed.Pause) return;
 
-        // Tính tốc độ mô phỏng (1x, 2x, 3x)
-        float speedMultiplier = data.currentGameSpeed switch
-        {
-            GameSpeed.Speed1x => 1f,
-            GameSpeed.Speed2x => 2f,
-            GameSpeed.Speed3x => 3f,
-            _ => 1f
-        };
-
         // Cập nhật tiến độ trôi qua của tháng hiện tại (0.0 -> 1.0)
-        data.timeTickProgress += (Time.deltaTime * speedMultiplier) / realSecondsPerMonth;
+        data.timeTickProgress += (Time.deltaTime * SpeedMultiplier) / realSecondsPerMonth;
 
         if (data.timeTickProgress >= 1.0f)
         {
@@ -109,13 +121,26 @@ public class GlobalSystemManager : MonoBehaviour
         // 1. Tính toán lại nhiệt độ môi trường theo Mùa
         UpdateSeasonalEnvironment();
 
+        // Chụp kho trước mô phỏng tháng để tính thay đổi ròng (sản xuất − tiêu hao) cho HUD
+        ResourceAmounts before = ResourceAmounts.From(in data);
+
         // 2. Trừ tiêu hao tài nguyên & kiểm tra nguy cơ bạo loạn
         ProcessMacroMonthlyConsumption();
 
         // 3. Phát event thông báo sang tháng mới cho toàn bộ hệ thống
+        //    (sản xuất, thuế, sắc lệnh, nghiên cứu, hàng chờ… đều chạy đồng bộ trong event này)
         PostMonthChanged(true);
+
+        LastMonthNet = ResourceAmounts.From(in data) - before;
         GameEvents.Post(EventID.ResourcesChanged);
     }
+
+    /// <summary>
+    /// Thay đổi ròng của kho trong lần mô phỏng tháng gần nhất: mọi sản xuất, thuế trừ đi tiêu hao, sưởi,
+    /// chi phí sắc lệnh / nghiên cứu… Không tính chi tiêu thủ công giữa hai tháng (xây, mua bán với thương nhân).
+    /// Không lưu vào save: sau khi nạp game là 0 tới tháng kế tiếp.
+    /// </summary>
+    public ResourceAmounts LastMonthNet { get; private set; }
 
     private void UpdateSeasonalEnvironment()
     {
@@ -129,19 +154,39 @@ public class GlobalSystemManager : MonoBehaviour
             _ => 20.0f
         };
 
-        // Xử lý sự kiện thời tiết cực đoan (Bão tuyết / Sương độc / Nắng gắt)
+        // Xử lý sự kiện thời tiết cực đoan. weatherDuration = số tháng còn lại, tính cả tháng hiện tại.
         if (data.weatherDuration > 0)
-        {
             data.weatherDuration--;
-            if (data.currentWeather == WeatherEvent.Blizzard) baseTemp -= 15.0f; // Rét buốt -30°C
-        }
-        else
+        if (data.currentWeather == WeatherEvent.Blizzard && data.CurrentSeason != SeasonType.Winter)
+            data.weatherDuration = 0;   // Hết mùa đông thì bão tan
+        if (data.weatherDuration == 0)
         {
             data.currentWeather = WeatherEvent.Clear;
+            TryStartWeatherEvent();
         }
+
+        if (data.currentWeather == WeatherEvent.Blizzard)
+            baseTemp += blizzardTempDrop; // Rét buốt -30°C
 
         data.environmentTemperature = baseTemp;
         PostWeatherChanged();
+    }
+
+    /// <summary>
+    /// GDD 2.2.i / 3.7: khủng hoảng chính Bão tuyết — chỉ xảy ra mùa đông, kéo dài vài tháng,
+    /// làm lạnh thêm và đốt than nhiều hơn (dễ cạn kho than → chết rét → chuỗi khủng hoảng).
+    /// </summary>
+    private void TryStartWeatherEvent()
+    {
+        if (data.CurrentSeason != SeasonType.Winter)
+            return;
+        if (Random.value >= blizzardChancePerWinterMonth)
+            return;
+
+        int minMonths = Mathf.Max(1, blizzardDurationMonths.x);
+        int maxMonths = Mathf.Max(minMonths, blizzardDurationMonths.y);
+        data.currentWeather = WeatherEvent.Blizzard;
+        data.weatherDuration = (byte)Random.Range(minMonths, maxMonths + 1);
     }
 
     private BuildingEffectRules.MonthlyEffects CollectBuildingEffects()
@@ -175,6 +220,10 @@ public class GlobalSystemManager : MonoBehaviour
         data.treasuryGold += fx.gold;
         if (fx.reputation != 0f)
             ModifyReputation(fx.reputation);
+        data.authorityPoints = (ushort)Mathf.Min(ImmigrationRules.MaxAuthority,
+            data.authorityPoints + ImmigrationRules.AuthorityRegenPerMonth);
+        if (data.reputation < 0f)
+            ModifyReputation(Mathf.Min(-data.reputation, ImmigrationRules.ReputationRecoveryPerMonth));
         data.riotRiskMeter = Mathf.Max(0f, data.riotRiskMeter - fx.riotReduction);
 
         int foodPerCapita = data.CurrentSeason == SeasonType.Winter ? 2 : 1;
@@ -192,6 +241,8 @@ public class GlobalSystemManager : MonoBehaviour
         GameEvents.Post(EventID.HungerResolved, LastHungryRate);
 
         int coalPerCapita = data.CurrentSeason == SeasonType.Winter ? 1 : 0;
+        if (data.currentWeather == WeatherEvent.Blizzard)
+            coalPerCapita += blizzardExtraCoalPerCapita;
         int needCoal = data.totalPopulation * coalPerCapita;
         int consumedCoal = Mathf.Min(data.stockCoal, needCoal);
         data.stockCoal -= consumedCoal;
@@ -363,4 +414,30 @@ public class GlobalSystemManager : MonoBehaviour
         data.totalInfected = infectedCount;
         data.overallHappiness = avgHappiness;
     }
+}
+
+/// <summary>Số lượng 6 loại tài nguyên trong kho (dùng cho chênh lệch theo tháng).</summary>
+public struct ResourceAmounts
+{
+    public int gold, food, coal, wood, iron, medicine;
+
+    public static ResourceAmounts From(in GlobalSystemData d) => new ResourceAmounts
+    {
+        gold = d.treasuryGold,
+        food = d.stockFood,
+        coal = d.stockCoal,
+        wood = d.stockWood,
+        iron = d.stockIron,
+        medicine = d.stockMedicine
+    };
+
+    public static ResourceAmounts operator -(ResourceAmounts a, ResourceAmounts b) => new ResourceAmounts
+    {
+        gold = a.gold - b.gold,
+        food = a.food - b.food,
+        coal = a.coal - b.coal,
+        wood = a.wood - b.wood,
+        iron = a.iron - b.iron,
+        medicine = a.medicine - b.medicine
+    };
 }

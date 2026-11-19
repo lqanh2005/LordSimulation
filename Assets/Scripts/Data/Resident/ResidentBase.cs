@@ -113,6 +113,9 @@ public class ResidentBase : MonoBehaviour
         SetFacingBack(false);
         ApplyFlip();
         gameObject.SetActive(true);
+        SetIndoors(false);   // Visual lấy từ pool có thể còn đang ẩn trong nhà
+        if (spriteRenderer != null)
+            spriteRenderer.enabled = true;
         SyncFromData(in data);
     }
 
@@ -354,9 +357,30 @@ public class ResidentBase : MonoBehaviour
         transform.localScale = Vector3.one * scale;
     }
 
+    // ===== Vào trong nhà (giờ ngủ) =====
+    private bool _indoors;
+
+    public bool IsIndoors => _indoors;
+
+    /// <summary>Ẩn thân + icon khi cư dân đã về tới nhà vào giờ ngủ; hiện lại khi ra khỏi nhà.</summary>
+    public void SetIndoors(bool indoors)
+    {
+        if (_indoors == indoors)
+            return;
+
+        _indoors = indoors;
+        if (spriteRenderer != null)
+            spriteRenderer.enabled = !indoors;
+        if (_statusIcon != null)
+            _statusIcon.enabled = !indoors && _hasStatusIcon;
+    }
+
+    private bool _hasStatusIcon;
+
     private void ApplyOverlay(in ResidentData data)
     {
         Sprite icon = GetStatusIcon(in data);
+        _hasStatusIcon = icon != null;
         if (icon == null)
         {
             if (_statusIcon != null && _statusIcon.enabled)
@@ -364,11 +388,13 @@ public class ResidentBase : MonoBehaviour
             return;
         }
 
+        // Vẫn cập nhật sprite khi đang trong nhà để lúc ra ngoài hiện đúng trạng thái
         EnsureStatusIcon();
         if (_statusIcon.sprite != icon)
             _statusIcon.sprite = icon;
-        if (!_statusIcon.enabled)
-            _statusIcon.enabled = true;
+        bool show = !_indoors;
+        if (_statusIcon.enabled != show)
+            _statusIcon.enabled = show;
     }
 
     private Sprite GetStatusIcon(in ResidentData data)

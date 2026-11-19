@@ -95,6 +95,23 @@ public static class ResidentProductionSystem
                 * (research != null ? research.GetProductionMultiplier(building.buildingType) : 1f)
                 * sampleScale;
 
+            // Công trình chế biến: thiếu nguyên liệu thì chỉ làm được phần tương ứng
+            if (ResidentProductionRules.TryGetInput(building.buildingType, out ResourceType input, out float inputPerWorker))
+            {
+                int need = Mathf.CeilToInt(inputPerWorker * multiplier);
+                if (need > 0)
+                {
+                    int take = Mathf.Min(need, ResidentProductionRules.GetStock(in global.GetGlobalDataRef(), input));
+                    if (take <= 0)
+                    {
+                        building.outputStored = 0;
+                        continue;
+                    }
+                    global.ConsumeAvailable(input, take);
+                    multiplier *= (float)take / need;
+                }
+            }
+
             float primaryAmount = primaryPerWorker * multiplier;
             PendingByResource[(int)primary] += primaryAmount;
             if (secondary != ResourceType.None)

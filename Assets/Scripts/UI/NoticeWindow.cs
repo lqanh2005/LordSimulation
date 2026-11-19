@@ -80,7 +80,6 @@ public static class NoticeWindow
                 Button button = row.gameObject.AddComponent<Button>();
                 UISkin.SetButtonTint(button);
                 System.Action action = entry.onClick;
-                button.onClick.AddListener(RuntimeUIKit.PlayClick);
                 button.onClick.AddListener(() =>
                 {
                     Close();

@@ -70,8 +70,9 @@ public class ImmigrationPopupUI : MonoBehaviour
         if (!IsOpen || _manager == null)
             return;
 
-        if (_manager.TryGetCurrent(out ResidentData applicant))
-            ShowApplicant(in applicant, _manager.GetSuggestedAction(in applicant), _manager.waitingCount);
+        // Vẽ lại qua manager để giữ đủ dòng "Vì sao", thân nhiệt (Nhiệt kế) và kết quả thẩm vấn
+        if (_manager.HasApplicants)
+            _manager.RefreshCurrent();
         else
             ShowEmpty();
     }
@@ -338,7 +339,6 @@ public class ImmigrationPopupUI : MonoBehaviour
         closeButton = back.gameObject.AddComponent<Button>();
         closeButton.targetGraphic = backImg;
         UISkin.SetButtonTint(closeButton);
-        closeButton.onClick.AddListener(RuntimeUIKit.PlayClick);
         TextMeshProUGUI backLabel = UIWidgets.Text(back, "Label", "Quay về thành", 20f, UISkin.Cream, TextAlignmentOptions.Center, true);
         UIWidgets.Stretch(backLabel.rectTransform);
 
@@ -420,7 +420,6 @@ public class ImmigrationPopupUI : MonoBehaviour
         Button button = rt.gameObject.AddComponent<Button>();
         button.targetGraphic = img;
         UISkin.SetButtonTint(button);
-        button.onClick.AddListener(RuntimeUIKit.PlayClick);
         TextMeshProUGUI text = UIWidgets.Text(rt, "Label", label, 22f, UISkin.Cream, TextAlignmentOptions.Center, true);
         text.fontStyle = FontStyles.Bold;
         UIWidgets.Stretch(text.rectTransform);

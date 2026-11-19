@@ -58,14 +58,14 @@ public class EdictPopupController : MonoBehaviour
         new ActionPreset("Tăng sản xuất lương thực", RuleActionType.BoostProduction, (float)BuildingType.Farm, 20f),
         new ActionPreset("Tăng khai thác gỗ", RuleActionType.BoostProduction, (float)BuildingType.LumberCamp, 20f),
         new ActionPreset("Tăng khai thác mỏ", RuleActionType.BoostProduction, (float)BuildingType.Mine, 20f),
-        new ActionPreset("Tăng cường lò sưởi", RuleActionType.BoostProduction, (float)BuildingType.Furnace, 20f),
+        new ActionPreset("Tăng bào chế thuốc", RuleActionType.BoostProduction, (float)BuildingType.Furnace, 20f),
         new ActionPreset("Thu thêm thuế", RuleActionType.ModifyGoldMonthly, 50f),
         new ActionPreset("Trợ cấp dân chúng", RuleActionType.ModifyGoldMonthly, -50f),
         new ActionPreset("Xoa dịu dân chúng", RuleActionType.ReduceRiotRisk, 10f),
         new ActionPreset("Củng cố uy tín", RuleActionType.ModifyReputation, 5f),
         new ActionPreset("Cho nhập cư", RuleActionType.ImmigrationAdmit),
         new ActionPreset("Từ chối nhập cư", RuleActionType.ImmigrationDeny),
-        new ActionPreset("Cách ly người nhập cư", RuleActionType.ImmigrationQuarantine, 2f),
+        new ActionPreset("Cách ly người nhập cư", RuleActionType.ImmigrationQuarantine, ImmigrationRules.DefaultQuarantineMonths),
         new ActionPreset("Áp giải tới bàn thẩm vấn", RuleActionType.ImmigrationEscort, 5f)
     };
 
@@ -100,7 +100,10 @@ public class EdictPopupController : MonoBehaviour
         Initialize();
 
         edictManager = HUDLocator.ResolveEdictManager(edictManager);
-        SetStatus(string.Empty, successColor);
+        if (EdictRules.EdictsUnlocked)
+            SetStatus(string.Empty, successColor);
+        else
+            SetStatus(EdictRules.EdictsLockedMessage, errorColor);
         RefreshRuleList();
     }
 
@@ -263,6 +266,12 @@ public class EdictPopupController : MonoBehaviour
         if (!builder.IsValid(out string error))
         {
             SetStatus(error, errorColor);
+            return;
+        }
+
+        if (!EdictRules.EdictsUnlocked)
+        {
+            SetStatus(EdictRules.EdictsLockedMessage, errorColor);
             return;
         }
 

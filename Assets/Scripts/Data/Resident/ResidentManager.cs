@@ -34,6 +34,8 @@ public class ResidentManager : MonoBehaviour
 
     [Header("Đói / Chết đói")]
     [SerializeField] [Range(0f, 1f)] private float starveDeathChance = 0.1f;
+    [Header("Lạnh / Chết rét")]
+    [SerializeField] [Range(0f, 1f)] private float freezeDeathChance = 0.1f;
     [SerializeField] private float hungerHappinessPenalty = 0.1f;
     [SerializeField] private float coldHappinessPenalty = 0.1f;
 
@@ -61,7 +63,22 @@ public class ResidentManager : MonoBehaviour
         public Vector3 world;
         public Vector2Int cell;
         public ushort buildingId;
+        public bool indoors;   // Tới nơi thì vào trong nhà (ẩn hình) — giờ ngủ
     }
+
+    // ===== Lịch sinh hoạt theo vòng ngày–đêm (DayCycle) =====
+    [Header("Lịch sinh hoạt (1 tháng = 1 vòng ngày–đêm)")]
+    [Tooltip("Tỉ lệ lính gác / thầy thuốc làm ca đêm (1/N người)")]
+    [SerializeField, Min(2)] private int nightShiftOneIn = 5;
+    [Tooltip("Tỉ lệ người không đi làm ra quảng trường (Tòa thị chính) ban ngày (N/3)")]
+    [SerializeField, Range(0, 3)] private int outingThirds = 2;
+
+    private ushort _plazaBuildingId;
+    private Vector3 _plazaWorld;
+    private Vector2Int _plazaCell;
+    private readonly List<CommuteGoal> _campfires = new List<CommuteGoal>(8);
+    private float _goalHour;
+    private bool _reassignPending;
 
     // ===== Debug: ép cư dân đi tới ô chỉ định (key = residentID, bền qua compact) =====
     private readonly Dictionary<int, CommuteGoal> _debugGoals = new Dictionary<int, CommuteGoal>();
@@ -135,6 +152,7 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
         GameEvents.Unlisten(EventID.BuildingDemolished, OnBuildingDemolished);
+        GameEvents.Unlisten(EventID.BuildingCompleted, OnBuildingCompleted);
 
         GameEvents.Listen(EventID.HungerResolved, OnHungerResolved);
         GameEvents.Listen(EventID.ColderResolved, OnColderResolved);
@@ -142,6 +160,7 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Listen(EventID.YearChanged, OnYearChanged);
         GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
         GameEvents.Listen(EventID.BuildingDemolished, OnBuildingDemolished);
+        GameEvents.Listen(EventID.BuildingCompleted, OnBuildingCompleted);
     }
 
     private void UnsubscribeEvents()
@@ -152,6 +171,41 @@ public class ResidentManager : MonoBehaviour
         GameEvents.Unlisten(EventID.YearChanged, OnYearChanged);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
         GameEvents.Unlisten(EventID.BuildingDemolished, OnBuildingDemolished);
+        GameEvents.Unlisten(EventID.BuildingCompleted, OnBuildingCompleted);
+    }
+
+    // Công trình xây xong giữa tháng (Lều, Đường… xây tức thì) -> dân dọn vào / đi làm ngay
+    private void OnBuildingCompleted(object param)
+    {
+        RequestReassign();
+    }
+
+    /// <summary>
+    /// Xếp lại nghề / nhà / chỗ làm ngay (gom về LateUpdate, chạy 1 lần dù gọi nhiều lần trong frame).
+    /// Gọi khi có người mới vào thành, công trình xây xong, bật/tắt công trình… để không ai phải đứng chờ tới tháng sau.
+    /// </summary>
+    public void RequestReassign()
+    {
+        _reassignPending = true;
+    }
+
+    private void LateUpdate()
+    {
+        if (!_reassignPending)
+            return;
+        _reassignPending = false;
+
+        if (buildingManager == null)
+            ResolveDependencies();
+        if (buildingManager == null)
+            return;
+
+        ResidentProfessionSystem.ProcessMonthly(
+            allResidents, activeCount, buildingManager.allBuildings, buildingManager.activeCount);
+        ResidentAssignmentSystem.ProcessMonthly(
+            allResidents, activeCount, buildingManager.allBuildings, buildingManager.activeCount);
+        SyncAllVisualAgents();
+        FillMissingVisualAgents();
     }
 
     // Công trình bị phá → cư dân mất nhà / chỗ làm ngay, rồi xếp lại chỗ mới luôn (không đợi sang tháng)
@@ -347,6 +401,7 @@ public class ResidentManager : MonoBehaviour
     public void NotifyPopulationChanged()
     {
         RefreshVisualPopulation();
+        RequestReassign();   // Người mới vào thành có nhà / việc ngay, không đợi sang tháng
     }
 
     public ref ResidentData GetResidentRef(int index)
@@ -500,7 +555,7 @@ public class ResidentManager : MonoBehaviour
                 r.happiness = Mathf.Max(0f, r.happiness - coldHappinessPenalty);
             }
             else r.coldMonths = 0;
-            if(r.coldMonths >= ColdMonthsBeforeDeathRisk && UnityEngine.Random.value < starveDeathChance)
+            if(r.coldMonths >= ColdMonthsBeforeDeathRisk && UnityEngine.Random.value < freezeDeathChance)
             {
                 r.isAlive = false;
                 r.coldMonths = 0;
@@ -551,6 +606,11 @@ public class ResidentManager : MonoBehaviour
             activeCount,
             buildingManager.allBuildings,
             buildingManager.activeCount);
+
+        // Tính lại thưởng sản xuất của sắc lệnh theo tình hình tháng này trước khi sản xuất
+        // (EdictManager cũng nghe MonthChanged nhưng thứ tự listener không cố định)
+        if (edictManager != null)
+            edictManager.EvaluateCityRules(false);
 
         ResidentProductionSystem.ProcessMonthly(
             allResidents,
@@ -620,12 +680,15 @@ public class ResidentManager : MonoBehaviour
         float avgHappiness = alive > 0 ? happinessSum / alive : 0f;
 
         ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
-        int pop = global.totalPopulation > 0 ? global.totalPopulation : alive;
+        // Mẫu là tập con của dân thật: dân số thật luôn >= số mẫu còn sống (không để làm tròn kéo lệch),
+        // và hết mẫu = tuyệt chủng (trước đây dân số về 0 lại "hồi sinh" bằng số mẫu).
+        int pop = alive == 0 ? 0 : Mathf.Max(global.totalPopulation, alive);
         int scaledInfected = alive > 0
             ? Mathf.RoundToInt(pop * ((float)infected / alive))
             : 0;
 
-        globalSystemManager.UpdateMetricsCache(pop, scaledInfected, avgHappiness);
+        // Hạnh phúc từng người 0–1; chỉ số toàn thành lưu theo % (0–100) cho HUD và sắc lệnh
+        globalSystemManager.UpdateMetricsCache(pop, scaledInfected, avgHappiness * 100f);
         GameEvents.Post(EventID.PopulationChanged, pop);
     }
 
@@ -754,6 +817,7 @@ public class ResidentManager : MonoBehaviour
         if (residentPrefab == null || !resident.isAlive || _activeVisuals.Count >= maxVisualAgents)
             return false;
 
+        _goalHour = CurrentHour();
         Vector3 worldPosition = ResolveCommuteGoal(in resident).world;
         ResidentBase view = SimplePool2.Spawn(residentPrefab, worldPosition, Quaternion.identity);
 
@@ -791,11 +855,14 @@ public class ResidentManager : MonoBehaviour
         if (_activeVisuals.Count == 0)
             return;
 
-        float step = commuteSpeed * Time.deltaTime;
+        // Đi bộ nhanh theo tốc độ game (x2/x3) để lịch sinh hoạt vẫn khớp giờ trong vòng ngày–đêm
+        float speedMult = globalSystemManager != null ? globalSystemManager.SpeedMultiplier : 1f;
+        float step = commuteSpeed * Time.deltaTime * speedMult;
         if (step <= 0f)
             return;
 
         EnsurePathfinder();
+        RefreshScheduleCache();
         int gridVersion = gridController != null ? gridController.OccupancyVersion : 0;
         int pathBudget = Mathf.Max(1, maxPathRequestsPerFrame);
 
@@ -827,6 +894,7 @@ public class ResidentManager : MonoBehaviour
             }
 
             view.TickPath(step);
+            view.SetIndoors(goal.indoors && !view.IsMoving);
             ApplyDepthSorting(view);
         }
     }
@@ -870,34 +938,185 @@ public class ResidentManager : MonoBehaviour
         if (_debugGoals.Count > 0 && _debugGoals.TryGetValue(data.residentID, out CommuteGoal debugGoal))
             return debugGoal;
 
-        bool goToWork = false;
-        if (data.assignedWorkID >= 0)
-        {
-            float progress = 0.5f;
-            if (globalSystemManager != null)
-                progress = globalSystemManager.GetGlobalDataRef().timeTickProgress;
+        // Lịch sinh hoạt kiểu Cities: Skylines — 1 tháng = 1 vòng ngày–đêm (DayCycle), giờ lệch theo từng người
+        float hour = _goalHour;
+        int id = data.residentID;
+        bool hasHouse = TryResolveBuildingGoal(data.assignedHouseID, id, 0, out CommuteGoal house, out BuildingType houseType);
+        bool hasWork = TryResolveBuildingGoal(data.assignedWorkID, id, 1, out CommuteGoal work, out _);
 
-            goToWork = !(progress >= 0.5f && progress < 0.95f);
-        }
-
-        if (goToWork && TryResolveBuildingGoal(data.assignedWorkID, data.residentID, 1, out CommuteGoal work))
+        // 1. Bệnh nhân được xếp vào Phòng khám: nằm ở đó cả ngày
+        if (hasWork && ResidentAssignmentRules.NeedsClinicCare(in data))
             return work;
 
-        if (TryResolveBuildingGoal(data.assignedHouseID, data.residentID, 0, out CommuteGoal house))
-            return house;
+        // 2. Đi làm / đi học theo ca, xuất phát sớm theo quãng đường để tới đúng giờ
+        if (hasWork && IsWorkTime(in data, hour, hasHouse ? house.world : work.world, work.world))
+            return work;
 
-        Vector2Int fallbackCell = FallbackCell(data.residentID);
-        return new CommuteGoal
+        if (hasHouse)
         {
-            world = CellToWorld(fallbackCell.x, fallbackCell.y) + SlotOffset(data.residentID, 0),
+            // 3. Người không đi làm (già, thất nghiệp, trẻ chưa đi học) ra quảng trường ban ngày
+            if (houseType != BuildingType.QuarantineWard && WantsOuting(in data, hasWork, hour)
+                && TryGetPlazaGoal(id, out CommuteGoal plaza))
+                return plaza;
+
+            // 4. Ở nhà; tới giờ ngủ thì vào trong
+            house.indoors = IsSleepTime(in data, hour);
+            return house;
+        }
+
+        // 5. Vô gia cư: đêm co cụm quanh lửa trại gần nhất, ngày tụ ở giữa làng
+        Vector2Int fallbackCell = FallbackCell(id);
+        CommuteGoal street = new CommuteGoal
+        {
+            world = CellToWorld(fallbackCell.x, fallbackCell.y) + SlotOffset(id, 0),
             cell = fallbackCell,
             buildingId = 0
         };
+        if (DayCycle.IsBetween(hour, 19f + DayCycle.PersonalJitter(id, 0.75f, 7), 6f)
+            && TryGetNearestCampfire(street.world, id, out CommuteGoal camp))
+            return camp;
+        return street;
     }
 
-    private bool TryResolveBuildingGoal(int buildingId, int residentId, int slot, out CommuteGoal goal)
+    /// <summary>Giờ trong vòng ngày–đêm dùng cho mọi cư dân trong frame này.</summary>
+    private float CurrentHour() =>
+        globalSystemManager != null ? DayCycle.GetHour(in globalSystemManager.GetGlobalDataRef()) : 12f;
+
+    private bool IsNightShift(in ResidentData data) =>
+        (data.professionType == ProfessionType.Guard || data.professionType == ProfessionType.Doctor)
+        && DayCycle.PersonalHash(data.residentID, 11) % nightShiftOneIn == 0;
+
+    private bool IsWorkTime(in ResidentData data, float hour, Vector3 from, Vector3 to)
+    {
+        float start, end;
+        if (data.professionType == ProfessionType.Student)
+        {
+            start = DayCycle.SchoolStart;
+            end = DayCycle.SchoolEnd;
+        }
+        else if (IsNightShift(in data))
+        {
+            start = DayCycle.NightShiftStart;
+            end = DayCycle.NightShiftEnd;
+        }
+        else
+        {
+            start = DayCycle.WorkStart;
+            end = DayCycle.WorkEnd;
+        }
+
+        // Giờ đi đường (giờ trong vòng): quãng đường thẳng × hệ số đường vòng / tốc độ đi bộ
+        float secondsPerHour = globalSystemManager != null ? globalSystemManager.RealSecondsPerMonth / 24f : 5f;
+        float travelHours = commuteSpeed > 0f && secondsPerHour > 0f
+            ? Vector3.Distance(from, to) * 1.4f / (commuteSpeed * secondsPerHour)
+            : 0f;
+        travelHours = Mathf.Min(travelHours, 3f);
+
+        int id = data.residentID;
+        float leave = start - travelHours + DayCycle.PersonalJitter(id, 0.5f, 1);
+        float finish = end + DayCycle.PersonalJitter(id, 0.6f, 2);
+        return DayCycle.IsBetween(hour, leave, finish);
+    }
+
+    private bool WantsOuting(in ResidentData data, bool hasWork, float hour)
+    {
+        if (hasWork || _plazaBuildingId == 0)
+            return false;
+        if (data.healthStatus == HealthStatus.ActiveInfected || data.healthStatus == HealthStatus.Treated)
+            return false;
+        if (data.GetAgeGroup() == AgeGroupType.Child && data.age < ResidentAssignmentRules.SchoolStartAge)
+            return false;
+        if (DayCycle.PersonalHash(data.residentID, 23) % 3 >= outingThirds)
+            return false;
+
+        int id = data.residentID;
+        return DayCycle.IsBetween(hour,
+            DayCycle.OutingStart + DayCycle.PersonalJitter(id, 1f, 3),
+            DayCycle.OutingEnd + DayCycle.PersonalJitter(id, 1f, 4));
+    }
+
+    private bool IsSleepTime(in ResidentData data, float hour)
+    {
+        int id = data.residentID;
+        // Ca đêm ngủ ban ngày
+        if (data.assignedWorkID >= 0 && IsNightShift(in data))
+            return DayCycle.IsBetween(hour, 8f + DayCycle.PersonalJitter(id, 0.5f, 5), 16f);
+
+        return DayCycle.IsBetween(hour,
+            DayCycle.BedTime + DayCycle.PersonalJitter(id, 1f, 5),
+            DayCycle.WakeTime + DayCycle.PersonalJitter(id, 0.5f, 6));
+    }
+
+    /// <summary>Quét công trình 1 lần mỗi frame: quảng trường (Tòa thị chính) và các lửa trại đang cháy.</summary>
+    private void RefreshScheduleCache()
+    {
+        _goalHour = CurrentHour();
+        _plazaBuildingId = 0;
+        _campfires.Clear();
+        if (buildingManager == null)
+            return;
+
+        for (int i = 0; i < buildingManager.activeCount; i++)
+        {
+            ref BuildingData b = ref buildingManager.allBuildings[i];
+            if (!BuildingEffectRules.IsEffectActive(in b))
+                continue;
+
+            if (b.buildingType == BuildingType.CityHall && _plazaBuildingId == 0)
+            {
+                Vector2Int size = BuildingRules.GetFootprint(in b);
+                _plazaBuildingId = b.buildingID;
+                _plazaWorld = GetBuildingWorldPosition(in b);
+                _plazaCell = new Vector2Int(b.coordX + (size.x - 1) / 2, b.coordY + (size.y - 1) / 2);
+            }
+            else if (b.buildingType == BuildingType.Campfire)
+            {
+                _campfires.Add(new CommuteGoal
+                {
+                    world = GetBuildingWorldPosition(in b),
+                    cell = new Vector2Int(b.coordX, b.coordY),
+                    buildingId = b.buildingID
+                });
+            }
+        }
+    }
+
+    private bool TryGetPlazaGoal(int residentId, out CommuteGoal goal)
     {
         goal = default;
+        if (_plazaBuildingId == 0)
+            return false;
+
+        goal.world = _plazaWorld + SlotOffset(residentId, 2) * 2.5f;
+        goal.cell = _plazaCell;
+        goal.buildingId = _plazaBuildingId;
+        return true;
+    }
+
+    private bool TryGetNearestCampfire(Vector3 near, int residentId, out CommuteGoal goal)
+    {
+        goal = default;
+        float best = float.MaxValue;
+        for (int i = 0; i < _campfires.Count; i++)
+        {
+            float d = (_campfires[i].world - near).sqrMagnitude;
+            if (d < best)
+            {
+                best = d;
+                goal = _campfires[i];
+            }
+        }
+
+        if (best == float.MaxValue)
+            return false;
+        goal.world += SlotOffset(residentId, 3) * 1.5f;
+        return true;
+    }
+
+    private bool TryResolveBuildingGoal(int buildingId, int residentId, int slot, out CommuteGoal goal, out BuildingType type)
+    {
+        goal = default;
+        type = BuildingType.None;
         if (buildingManager == null || buildingId < 0)
             return false;
 
@@ -906,6 +1125,7 @@ public class ResidentManager : MonoBehaviour
             return false;
 
         ref BuildingData building = ref buildingManager.GetBuildingRef(index);
+        type = building.buildingType;
         Vector2Int footprint = Vector2Int.Max(Vector2Int.one, BuildingRules.GetFootprint(in building));
         goal.world = GetBuildingWorldPosition(in building) + SlotOffset(residentId, slot);
         goal.cell = new Vector2Int(

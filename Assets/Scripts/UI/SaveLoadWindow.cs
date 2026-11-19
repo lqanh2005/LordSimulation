@@ -178,7 +178,6 @@ public static class SaveLoadWindow
             box.raycastTarget = true;
             Button button = row.gameObject.AddComponent<Button>();
             UISkin.SetButtonTint(button);
-            button.onClick.AddListener(RuntimeUIKit.PlayClick);
             button.onClick.AddListener(() => Select(slot));
 
             TextMeshProUGUI name = UIWidgets.Text(row, "Txt_Slot", $"Slot {i + 1}", 18f, UISkin.Cream, TextAlignmentOptions.Left);

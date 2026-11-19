@@ -135851,7 +135851,7 @@ MonoBehaviour:
     type: 10
     param0: 4
     param1: 20
-  - label: "T\u0103ng c\u01B0\u1EDDng l\xF2 s\u01B0\u1EDFi"
+  - label: "T\u0103ng b\xE0o ch\u1EBF thu\u1ED1c"
     type: 10
     param0: 6
     param1: 20
@@ -135881,7 +135881,7 @@ MonoBehaviour:
     param1: 0
   - label: "C\xE1ch ly ng\u01B0\u1EDDi nh\u1EADp c\u01B0"
     type: 3
-    param0: 2
+    param0: 3
     param1: 0
   - label: "\xC1p gi\u1EA3i t\u1EDBi b\xE0n th\u1EA9m v\u1EA5n"
     type: 4

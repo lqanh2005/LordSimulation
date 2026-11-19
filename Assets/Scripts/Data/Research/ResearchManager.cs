@@ -58,6 +58,8 @@ public class ResearchManager : MonoBehaviour
         ApplySaveData(default);
         // Điều kiện "Thân nhiệt" của sắc lệnh chỉ dùng được khi đã có Nhiệt kế
         EdictRules.IsVariableUnlocked = v => v != RuleVariable.ApplicantBodyTemp || IsCompleted(ResearchID.Thermometer);
+        // GDD Tier 0 -> 1: Sắc lệnh chỉ ban hành được sau khi nghiên cứu Bộ luật
+        EdictRules.AreEdictsUnlocked = () => IsCompleted(ResearchID.CodeOfLaw);
     }
 
     public bool HasThermometer => IsCompleted(ResearchID.Thermometer);
@@ -67,6 +69,7 @@ public class ResearchManager : MonoBehaviour
     public void ApplySaveData(in ResearchSaveData data)
     {
         state = data;
+        _overflowPoints = 0f;
         if (state.currentResearch != ResearchID.None
             && (ResearchCatalog.Get(state.currentResearch) == null || IsCompleted(state.currentResearch)))
         {
@@ -141,11 +144,38 @@ public class ResearchManager : MonoBehaviour
         if (state.currentResearch == id)
             return true;
 
+        GlobalSystemManager global = ResolveGlobal();
+        int gold = ResearchCatalog.GetGoldCost(node);
+        if (global != null)
+        {
+            if (global.GetGlobalDataRef().treasuryGold < gold)
+                return false;
+            global.ModifyGold(-gold);
+        }
+
         state.currentResearch = id;
-        state.currentProgress = 0f;
+        state.currentProgress = _overflowPoints;   // điểm dư của công nghệ vừa xong chuyển sang
+        _overflowPoints = 0f;
         GameEvents.Post(EventID.ResearchChanged);
+        if (state.currentProgress + 0.0001f >= node.cost)
+            Complete(node.id);
         return true;
     }
+
+    /// <summary>Đủ vàng để bắt đầu nghiên cứu công nghệ này không.</summary>
+    public bool CanAfford(ResearchID id)
+    {
+        GlobalSystemManager global = ResolveGlobal();
+        return global == null || global.GetGlobalDataRef().treasuryGold >= ResearchCatalog.GetGoldCost(ResearchCatalog.Get(id));
+    }
+
+    private static GlobalSystemManager ResolveGlobal() =>
+        GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
+            ? GamePlayController.Instance.playerContain.globalSystemManager
+            : null;
+
+    // Điểm vượt quá chi phí của công nghệ vừa hoàn thành, cộng vào công nghệ kế tiếp. Không lưu save.
+    private float _overflowPoints;
 
     public void CancelResearch()
     {
@@ -194,6 +224,8 @@ public class ResearchManager : MonoBehaviour
         state.completedMask |= Bit(id);
         if (state.currentResearch == id)
         {
+            ResearchNode done = ResearchCatalog.Get(id);
+            _overflowPoints = done != null ? Mathf.Max(0f, state.currentProgress - done.cost) : 0f;
             state.currentResearch = ResearchID.None;
             state.currentProgress = 0f;
         }

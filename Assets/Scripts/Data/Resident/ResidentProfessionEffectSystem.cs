@@ -55,6 +55,9 @@ public static class ResidentProfessionEffectSystem
             DoctorTokensByBuilding[clinicIndex] += ResidentProfessionEffectRules.GetDoctorCareTokens(in doctor);
         }
 
+        // Mỗi bệnh nhân mẫu đại diện cho (dân thật / mẫu) người -> thuốc tiêu hao theo đúng tỉ lệ đó
+        int medicinePerPatient = Mathf.Max(1, Mathf.RoundToInt(GetSampleScale(residents, residentCount, global)));
+
         for (int i = 0; i < residentCount; i++)
         {
             ref ResidentData patient = ref residents[i];
@@ -79,7 +82,7 @@ public static class ResidentProfessionEffectSystem
                 doctorCount > 0 ? DoctorPowerByBuilding[clinicIndex] / doctorCount : 0f);
 
             bool treated = false;
-            if (global != null && global.TryConsumeMedicine(1))
+            if (global != null && global.TryConsumeMedicine(medicinePerPatient))
                 treated = true;
             else if (treatChance > 0f && Random.value < treatChance)
                 treated = true;
@@ -170,6 +173,19 @@ public static class ResidentProfessionEffectSystem
 
         ref GlobalSystemData data = ref global.GetGlobalDataRef();
         data.riotRiskMeter = Mathf.Max(0f, data.riotRiskMeter - reduction);
+    }
+
+    /// <summary>Số dân thật mà mỗi cư dân mẫu còn sống đại diện (>= 1).</summary>
+    public static float GetSampleScale(ResidentData[] residents, int residentCount, GlobalSystemManager global)
+    {
+        if (global == null)
+            return 1f;
+        int alive = 0;
+        for (int i = 0; i < residentCount; i++)
+            if (residents[i].isAlive)
+                alive++;
+        int pop = global.GetGlobalDataRef().totalPopulation;
+        return alive > 0 && pop > alive ? (float)pop / alive : 1f;
     }
 
     private static int FindBuildingIndexById(

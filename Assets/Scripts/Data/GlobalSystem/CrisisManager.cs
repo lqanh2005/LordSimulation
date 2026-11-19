@@ -16,7 +16,7 @@ public struct CrisisReportPayload
 ///
 /// - Người chết (mọi nguyên nhân) để lại thi thể.
 /// - Mỗi tháng thu gom được: nền + theo số lính gác và thầy thuốc đang làm việc.
-/// - Thi thể để quá 1 tháng sinh Miasma; Miasma giảm dần theo thời gian.
+/// - Thi thể để quá 1 tháng (qua 1 lần tick) mới phân hủy sinh Miasma; Miasma giảm dần theo thời gian.
 /// - Miasma cộng vào áp lực dịch bệnh (GlobalSystemManager) và gây bất ổn nhẹ.
 /// </summary>
 public class CrisisManager : MonoBehaviour
@@ -45,37 +45,72 @@ public class CrisisManager : MonoBehaviour
         globalSystemManager = global;
         buildingManager = buildings;
         DiseaseFactor = diseasePressurePerMiasma;
+        _newCorpses = 0;   // static: xoá số dư từ ván trước
     }
 
     private void OnEnable()
     {
         GameEvents.Listen(EventID.ResidentsDied, OnResidentsDied);
         GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
+        GameEvents.Listen(EventID.LoadCompleted, OnLoadCompleted);
     }
 
     private void OnDisable()
     {
         GameEvents.Unlisten(EventID.ResidentsDied, OnResidentsDied);
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
+        GameEvents.Unlisten(EventID.LoadCompleted, OnLoadCompleted);
+    }
+
+    // Người chết từ lần xử lý trước — chưa đủ 1 tháng nên chưa phân hủy. Không lưu save: luôn được
+    // xử lý ngay trong LateUpdate của frame có tick tháng (mọi cái chết trong tháng đều xảy ra lúc tick).
+    private static int _newCorpses;
+    private bool _pendingTick;
+
+    /// <summary>Báo có thi thể mới (cư dân chết, người chết trong hàng chờ ở Cổng…).</summary>
+    public static void AddCorpses(int count)
+    {
+        if (count > 0)
+            _newCorpses += count;
     }
 
     private void OnResidentsDied(object param)
     {
-        if (!(param is ResidentsDiedPayload p) || p.count <= 0 || globalSystemManager == null)
-            return;
-
-        globalSystemManager.GetGlobalDataRef().corpsesFresh += p.count;
+        if (param is ResidentsDiedPayload p)
+            AddCorpses(p.count);
     }
 
     private void OnMonthChanged(object param)
     {
-        if (!(param is MonthChangedPayload p) || !p.isSimulationTick || globalSystemManager == null)
+        if (param is MonthChangedPayload p && p.isSimulationTick)
+            _pendingTick = true;
+    }
+
+    private void OnLoadCompleted(object param)
+    {
+        _newCorpses = 0;
+        _pendingTick = false;
+    }
+
+    /// <summary>
+    /// Xử lý trễ tới LateUpdate để gom đủ người chết của tháng (đói/rét/bệnh trước tick, sinh sản/tuổi già trong tick).
+    /// Thi thể tươi của tháng TRƯỚC chưa thu gom mới chuyển sang phân hủy (GDD: phân hủy sau 1 tháng).
+    /// </summary>
+    private void LateUpdate()
+    {
+        if (!_pendingTick || globalSystemManager == null)
             return;
+        _pendingTick = false;
 
         ref GlobalSystemData d = ref globalSystemManager.GetGlobalDataRef();
         var report = new CrisisReportPayload();
 
-        // 1. Thu gom: ưu tiên thi thể đang phân hủy
+        // 1. Xác tươi tháng trước còn nằm lại -> đã đủ 1 tháng -> phân hủy; người chết tháng này là xác tươi
+        d.corpsesRotting += d.corpsesFresh;
+        d.corpsesFresh = _newCorpses;
+        _newCorpses = 0;
+
+        // 2. Thu gom: ưu tiên thi thể đang phân hủy
         int capacity = GetCollectCapacity();
         int fromRotting = Mathf.Min(capacity, d.corpsesRotting);
         d.corpsesRotting -= fromRotting;
@@ -83,10 +118,6 @@ public class CrisisManager : MonoBehaviour
         int fromFresh = Mathf.Min(capacity, d.corpsesFresh);
         d.corpsesFresh -= fromFresh;
         report.collected = fromRotting + fromFresh;
-
-        // 2. Xác để quá 1 tháng -> phân hủy
-        d.corpsesRotting += d.corpsesFresh;
-        d.corpsesFresh = 0;
 
         // 3. Miasma: giảm dần rồi cộng theo số xác đang phân hủy
         d.miasma = d.miasma * (1f - miasmaDecayPerMonth) + d.corpsesRotting * miasmaPerRottingCorpse;
@@ -96,7 +127,7 @@ public class CrisisManager : MonoBehaviour
         if (d.miasma > 0f)
             d.riotRiskMeter = Mathf.Min(100f, d.riotRiskMeter + d.miasma * riotPerMiasma);
 
-        report.unburied = d.corpsesRotting;
+        report.unburied = d.corpsesFresh + d.corpsesRotting;
         report.rotting = d.corpsesRotting;
         report.miasma = d.miasma;
         report.diseasePressureAdded = GetDiseasePressure(in d);

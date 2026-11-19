@@ -72,9 +72,19 @@ public static class ResidentAssignmentRules
     };
 
     public static bool NeedsQuarantineHousing(in ResidentData resident) =>
-        resident.healthStatus == HealthStatus.ActiveInfected
+        resident.quarantineMonths > 0   // Đang trong thời hạn cách ly (kể cả người khoẻ)
+        || resident.healthStatus == HealthStatus.ActiveInfected
         || resident.healthStatus == HealthStatus.Incubating
         || resident.healthStatus == HealthStatus.Treated;
+
+    /// <summary>
+    /// Thành biết là phải cách ly (để XẾP VÀO Trạm): còn hạn cách ly hoặc đang phát bệnh rõ.
+    /// Người đang ủ bệnh chưa lộ triệu chứng thì không ai biết -> không tự đưa vào Trạm (tránh lộ bệnh ẩn,
+    /// tránh chiếm chỗ của người cách ly từ Cổng). Người đã ở Trạm thì vẫn ở lại theo NeedsQuarantineHousing.
+    /// </summary>
+    public static bool NeedsKnownQuarantine(in ResidentData resident) =>
+        resident.quarantineMonths > 0
+        || resident.healthStatus == HealthStatus.ActiveInfected;
 
     public static bool CanWork(in ResidentData resident)
     {
@@ -163,12 +173,22 @@ public static class ResidentAssignmentRules
         if (!HasHousingSlot(in building))
             return false;
 
-        return IsAllowedHousingType(in resident, building.buildingType);
+        return IsAllowedNewHousingType(in resident, building.buildingType);
     }
 
+    /// <summary>Được Ở LẠI loại nhà này không: người còn mang bệnh / đang điều trị / còn hạn được ở lại Trạm.</summary>
     public static bool IsAllowedHousingType(in ResidentData resident, BuildingType type)
     {
         if (NeedsQuarantineHousing(in resident))
+            return type == BuildingType.QuarantineWard || IsNormalHousing(type);
+
+        return IsNormalHousing(type);
+    }
+
+    /// <summary>Được XẾP MỚI vào loại nhà này không: chỉ người thành biết cần cách ly mới được đưa vào Trạm.</summary>
+    public static bool IsAllowedNewHousingType(in ResidentData resident, BuildingType type)
+    {
+        if (NeedsKnownQuarantine(in resident))
             return type == BuildingType.QuarantineWard || IsNormalHousing(type);
 
         return IsNormalHousing(type);
@@ -247,16 +267,17 @@ public static class ResidentAssignmentRules
 
         int bonus = ResidentSocialRules.GetHousingPriorityBonus(in resident);
 
-        if (NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.QuarantineWard)
+        bool knownQuarantine = NeedsKnownQuarantine(in resident);
+        if (knownQuarantine && building.buildingType == BuildingType.QuarantineWard)
             return 100;
 
-        if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.LargeHouse)
+        if (!knownQuarantine && building.buildingType == BuildingType.LargeHouse)
             return 85 + bonus;
 
-        if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.House)
+        if (!knownQuarantine && building.buildingType == BuildingType.House)
             return 80 + bonus;
 
-        if (!NeedsQuarantineHousing(in resident) && building.buildingType == BuildingType.Tent)
+        if (!knownQuarantine && building.buildingType == BuildingType.Tent)
             return 60 + bonus;
 
         return 40 + bonus;

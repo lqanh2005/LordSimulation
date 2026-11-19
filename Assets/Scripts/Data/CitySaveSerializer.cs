@@ -4,7 +4,7 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 9;
+    public const int SaveVersion = 10;   // v10: ResidentData.quarantineMonths
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,

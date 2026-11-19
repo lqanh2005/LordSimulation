@@ -5,17 +5,14 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 /// <summary>
-/// Popup nhỏ hiện cạnh Farm khi click: chọn trồng Lúa hoặc Cây thuốc.
+/// Popup nhỏ ở góc phải dưới màn hình khi click Farm: chọn trồng Lúa hoặc Cây thuốc.
 /// UI tự dựng lúc chạy dưới canvas HUD nên không cần chỉnh scene.
 /// </summary>
 public class FarmCropPopup : MonoBehaviour
 {
-    private static readonly Vector2 PanelSize = new Vector2(300f, 230f);
-    private const float HudTopMargin = 130f;
-    private const float HudBottomMargin = 140f;
+    private static readonly Vector2 PanelSize = new Vector2(RuntimeUIKit.InfoPopupWidth, 230f);
 
     private PlacementManager placement;
-    private RectTransform canvasRect;
     private Canvas canvas;
     private RectTransform panel;
     private TextMeshProUGUI title;
@@ -79,7 +76,6 @@ public class FarmCropPopup : MonoBehaviour
         }
 
         clickedOutside = false;
-        FollowFarm();
     }
 
     public bool IsOpen => panel != null && panel.gameObject.activeSelf;
@@ -99,7 +95,6 @@ public class FarmCropPopup : MonoBehaviour
         panel.gameObject.SetActive(true);
         panel.SetAsLastSibling();
         Refresh();
-        FollowFarm();
     }
 
     private void OnMonthChanged(object param)
@@ -181,7 +176,7 @@ public class FarmCropPopup : MonoBehaviour
             sb.Append("Nông dân: ").Append(farm.currentWorkers).Append('/').Append(farm.maxWorkers).Append('\n');
         string output = BuildingStatusRules.DescribeOutput(in farm);
         if (!string.IsNullOrEmpty(output))
-            sb.Append("<size=14>").Append(output).Append("</size>");
+            sb.Append("<size=88%>").Append(output).Append("</size>");
         status.text = sb.ToString();
 
         bool canToggle = !BuildingRules.IsUnderConstruction(in farm);
@@ -203,33 +198,10 @@ public class FarmCropPopup : MonoBehaviour
             return;
 
         farm.isOperational = !farm.isOperational;
+        RequestResidentReassign();   // Thợ rời đi / quay lại làm ngay, không đợi sang tháng
         NotificationFeed.Show($"Nông trại #{farm.buildingID} {(farm.isOperational ? "hoạt động trở lại" : "đã tạm dừng")}",
             NoticeLevel.Info, "toggle:" + farm.buildingID);
         Refresh();
-    }
-
-    private void FollowFarm()
-    {
-        Camera cam = Camera.main;
-        BuildingView view = placement != null ? placement.GetBuildingView(farmId) : null;
-        if (cam == null || view == null || canvasRect == null)
-            return;
-
-        // Neo popup tại tâm footprint của Farm (pivot của view là góc dưới footprint)
-        Vector3 world = view.transform.position;
-        Vector2Int size = view.Footprint;
-        world.y += (size.x + size.y) * 0.125f;
-        Vector2 screen = cam.WorldToScreenPoint(world);
-
-        Camera uiCam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
-        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screen, uiCam, out Vector2 local))
-            return;
-
-        Rect r = canvasRect.rect;
-        local.x = Mathf.Clamp(local.x, r.xMin + PanelSize.x * 0.5f, r.xMax - PanelSize.x * 0.5f);
-        // Chừa thanh tài nguyên phía trên và thanh xây dựng phía dưới
-        local.y = Mathf.Clamp(local.y, r.yMin + HudBottomMargin, r.yMax - PanelSize.y - HudTopMargin);
-        panel.anchoredPosition = local;
     }
 
     // ==========================================
@@ -245,13 +217,10 @@ public class FarmCropPopup : MonoBehaviour
         if (canvas == null)
             return;
 
-        canvasRect = (RectTransform)canvas.transform;
 
         GameObject panelGo = new GameObject("FarmCropPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
         panel = (RectTransform)panelGo.transform;
         panel.SetParent(canvas.transform, false);
-        panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
-        panel.pivot = new Vector2(0.5f, 0f);
         panel.sizeDelta = PanelSize;
         RuntimeUIKit.StylePanel(panelGo.GetComponent<Image>());
 
@@ -276,6 +245,7 @@ public class FarmCropPopup : MonoBehaviour
         pauseButton = CreateButton(controls, "Pause", "Tạm dừng", TogglePause);
         pauseLabel = pauseButton.GetComponentInChildren<TextMeshProUGUI>();
 
+        RuntimeUIKit.SetupInfoPopup(panel);
         panelGo.SetActive(false);
     }
 
@@ -303,4 +273,11 @@ public class FarmCropPopup : MonoBehaviour
 
     private static Image CreateButton(Transform parent, string name, string label, UnityEngine.Events.UnityAction onClick)
         => RuntimeUIKit.CreateButton(parent, name, label, onClick);
+
+    private static void RequestResidentReassign()
+    {
+        PlayerContain contain = GamePlayController.Instance != null ? GamePlayController.Instance.playerContain : null;
+        if (contain != null && contain.residentManager != null)
+            contain.residentManager.RequestReassign();
+    }
 }

@@ -11,6 +11,7 @@ using UnityEngine.InputSystem;
 ///   T          Cây nghiên cứu           E       Sắc lệnh
 ///   1..N       Mở nhóm xây dựng trên thanh dưới
 ///   Esc        Đóng cửa sổ đang mở; không còn cửa sổ nào thì mở Pause Menu
+///   F9         (Editor / Development Build) thử âm báo: Info → Warning → Critical
 /// WASD / chuột giữa / cuộn chuột do IsoTestCamera xử lý.
 /// Chạy trước PlacementManager để Esc/chuột phải huỷ đặt nhà được ưu tiên đúng.
 /// </summary>
@@ -29,6 +30,7 @@ public class GameHotkeys : MonoBehaviour
     private FarmCropPopup _farmPopup;
     private MerchantPopup _merchantPopup;
     private bool _quickSaving;
+    private int _soundTestStep;
 
     public static void EnsureInstance(PlacementManager placement)
     {
@@ -104,6 +106,24 @@ public class GameHotkeys : MonoBehaviour
         if (kb.eKey.wasPressedThisFrame) ToggleExclusive(_edicts != null ? _edicts.gameObject : null, () => _edicts.Toggle());
 
         HandleBuildCategoryKeys(kb);
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (kb.f9Key.wasPressedThisFrame) TestAlertSound();
+#endif
+    }
+
+    /// <summary>Phím thử âm: mỗi lần bấm hiện một thông báo mẫu, lần lượt Info → Warning → Critical (kèm âm báo).</summary>
+    private void TestAlertSound()
+    {
+        NoticeLevel level = (NoticeLevel)(_soundTestStep % 3);
+        _soundTestStep++;
+        string name = level switch
+        {
+            NoticeLevel.Critical => "Critical",
+            NoticeLevel.Warning => "Warning",
+            _ => "Info"
+        };
+        NotificationFeed.Show($"[F9] Thử âm báo mức {name}", level);
     }
 
     // ==========================================

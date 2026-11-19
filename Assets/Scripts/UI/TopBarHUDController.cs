@@ -34,6 +34,7 @@ public class TopBarHUDController : MonoBehaviour
     [SerializeField] private TMP_Text txtMedicineRate;
     [SerializeField] private Color rateColor = new Color32(0x4C, 0xAF, 0x50, 0xFF);
     [SerializeField] private Color zeroRateColor = new Color32(0x9A, 0x9A, 0x9A, 0xFF);
+    [SerializeField] private Color negativeRateColor = new Color32(0xE0, 0x4B, 0x4B, 0xFF);
 
     [Header("Chỉ Số Dân Sinh (Ở Giữa TopBar)")]
     [SerializeField] private TMP_Text txtPopulation;       // "Dân: 120"
@@ -145,12 +146,14 @@ public class TopBarHUDController : MonoBehaviour
         if (txtIron != null) txtIron.text = FormatNumber(data.stockIron);
         if (txtMedicine != null) txtMedicine.text = FormatNumber(data.stockMedicine);
 
-        UpdateRate(txtGoldRate, ResidentSocialSystem.LastMonthTax);
-        UpdateRate(txtFoodRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Food));
-        UpdateRate(txtCoalRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Coal));
-        UpdateRate(txtWoodRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Wood));
-        UpdateRate(txtIronRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Iron));
-        UpdateRate(txtMedicineRate, ResidentProductionSystem.GetLastMonthOutput(ResourceType.Medicine));
+        // Thay đổi ròng tháng trước (thu − chi): dương xanh, âm đỏ
+        ResourceAmounts net = globalSystemManager.LastMonthNet;
+        UpdateRate(txtGoldRate, net.gold);
+        UpdateRate(txtFoodRate, net.food);
+        UpdateRate(txtCoalRate, net.coal);
+        UpdateRate(txtWoodRate, net.wood);
+        UpdateRate(txtIronRate, net.iron);
+        UpdateRate(txtMedicineRate, net.medicine);
 
         // Cập nhật chỉ số dân sinh
         if (txtPopulation != null) txtPopulation.text = FormatNumber(data.totalPopulation);
@@ -174,13 +177,25 @@ public class TopBarHUDController : MonoBehaviour
         txtReputation.text = $"<color={color}>{(value > 0 ? "+" : "")}{value}</color>";
     }
 
-    private void UpdateRate(TMP_Text text, float amount)
+    private void UpdateRate(TMP_Text text, int amount)
     {
         if (text == null) return;
 
-        int rounded = Mathf.RoundToInt(amount);
-        text.text = rounded > 0 ? $"+{FormatNumber(rounded)}/th" : "0/th";
-        text.color = rounded > 0 ? rateColor : zeroRateColor;
+        if (amount > 0)
+        {
+            text.text = $"+{FormatNumber(amount)}/th";
+            text.color = rateColor;
+        }
+        else if (amount < 0)
+        {
+            text.text = $"-{FormatNumber(-amount)}/th";
+            text.color = negativeRateColor;
+        }
+        else
+        {
+            text.text = "0/th";
+            text.color = zeroRateColor;
+        }
     }
 
     private void UpdateRiotMeter(float riotRisk)

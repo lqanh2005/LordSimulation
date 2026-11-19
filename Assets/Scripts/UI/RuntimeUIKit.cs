@@ -131,7 +131,6 @@ public static class RuntimeUIKit
         SetButtonStyle(image, ButtonStyle.Normal);
         Button button = go.GetComponent<Button>();
         UISkin.SetButtonTint(button);
-        button.onClick.AddListener(PlayClick);
         button.onClick.AddListener(onClick);
 
         TextMeshProUGUI text = CreateText(go.transform, "Label", 16f, FontStyles.Normal, TextAlignmentOptions.Center);
@@ -143,7 +142,7 @@ public static class RuntimeUIKit
         return image;
     }
 
-    /// <summary>Tiếng click chung cho mọi nút dựng bằng kit này.</summary>
+    /// <summary>Phát tiếng click UI. Nút không cần tự gọi: UIClickSound (trên MusicManager) bắt mọi click.</summary>
     public static void PlayClick()
     {
         if (MusicManager.Instance != null)
@@ -172,6 +171,52 @@ public static class RuntimeUIKit
         closeLayout.minWidth = 26f;
         closeLayout.flexibleWidth = 0f;
         return title;
+    }
+
+    /// <summary>Độ rộng chung của popup thông tin (cư dân / công trình / nông trại), trước khi phóng to.</summary>
+    public const float InfoPopupWidth = 320f;
+    /// <summary>Phóng to popup thông tin (cỡ chữ, nút, lề) cho dễ đọc.</summary>
+    public const float InfoPopupScale = 1.3f;
+
+    /// <summary>
+    /// Gọi sau khi dựng xong popup thông tin: phóng to theo InfoPopupScale rồi neo cố định ở góc phải dưới canvas.
+    /// Phóng bằng cách tăng kích thước thật (cỡ chữ, chiều cao hàng, lề) chứ không dùng localScale,
+    /// để chữ được dựng đúng cỡ và viền sprite 9-slice không bị kéo giãn mờ.
+    /// Lề mặc định khớp HUD 1920x1080: thẳng cột nút bên phải, ngang đáy thanh xây dựng.
+    /// </summary>
+    public static void SetupInfoPopup(RectTransform panel, float rightMargin = 33f, float bottomMargin = 28f)
+    {
+        if (panel == null)
+            return;
+        ScaleLayout(panel, InfoPopupScale);
+        panel.anchorMin = panel.anchorMax = new Vector2(1f, 0f);
+        panel.pivot = new Vector2(1f, 0f);
+        panel.anchoredPosition = new Vector2(-rightMargin, bottomMargin);
+    }
+
+    /// <summary>Nhân mọi kích thước layout (rộng/cao, lề, khoảng cách, cỡ chữ) trong cây UI với hệ số s.</summary>
+    public static void ScaleLayout(RectTransform root, float s)
+    {
+        if (root == null || Mathf.Approximately(s, 1f))
+            return;
+
+        root.sizeDelta *= s;
+        foreach (HorizontalOrVerticalLayoutGroup g in root.GetComponentsInChildren<HorizontalOrVerticalLayoutGroup>(true))
+        {
+            RectOffset p = g.padding;
+            g.padding = new RectOffset(Mathf.RoundToInt(p.left * s), Mathf.RoundToInt(p.right * s),
+                Mathf.RoundToInt(p.top * s), Mathf.RoundToInt(p.bottom * s));
+            g.spacing *= s;
+        }
+        foreach (LayoutElement e in root.GetComponentsInChildren<LayoutElement>(true))
+        {
+            if (e.minWidth > 0f) e.minWidth *= s;
+            if (e.minHeight > 0f) e.minHeight *= s;
+            if (e.preferredWidth > 0f) e.preferredWidth *= s;
+            if (e.preferredHeight > 0f) e.preferredHeight *= s;
+        }
+        foreach (TMP_Text t in root.GetComponentsInChildren<TMP_Text>(true))
+            t.fontSize = Mathf.Round(t.fontSize * s);
     }
 
     /// <summary>

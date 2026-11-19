@@ -57,6 +57,13 @@ public static class BuildingStatusRules
             return BuildingStatusLevel.Stopped;
         }
 
+        if (ResidentProductionRules.TryGetInput(type, out ResourceType input, out _)
+            && ResidentProductionRules.GetStock(in global, input) <= 0)
+        {
+            reason = $"Không hoạt động — thiếu {MerchantManager.GetResourceName(input).ToLowerInvariant()}";
+            return BuildingStatusLevel.Stopped;
+        }
+
         switch (type)
         {
             case BuildingType.Clinic:

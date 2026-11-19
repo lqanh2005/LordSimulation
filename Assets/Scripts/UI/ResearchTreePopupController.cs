@@ -521,7 +521,7 @@ public class ResearchTreePopupController : MonoBehaviour
             imgDetailIcon.sprite = icon;
             imgDetailIcon.enabled = icon != null;
         }
-        SetText(txtDetailBranch, $"{ResearchCatalog.GetBranchName(node.branch)}  ·  {node.cost} điểm");
+        SetText(txtDetailBranch, $"{ResearchCatalog.GetBranchName(node.branch)}  ·  {node.cost} điểm  ·  {ResearchCatalog.GetGoldCost(node)} vàng");
         SetText(txtDetailDesc, node.description);
         SetText(txtDetailEffects, "Hiệu quả:\n" + ResearchCatalog.DescribeEffects(node));
 
@@ -536,16 +536,21 @@ public class ResearchTreePopupController : MonoBehaviour
                 interactable = false;
                 break;
             case ResearchNodeState.Researching:
-                status = $"Tiến độ {research.CurrentProgress:0.#}/{node.cost} ({FormatEta(node)}).";
+                status = $"Tiến độ {research.CurrentProgress:0.#}/{node.cost} ({FormatEta(node)}). Huỷ sẽ mất vàng đã trả.";
                 buttonLabel = "Hủy nghiên cứu";
                 interactable = true;
                 break;
             case ResearchNodeState.Available:
                 status = research != null && research.CurrentResearch != ResearchID.None
-                    ? $"Chuyển sang sẽ mất tiến độ hiện tại. Dự kiến {FormatEta(node)}."
+                    ? $"Chuyển sang sẽ mất tiến độ và vàng đã trả. Dự kiến {FormatEta(node)}."
                     : $"Dự kiến {FormatEta(node)}.";
                 buttonLabel = "Nghiên cứu";
                 interactable = research != null;
+                if (research != null && !research.CanAfford(node.id))
+                {
+                    status = $"Không đủ vàng (cần {ResearchCatalog.GetGoldCost(node)}).";
+                    interactable = false;
+                }
                 break;
             default:
                 status = "Cần nghiên cứu trước: " + DescribeMissingPrereqs(node);

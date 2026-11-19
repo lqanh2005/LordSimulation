@@ -9,7 +9,7 @@ using UnityEngine;
 /// - Chỉ công trình SẢN XUẤT cần nối đường (Producer → Road → Storage). Nhà ở, y tế, trang trí không cần.
 /// - Một công trình được nối nếu chạm trực tiếp Tòa thị chính, hoặc chạm một ô đường thuộc mạng đường
 ///   nối liền (4 hướng) tới Tòa thị chính.
-/// - Trước khi có Tòa thị chính (khu định cư sơ khai) thì mọi công trình coi như đã nối.
+/// - Trước khi có Tòa thị chính đã xây xong (khu định cư sơ khai) thì mọi công trình coi như đã nối.
 /// Kết quả được cache, tính lại khi có công trình được đặt / phá / tải save (MarkDirty).
 /// </summary>
 public static class RoadNetwork
@@ -83,7 +83,7 @@ public static class RoadNetwork
                 continue;
             if (b.buildingType == BuildingType.Road)
                 RoadCells.Add(new Vector2Int(b.coordX, b.coordY));
-            else if (b.buildingType == BuildingType.CityHall)
+            else if (IsActiveHub(in b))
                 _hasHub = true;
         }
 
@@ -94,7 +94,7 @@ public static class RoadNetwork
         for (int i = 0; i < count; i++)
         {
             ref BuildingData b = ref buildings[i];
-            if (b.buildingType != BuildingType.CityHall || !b.isAllocated)
+            if (!IsActiveHub(in b))
                 continue;
 
             ForEachRingCell(in b, cell =>
@@ -134,6 +134,15 @@ public static class RoadNetwork
         }
     }
 
+    /// <summary>
+    /// Tòa thị chính chỉ thành trung tâm khi đã xây xong — đang xây thì luật nối đường chưa áp dụng
+    /// (khớp với thông báo "từ giờ phải nối đường" hiện lúc xây xong).
+    /// </summary>
+    private static bool IsActiveHub(in BuildingData b) =>
+        b.buildingType == BuildingType.CityHall
+        && b.isAllocated
+        && b.buildingState == BuildingState.Active;
+
     /// <summary>Các ô kề 4 hướng bao quanh footprint của công trình.</summary>
     private static void ForEachRingCell(in BuildingData b, System.Action<Vector2Int> visit)
     {
@@ -156,7 +165,7 @@ public static class RoadNetwork
         for (int i = 0; i < count; i++)
         {
             ref BuildingData b = ref buildings[i];
-            if (b.buildingType != BuildingType.CityHall || !b.isAllocated)
+            if (!IsActiveHub(in b))
                 continue;
 
             Vector2Int size = BuildingRules.GetFootprint(in b);

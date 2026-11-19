@@ -59,6 +59,7 @@ public class NotificationFeed : MonoBehaviour
     private bool _hasPendingDeaths;
     private bool _pendingMonthReport;
     private int _lastInfected;
+    private WeatherEvent _lastWeather;
 
     private RectTransform _container;
     private GameObject _infoTemplate;
@@ -158,6 +159,8 @@ public class NotificationFeed : MonoBehaviour
 
         if (p.left > 0)
             Push($"{p.left} người trong hàng chờ bỏ đi vì đói (giảm uy tín)", NoticeLevel.Warning, "yard-left", UIActions.OpenGate);
+        if (p.died > 0)
+            Push($"{p.died} người chết bệnh trong hàng chờ ở Cổng", NoticeLevel.Warning, "yard-died", UIActions.OpenGate);
         if (p.hungry > 0)
             Push($"Không đủ lương thực cho hàng chờ: {p.hungry} người bị đói", NoticeLevel.Warning, "yard-hungry", UIActions.OpenGate);
         if (p.newlyInfected > 0)
@@ -287,6 +290,7 @@ public class NotificationFeed : MonoBehaviour
         ClearAll();
         GlobalSystemManager global = ResolveGlobal();
         _lastInfected = global != null ? global.GetGlobalDataRef().totalInfected : 0;
+        _lastWeather = global != null ? global.GetGlobalDataRef().currentWeather : WeatherEvent.Clear;
     }
 
     private void LateUpdate()
@@ -339,6 +343,12 @@ public class NotificationFeed : MonoBehaviour
 
         ref GlobalSystemData d = ref global.GetGlobalDataRef();
         int pop = Mathf.Max(0, d.totalPopulation);
+
+        // Bão tuyết (GDD 3.7 giai đoạn 1)
+        if (d.currentWeather == WeatherEvent.Blizzard && _lastWeather != WeatherEvent.Blizzard)
+            Push($"Bão tuyết ập tới ({d.weatherDuration} tháng): nhiệt độ {d.environmentTemperature:0}°C, than tiêu hao tăng mạnh",
+                NoticeLevel.Critical, "blizzard", () => UIActions.OpenBuildCategory("Năng lượng"));
+        _lastWeather = d.currentWeather;
 
         // Dịch bệnh
         float infectedPct = pop > 0 ? d.totalInfected * 100f / pop : 0f;
@@ -538,8 +548,8 @@ public class NotificationFeed : MonoBehaviour
             });
         }
 
-        if (level != NoticeLevel.Info && MusicManager.Instance != null)
-            MusicManager.Instance.PlayNotice(level == NoticeLevel.Critical);
+        if (MusicManager.Instance != null)
+            MusicManager.Instance.PlayAlert(level);
 
         _active.Insert(0, notice);
         while (_active.Count > MaxVisible)
@@ -695,6 +705,7 @@ public class NotificationFeed : MonoBehaviour
         EnsureContainer();
         GlobalSystemManager global = ResolveGlobal();
         _lastInfected = global != null ? global.GetGlobalDataRef().totalInfected : 0;
+        _lastWeather = global != null ? global.GetGlobalDataRef().currentWeather : WeatherEvent.Clear;
         ShowStartObjective();
     }
 

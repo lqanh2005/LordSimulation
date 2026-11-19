@@ -108,6 +108,7 @@ public class PlacementManager : MonoBehaviour
         NotificationFeed.EnsureInstance(this);
         MerchantPopup.EnsureInstance();
         TutorialHints.EnsureInstance();
+        DayNightOverlay.EnsureInstance();   // Ánh sáng sáng–tối (1 tháng = 1 vòng ngày–đêm)
         GameHotkeys.EnsureInstance(this);   // tạo sau cùng để tìm thấy các popup ở trên
     }
 
@@ -496,6 +497,25 @@ public class PlacementManager : MonoBehaviour
     public ushort GetBuildingIdAt(Vector2Int cell)
     {
         return grid != null ? grid.GetOccupantId(cell.x, cell.y) : (ushort)0;
+    }
+
+    /// <summary>
+    /// Công trình (không tính đường) dưới con trỏ, 0 nếu không có.
+    /// Popup cư dân dùng để nhường ưu tiên click cho nhà / công trình; đường bỏ qua vì dân đi trên đường.
+    /// </summary>
+    public ushort GetSolidBuildingIdUnderMouse()
+    {
+        if (grid == null || buildingManager == null)
+            return 0;
+
+        ushort id = GetBuildingIdAt(GetOriginUnderMouse(Vector2Int.one));
+        if (id == 0)
+            return 0;
+
+        int index = buildingManager.FindBuildingIndexById(id);
+        if (index < 0 || buildingManager.GetBuildingRef(index).buildingType == BuildingType.Road)
+            return 0;
+        return id;
     }
 
     public BuildingView GetBuildingView(ushort buildingId)
