@@ -20,6 +20,10 @@ public static class GameAssets
 
     private static readonly Dictionary<string, AsyncOperationHandle> Handles = new Dictionary<string, AsyncOperationHandle>();
 
+    // Project tắt Domain Reload: handle của lần Play trước đã chết cùng Addressables cũ -> bỏ, không Release
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics() => Handles.Clear();
+
     /// <summary>Nạp bất đồng bộ; gọi lại cùng key trả về cùng handle (không nạp lại).</summary>
     public static AsyncOperationHandle<T> LoadAsync<T>(string key) where T : Object
     {

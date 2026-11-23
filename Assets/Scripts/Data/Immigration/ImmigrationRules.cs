@@ -75,7 +75,8 @@ public static class ImmigrationRules
         int scaled = Mathf.FloorToInt(expected);
         if (Random.value < expected - scaled)   // làm tròn ngẫu nhiên giữ đúng kỳ vọng
             scaled++;
-        return scaled;
+        // Trần cứng sau hệ số uy tín: uy tín cao không đẩy quá MaxMonthlyArrivals người/tháng
+        return scaled > MaxMonthlyArrivals ? MaxMonthlyArrivals : scaled;
     }
 
     public static int GetEntryTax(in ResidentData applicant, float tariffPercent)

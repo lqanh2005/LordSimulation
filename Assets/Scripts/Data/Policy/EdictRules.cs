@@ -12,6 +12,14 @@ public static class EdictRules
 
     public static bool EdictsUnlocked => AreEdictsUnlocked == null || AreEdictsUnlocked();
 
+    // Project tắt Domain Reload: xoá hook còn sót từ lần Play trước
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        IsVariableUnlocked = null;
+        AreEdictsUnlocked = null;
+    }
+
     public const string EdictsLockedMessage = "Cần nghiên cứu <b>Bộ luật</b> (phím T) để ban hành Sắc lệnh.";
 
     private const float Epsilon = 0.0001f;

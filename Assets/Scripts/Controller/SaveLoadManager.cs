@@ -41,10 +41,17 @@ public class SaveLoadManager : MonoBehaviour
         SetActiveSlot(latest >= 0 ? latest : 0);
     }
 
+    /// <summary>Thư mục lưu thay thế (chỉ test PlayMode dùng, để không ghi đè save thật). null = persistentDataPath.</summary>
+    public static string DirectoryOverride;
+
+    // Project tắt Domain Reload: test lỗi giữa chừng (không chạy TearDown) không được để save thật ghi vào thư mục tạm
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics() => DirectoryOverride = null;
+
     public string GetSlotPath(int slot)
     {
         string file = slot <= 0 ? saveSlotFileName : $"city_save_slot_{slot + 1}.dat";
-        return Path.Combine(Application.persistentDataPath, file);
+        return Path.Combine(string.IsNullOrEmpty(DirectoryOverride) ? Application.persistentDataPath : DirectoryOverride, file);
     }
 
     public void SetActiveSlot(int slot)

@@ -11,12 +11,58 @@ public class IsoTestCamera : MonoBehaviour
     [Tooltip("Tắt trong gameplay vì chuột phải dùng để huỷ đặt nhà")]
     public bool rightDragPan = true;
 
+    [Header("Giới hạn vùng di chuyển")]
+    [Tooltip("Giữ tâm camera trong bản đồ (lưới isometric hình thoi)")]
+    public bool clampToMap = true;
+    [Tooltip("Số ô được phép ra ngoài mép bản đồ")]
+    [Min(0f)] public float mapMargin = 2f;
+
     private Camera cam;
     private Vector3 lastMouseWorld;
+    private GridController grid;
 
     private void Awake()
     {
         cam = GetComponent<Camera>();
+    }
+
+    // LateUpdate: chặn cả khi chỗ khác dời camera (nhảy tới công trình, phím H/G...)
+    private void LateUpdate()
+    {
+        if (clampToMap)
+            ClampToMap();
+    }
+
+    /// <summary>Đổi vị trí camera sang toạ độ ô (số thực), kẹp trong [-margin, size-1+margin] rồi đổi lại.</summary>
+    private void ClampToMap()
+    {
+        if (grid == null)
+        {
+            grid = FindFirstObjectByType<GridController>();
+            if (grid == null)
+                return;
+        }
+
+        Vector2 tile = grid.TileSize;
+        if (grid.Width <= 0 || grid.Height <= 0 || tile.x <= 0f || tile.y <= 0f)
+            return;
+
+        Vector3 pos = transform.position;
+        Vector3 local = grid.transform.InverseTransformPoint(pos);
+        float a = local.x / (tile.x * 0.5f);
+        float b = local.y / (tile.y * 0.5f);
+        float gx = (a + b) * 0.5f;
+        float gy = (b - a) * 0.5f;
+
+        float cx = Mathf.Clamp(gx, -mapMargin, grid.Width - 1 + mapMargin);
+        float cy = Mathf.Clamp(gy, -mapMargin, grid.Height - 1 + mapMargin);
+        if (Mathf.Approximately(cx, gx) && Mathf.Approximately(cy, gy))
+            return;
+
+        Vector3 clampedLocal = new Vector3((cx - cy) * tile.x * 0.5f, (cx + cy) * tile.y * 0.5f, local.z);
+        Vector3 world = grid.transform.TransformPoint(clampedLocal);
+        world.z = pos.z;
+        transform.position = world;
     }
 
     private void Update()
@@ -51,6 +97,9 @@ public class IsoTestCamera : MonoBehaviour
         if (dragging && !started)
         {
             transform.position += lastMouseWorld - mouseWorld;
+            // Kẹp ngay trước khi tính lại điểm neo chuột, nếu không phần kéo lố bị cộng dồn -> camera "dính" ở mép
+            if (clampToMap)
+                ClampToMap();
             mouseWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
         }
 

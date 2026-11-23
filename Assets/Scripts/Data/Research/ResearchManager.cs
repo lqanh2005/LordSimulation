@@ -57,9 +57,24 @@ public class ResearchManager : MonoBehaviour
     {
         ApplySaveData(default);
         // Điều kiện "Thân nhiệt" của sắc lệnh chỉ dùng được khi đã có Nhiệt kế
-        EdictRules.IsVariableUnlocked = v => v != RuleVariable.ApplicantBodyTemp || IsCompleted(ResearchID.Thermometer);
+        _variableUnlockHook = v => v != RuleVariable.ApplicantBodyTemp || IsCompleted(ResearchID.Thermometer);
+        EdictRules.IsVariableUnlocked = _variableUnlockHook;
         // GDD Tier 0 -> 1: Sắc lệnh chỉ ban hành được sau khi nghiên cứu Bộ luật
-        EdictRules.AreEdictsUnlocked = () => IsCompleted(ResearchID.CodeOfLaw);
+        _edictsUnlockHook = () => IsCompleted(ResearchID.CodeOfLaw);
+        EdictRules.AreEdictsUnlocked = _edictsUnlockHook;
+    }
+
+    private System.Func<RuleVariable, bool> _variableUnlockHook;
+    private System.Func<bool> _edictsUnlockHook;
+
+    // Gỡ hook khi đổi scene để EdictRules không còn trỏ vào ResearchManager của ván cũ
+    // (chỉ gỡ nếu vẫn là hook của chính mình — ván mới có thể đã gán hook khác)
+    private void OnDestroy()
+    {
+        if (_variableUnlockHook != null && EdictRules.IsVariableUnlocked == _variableUnlockHook)
+            EdictRules.IsVariableUnlocked = null;
+        if (_edictsUnlockHook != null && EdictRules.AreEdictsUnlocked == _edictsUnlockHook)
+            EdictRules.AreEdictsUnlocked = null;
     }
 
     public bool HasThermometer => IsCompleted(ResearchID.Thermometer);

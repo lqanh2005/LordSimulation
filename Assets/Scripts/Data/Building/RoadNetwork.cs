@@ -31,6 +31,17 @@ public static class RoadNetwork
 
     public static void MarkDirty() => _dirty = true;
 
+    // Project tắt Domain Reload: không giữ mạng đường của lần Play trước
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        Connected.Clear();
+        _dirty = true;
+        _hasHub = false;
+        _lastCount = -1;
+        Enabled = true;
+    }
+
     public static bool RequiresRoad(BuildingType type) => ResidentProductionRules.IsProductionBuilding(type);
 
     public static bool IsConnected(BuildingManager manager, ushort buildingId)

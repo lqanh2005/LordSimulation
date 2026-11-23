@@ -110,6 +110,15 @@ public class UISkin : ScriptableObject
     private static UISkin _instance;
     private static bool _searched;
 
+    // Project tắt Domain Reload: lần tìm thất bại ở Edit mode (hoặc handle đã Release của lần Play trước)
+    // không được chặn việc nạp skin khi vào Play
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        _instance = null;
+        _searched = false;
+    }
+
     public static UISkin Instance
     {
         get
