@@ -223,7 +223,8 @@ public class PlacementManager : MonoBehaviour
     // Click trái vào công trình khi không ở chế độ xây -> báo cho UI (vd: popup chọn cây trồng của Farm)
     private void HandleBuildingClick()
     {
-        if (Mouse.current == null || grid == null || !Mouse.current.leftButton.wasPressedThisFrame || IsPointerOverUI())
+        if (Mouse.current == null || grid == null || !Mouse.current.leftButton.wasPressedThisFrame || IsPointerOverUI()
+            || ImmigrationGate.IsPointerOver)
         {
             return;
         }

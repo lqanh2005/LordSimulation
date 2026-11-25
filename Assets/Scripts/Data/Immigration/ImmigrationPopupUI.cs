@@ -35,7 +35,9 @@ public class ImmigrationPopupUI : MonoBehaviour
         _manager = manager;
         EnsureUi();
         Subscribe();
-        Hide();
+        // Tắt thẳng, không chạy hiệu ứng đóng: nếu không màn Cổng vừa dựng sẽ loé lên lúc vào scene
+        if (root != null)
+            root.SetActive(false);
     }
 
     private void OnEnable()

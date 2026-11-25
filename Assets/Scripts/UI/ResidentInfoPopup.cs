@@ -61,7 +61,8 @@ public class ResidentInfoPopup : MonoBehaviour
             return;
 
         // Ưu tiên nhà / công trình: click trúng ô có công trình (trừ đường) thì để popup công trình xử lý
-        if (_placement != null && _placement.GetSolidBuildingIdUnderMouse() != 0)
+        // (Cổng thành cũng vậy)
+        if (ImmigrationGate.IsPointerOver || (_placement != null && _placement.GetSolidBuildingIdUnderMouse() != 0))
         {
             if (IsOpen)
                 Hide();

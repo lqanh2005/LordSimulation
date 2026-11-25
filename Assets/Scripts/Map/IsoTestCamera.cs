@@ -16,6 +16,8 @@ public class IsoTestCamera : MonoBehaviour
     public bool clampToMap = true;
     [Tooltip("Số ô được phép ra ngoài mép bản đồ")]
     [Min(0f)] public float mapMargin = 2f;
+    [Tooltip("Khung hình không vượt ra ngoài nền cảnh quan (world). Rộng/cao = 0 là không giới hạn")]
+    public Rect viewBounds;
 
     private Camera cam;
     private Vector3 lastMouseWorld;
@@ -31,6 +33,25 @@ public class IsoTestCamera : MonoBehaviour
     {
         if (clampToMap)
             ClampToMap();
+        ClampToView();
+    }
+
+    /// <summary>Giữ cả khung hình nằm trong nền cảnh quan; zoom xa quá thì thu lại cho vừa nền.</summary>
+    private void ClampToView()
+    {
+        if (viewBounds.width <= 0f || viewBounds.height <= 0f)
+            return;
+
+        float maxSize = Mathf.Min(viewBounds.height * 0.5f, viewBounds.width * 0.5f / cam.aspect);
+        if (cam.orthographicSize > maxSize)
+            cam.orthographicSize = maxSize;
+
+        float halfH = cam.orthographicSize;
+        float halfW = halfH * cam.aspect;
+        Vector3 pos = transform.position;
+        pos.x = Mathf.Clamp(pos.x, viewBounds.xMin + halfW, viewBounds.xMax - halfW);
+        pos.y = Mathf.Clamp(pos.y, viewBounds.yMin + halfH, viewBounds.yMax - halfH);
+        transform.position = pos;
     }
 
     /// <summary>Đổi vị trí camera sang toạ độ ô (số thực), kẹp trong [-margin, size-1+margin] rồi đổi lại.</summary>
@@ -100,6 +121,7 @@ public class IsoTestCamera : MonoBehaviour
             // Kẹp ngay trước khi tính lại điểm neo chuột, nếu không phần kéo lố bị cộng dồn -> camera "dính" ở mép
             if (clampToMap)
                 ClampToMap();
+            ClampToView();
             mouseWorld = cam.ScreenToWorldPoint(mouse.position.ReadValue());
         }
 
