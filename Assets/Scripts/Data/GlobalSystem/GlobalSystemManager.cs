@@ -96,6 +96,11 @@ public class GlobalSystemManager : MonoBehaviour
     // LOGIC THỜI GIAN & THỜI TIẾT ĐỊNH KỲ
     // ==========================================
 
+#if UNITY_EDITOR
+    /// <summary>Test: tua ngay sang tháng sau (cùng đường xử lý với game thật).</summary>
+    public void DebugAdvanceMonth() => AdvanceToNextMonth();
+#endif
+
     private void AdvanceToNextMonth()
     {
         data.currentMonth++;

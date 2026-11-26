@@ -25,6 +25,12 @@ public class ResidentBase : MonoBehaviour
     [Tooltip("Tới nơi / đứng yên thì quay mặt về camera")]
     [SerializeField] private bool faceFrontWhenIdle = true;
 
+    // Khung hình dùng chung (null = chạy Animator riêng)
+    private ResidentSpriteClips _clips;
+    private bool _animWalking;
+    private bool _animBack;
+    private float _frameClock;
+
     private bool _facingBack;
     private bool _facingRight;
 
@@ -243,6 +249,7 @@ public class ResidentBase : MonoBehaviour
             _facingBack = false;
         }
         SetFacingBack(_facingBack);
+        TickAnimation(Time.deltaTime);
 
         if (delta.x > FacingThreshold)
             _facingRight = true;
@@ -264,8 +271,34 @@ public class ResidentBase : MonoBehaviour
         spriteRenderer.flipX = _facingRight != artFacesRight;
     }
 
+    private void TickAnimation(float dt)
+    {
+        if (_clips == null || spriteRenderer == null)
+            return;
+
+        ref readonly ResidentSpriteClips.Clip clip = ref _clips.Get(_animWalking, _animBack);
+        if (!clip.IsValid)
+            return;
+
+        _frameClock += dt * clip.framesPerSecond;
+        if (_frameClock >= 840f)     // chia hết cho mọi số khung thường dùng
+            _frameClock -= 840f;
+        Sprite sprite = clip.frames[(int)_frameClock % clip.frames.Length];
+        if (spriteRenderer.sprite != sprite)
+            spriteRenderer.sprite = sprite;
+    }
+
     private void SetWalking(bool walking)
     {
+        if (_clips != null)
+        {
+            if (_animWalking != walking)
+            {
+                _animWalking = walking;
+                _frameClock = 0f;
+            }
+            return;
+        }
         if (animator == null || animator.runtimeAnimatorController == null)
             return;
 
@@ -275,6 +308,11 @@ public class ResidentBase : MonoBehaviour
 
     private void SetFacingBack(bool back)
     {
+        if (_clips != null)
+        {
+            _animBack = back;
+            return;
+        }
         if (animator == null || animator.runtimeAnimatorController == null)
             return;
 
@@ -296,6 +334,10 @@ public class ResidentBase : MonoBehaviour
 
         if (controller != null && animator.runtimeAnimatorController != controller)
             animator.runtimeAnimatorController = controller;
+
+        _clips = ResidentSpriteClips.For(animator.runtimeAnimatorController);
+        animator.enabled = _clips == null;
+        TickAnimation(0f);
     }
 
     private void ApplyProfessionSprite(ProfessionType profession)
