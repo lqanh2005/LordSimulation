@@ -57,8 +57,11 @@ public class TopBarHUDController : MonoBehaviour
         {
             GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
             GameEvents.Unlisten(EventID.ResourcesChanged, OnResourcesChanged);
+            GameEvents.Unlisten(EventID.PopulationChanged, OnResourcesChanged);
             GameEvents.Listen(EventID.MonthChanged, OnMonthChanged);
             GameEvents.Listen(EventID.ResourcesChanged, OnResourcesChanged);
+            // Dân số / bệnh / hạnh phúc đổi không kèm tài nguyên (có người vào thành, chết...)
+            GameEvents.Listen(EventID.PopulationChanged, OnResourcesChanged);
 
             RefreshAllUI();
         }
@@ -72,6 +75,7 @@ public class TopBarHUDController : MonoBehaviour
     {
         GameEvents.Unlisten(EventID.MonthChanged, OnMonthChanged);
         GameEvents.Unlisten(EventID.ResourcesChanged, OnResourcesChanged);
+        GameEvents.Unlisten(EventID.PopulationChanged, OnResourcesChanged);
     }
 
     private void OnMonthChanged(object param)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Profiling;
 using UnityEngine;
 
 public class ResidentManager : MonoBehaviour
@@ -7,6 +8,7 @@ public class ResidentManager : MonoBehaviour
     public const int MAX_RESIDENTS = 10000;
     private const byte HungerMonthsBeforeDeathRisk = 2;
     private const byte ColdMonthsBeforeDeathRisk = 2;
+    private const float MaxMoveDeltaTime = 0.05f;
 
     [Header("Dữ Liệu Mảng Tĩnh Lõi")]
     public ResidentData[] allResidents = new ResidentData[MAX_RESIDENTS];
@@ -53,6 +55,9 @@ public class ResidentManager : MonoBehaviour
     private readonly List<ResidentBase> _activeVisuals = new List<ResidentBase>();
     private readonly bool[] _visualBoundFlags = new bool[MAX_RESIDENTS];
 
+    private static readonly ProfilerMarker TickCommutesMarker = new ProfilerMarker("ResidentManager.TickVisualCommutes");
+    private static readonly ProfilerMarker AssignPathMarker = new ProfilerMarker("ResidentManager.AssignPath");
+
     private GridPathfinder _pathfinder;
     private readonly List<Vector2Int> _cellPathBuffer = new List<Vector2Int>(64);
     private readonly List<Vector3> _worldPathBuffer = new List<Vector3>(64);
@@ -88,6 +93,114 @@ public class ResidentManager : MonoBehaviour
         get => commuteSpeed;
         set => commuteSpeed = Mathf.Max(0f, value);
     }
+
+#if UNITY_EDITOR
+    // ===== Test: cư dân đi tự do =====
+    private struct RoamState
+    {
+        public CommuteGoal goal;
+        public float nextTime;
+    }
+
+    private readonly Dictionary<int, RoamState> _roam = new Dictionary<int, RoamState>();
+    private bool _freeRoam;
+
+    /// <summary>Số lần tìm đường thất bại (khi đó cư dân đi thẳng tới đích).</summary>
+    public int DebugPathFailures { get; private set; }
+
+    /// <summary>Bỏ lịch đi làm / về nhà: mỗi người đi tới ô trống ngẫu nhiên, nghỉ chút rồi đi tiếp.</summary>
+    public bool DebugFreeRoam
+    {
+        get => _freeRoam;
+        set
+        {
+            _freeRoam = value;
+            _roam.Clear();
+            DebugPathFailures = 0;
+        }
+    }
+
+    private void TickFreeRoam()
+    {
+        if (!_freeRoam || gridController == null)
+            return;
+
+        for (int i = 0; i < _activeVisuals.Count; i++)
+        {
+            ResidentBase view = _activeVisuals[i];
+            if (view == null || !view.IsBound || (uint)view.DataIndex >= (uint)activeCount)
+                continue;
+
+            int id = allResidents[view.DataIndex].residentID;
+            bool has = _roam.TryGetValue(id, out RoamState state);
+            bool blocked = has && !IsFreeCell(state.goal.cell);
+            if (has && !blocked)
+            {
+                Vector2 left = state.goal.world - view.transform.position;
+                if (left.sqrMagnitude > 0.0025f)
+                    continue;                       // chưa tới nơi
+                if (state.nextTime <= 0f)           // vừa tới: nghỉ một chút
+                {
+                    state.nextTime = Time.time + UnityEngine.Random.Range(0.2f, 1.5f);
+                    _roam[id] = state;
+                    continue;
+                }
+                if (Time.time < state.nextTime)
+                    continue;
+            }
+
+            if (TryPickFreeCell(out Vector2Int cell))
+            {
+                Vector3 world = gridController.GridToWorld(cell.x, cell.y);
+                world.z = 0f;
+                _roam[id] = new RoamState { goal = new CommuteGoal { world = world, cell = cell, buildingId = 0 } };
+            }
+        }
+    }
+
+    private bool IsFreeCell(Vector2Int c) =>
+        gridController.IsInside(c.x, c.y) && !gridController.IsOccupied(c.x, c.y) && !gridController.HasObject(c.x, c.y);
+
+    private bool TryPickFreeCell(out Vector2Int cell)
+    {
+        for (int t = 0; t < 30; t++)
+        {
+            cell = new Vector2Int(UnityEngine.Random.Range(0, gridController.Width), UnityEngine.Random.Range(0, gridController.Height));
+            if (IsFreeCell(cell))
+                return true;
+        }
+        cell = default;
+        return false;
+    }
+
+    /// <summary>Test tải: đổi giới hạn số hình hiển thị; hạ xuống thì cất bớt hình.</summary>
+    public int MaxVisualAgents
+    {
+        get => maxVisualAgents;
+        set
+        {
+            maxVisualAgents = Mathf.Clamp(value, 0, MAX_RESIDENTS);
+            for (int i = _activeVisuals.Count - 1; i >= maxVisualAgents; i--)
+            {
+                ResidentBase view = _activeVisuals[i];
+                _activeVisuals.RemoveAt(i);
+                if (view == null)
+                    continue;
+                view.Unbind();
+                SimplePool2.Despawn(view.gameObject);
+            }
+            FillMissingVisualAgents();
+        }
+    }
+
+    /// <summary>Test: đích hiện tại theo lịch sinh hoạt của cư dân.</summary>
+    public Vector3 DebugGetGoal(int dataIndex, out ushort buildingId)
+    {
+        CommuteGoal goal = ResolveCommuteGoal(in GetResidentRef(dataIndex));
+        buildingId = goal.buildingId;
+        return goal.world;
+    }
+#endif
 
     public IReadOnlyList<ResidentBase> ActiveVisuals => _activeVisuals;
     public GridController GridController => gridController;
@@ -728,7 +841,8 @@ public class ResidentManager : MonoBehaviour
                 infected++;
         }
 
-        float avgHappiness = alive > 0 ? happinessSum / alive : 0f;
+        // overallHappiness lưu theo % (0-100, như giá trị khởi đầu 50 và cách HUD hiển thị); từng cư dân là 0-1
+        float avgHappiness = alive > 0 ? happinessSum / alive * 100f : 0f;
 
         ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
         // Mẫu là tập con của dân thật: dân số thật luôn >= số mẫu còn sống (không để làm tròn kéo lệch),
@@ -898,7 +1012,8 @@ public class ResidentManager : MonoBehaviour
 
     private void Update()
     {
-        TickVisualCommutes();
+        using (TickCommutesMarker.Auto())
+            TickVisualCommutes();
     }
 
     private void TickVisualCommutes()
@@ -906,14 +1021,18 @@ public class ResidentManager : MonoBehaviour
         if (_activeVisuals.Count == 0)
             return;
 
-        // Đi bộ nhanh theo tốc độ game (x2/x3) để lịch sinh hoạt vẫn khớp giờ trong vòng ngày–đêm
+        // Đi bộ nhanh theo tốc độ game (x2/x3) để lịch sinh hoạt vẫn khớp giờ trong vòng ngày–đêm;
+        // khung hình bị khựng thì đi chậm lại thay vì nhảy một đoạn dài
         float speedMult = globalSystemManager != null ? globalSystemManager.SpeedMultiplier : 1f;
-        float step = commuteSpeed * Time.deltaTime * speedMult;
+        float step = commuteSpeed * Mathf.Min(Time.deltaTime, MaxMoveDeltaTime) * speedMult;
         if (step <= 0f)
             return;
 
         EnsurePathfinder();
         RefreshScheduleCache();
+#if UNITY_EDITOR
+        TickFreeRoam();
+#endif
         int gridVersion = gridController != null ? gridController.OccupancyVersion : 0;
         int pathBudget = Mathf.Max(1, maxPathRequestsPerFrame);
 
@@ -941,7 +1060,8 @@ public class ResidentManager : MonoBehaviour
                 pathBudget--;
                 if (pathBudget == 0)
                     _pathRoundRobin = (i + 1) % count;
-                AssignPath(view, in goal, gridVersion);
+                using (AssignPathMarker.Auto())
+                    AssignPath(view, in goal, gridVersion);
             }
 
             view.TickPath(step);
@@ -978,6 +1098,12 @@ public class ResidentManager : MonoBehaviour
                     _worldPathBuffer.Add(p);
                 }
             }
+#if UNITY_EDITOR
+            else
+            {
+                DebugPathFailures++;
+            }
+#endif
         }
 
         _worldPathBuffer.Add(goal.world);
@@ -988,6 +1114,10 @@ public class ResidentManager : MonoBehaviour
     {
         if (_debugGoals.Count > 0 && _debugGoals.TryGetValue(data.residentID, out CommuteGoal debugGoal))
             return debugGoal;
+#if UNITY_EDITOR
+        if (_freeRoam && _roam.TryGetValue(data.residentID, out RoamState roam))
+            return roam.goal;
+#endif
 
         // Lịch sinh hoạt kiểu Cities: Skylines — 1 tháng = 1 vòng ngày–đêm (DayCycle), giờ lệch theo từng người
         float hour = _goalHour;
