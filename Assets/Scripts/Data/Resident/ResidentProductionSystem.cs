@@ -93,6 +93,7 @@ public static class ResidentProductionSystem
                 * ResidentProductionRules.GetSeasonMultiplier(building.buildingType, season)
                 * (edicts != null ? edicts.GetProductionMultiplier(building.buildingType) : 1f)
                 * (research != null ? research.GetProductionMultiplier(building.buildingType) : 1f)
+                * EmergencyOrders.GetProductionMultiplier(building.buildingType)   // Ca làm kép ở mỏ (GDD 9.4)
                 * sampleScale;
 
             // Công trình chế biến: thiếu nguyên liệu thì chỉ làm được phần tương ứng

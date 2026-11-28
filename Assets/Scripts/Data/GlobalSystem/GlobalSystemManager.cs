@@ -35,7 +35,25 @@ public class GlobalSystemManager : MonoBehaviour
     public float RealSecondsPerMonth => realSecondsPerMonth;
 
     /// <summary>Hệ số tốc độ game hiện tại: 0 khi tạm dừng, 1/2/3 theo nút tốc độ.</summary>
-    public float SpeedMultiplier => data.currentGameSpeed switch
+    // GDD v0.3 mục 3: ở màn Cổng thời gian vẫn trôi nhưng chậm bằng 1/4 x1 (1 tháng = 8 phút), không dừng / tăng tốc được
+    public const float GateSpeedMultiplier = 0.25f;
+    public static bool GateViewOpen { get; private set; }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics() => GateViewOpen = false;
+
+    /// <summary>Màn Cổng mở/đóng. Mở khi đang dừng thì cho thời gian chạy lại (ở Cổng không dừng được).</summary>
+    public void SetGateView(bool open)
+    {
+        GateViewOpen = open;
+        if (open && data.currentGameSpeed == GameSpeed.Pause
+            && GamePlayController.Instance != null && GamePlayController.Instance.IsIn(GamePlayStateID.Playing))
+            SetGameSpeed(GameSpeed.Speed1x);
+    }
+
+    public float SpeedMultiplier => data.currentGameSpeed == GameSpeed.Pause ? 0f
+        : GateViewOpen ? GateSpeedMultiplier
+        : data.currentGameSpeed switch
     {
         GameSpeed.Pause => 0f,
         GameSpeed.Speed2x => 2f,
@@ -79,7 +97,17 @@ public class GlobalSystemManager : MonoBehaviour
             stockIron = 20,
             stockMedicine = 10,
             authorityPoints = 100,
-            reputation = 0.0f,
+            reputation = StabilityRules.ReputationStart,
+            entryTaxLevel = StabilityRules.DefaultEntryTax,
+            pendingEntryTaxLevel = StabilityRules.DefaultEntryTax,
+            wageLevel = WageLevel.Normal,
+            pendingWageLevel = WageLevel.Normal,
+            incomeTaxLevel = EntryTaxLevel.Normal,
+            pendingIncomeTaxLevel = EntryTaxLevel.Normal,
+            feedPolicy = FeedPolicy.Subsidize,
+            foodPriceEvent = 1f,
+            coalPriceEvent = 1f,
+            woodPriceEvent = 1f,
             riotRiskMeter = 0.0f,
             totalPopulation = 0,
             totalInfected = 0,
@@ -132,6 +160,9 @@ public class GlobalSystemManager : MonoBehaviour
         // 1. Tính toán lại nhiệt độ môi trường theo Mùa
         UpdateSeasonalEnvironment();
 
+        // GDD 6.6: giá thị trường (sự kiện, hồi giá, tin đồn) — trước khi hộ trả tiền ăn / sưởi
+        MarketSystem.ProcessMonthly(ref data);
+
         // Chụp kho trước mô phỏng tháng để tính thay đổi ròng (sản xuất − tiêu hao) cho HUD
         ResourceAmounts before = ResourceAmounts.From(in data);
 
@@ -175,6 +206,7 @@ public class GlobalSystemManager : MonoBehaviour
             data.currentWeather = WeatherEvent.Clear;
             TryStartWeatherEvent();
         }
+        ForecastNextBlizzard();
 
         if (data.currentWeather == WeatherEvent.Blizzard)
             baseTemp += blizzardTempDrop; // Rét buốt -30°C
@@ -189,15 +221,34 @@ public class GlobalSystemManager : MonoBehaviour
     /// </summary>
     private void TryStartWeatherEvent()
     {
-        if (data.CurrentSeason != SeasonType.Winter)
-            return;
-        if (Random.value >= blizzardChancePerWinterMonth)
+        // GDD 9.2 + 6.6: bão tuyết luôn được báo trước 1 tháng — chỉ xảy ra khi tháng trước đã có dự báo
+        bool forecast = data.blizzardForecast;
+        data.blizzardForecast = false;
+        if (data.CurrentSeason != SeasonType.Winter || !forecast)
             return;
 
         int minMonths = Mathf.Max(1, blizzardDurationMonths.x);
         int maxMonths = Mathf.Max(minMonths, blizzardDurationMonths.y);
         data.currentWeather = WeatherEvent.Blizzard;
         data.weatherDuration = (byte)Random.Range(minMonths, maxMonths + 1);
+        // GDD 4.1: thiên tai sinh thêm đợt tị nạn, đông hơn 50% (ImmigrationManager xử lý rồi xoá cờ)
+        data.disasterWaveBoost = true;
+    }
+
+    /// <summary>Tung xúc xắc bão tuyết cho tháng sau (nếu tháng sau là mùa đông và bão hiện tại không kéo sang) rồi báo trước.</summary>
+    private void ForecastNextBlizzard()
+    {
+        if (data.blizzardForecast)
+            return;
+        int nextMonth = data.currentMonth % 12 + 1;
+        bool nextWinter = nextMonth >= 10;
+        bool stormContinues = data.currentWeather == WeatherEvent.Blizzard && data.weatherDuration > 1;
+        if (!nextWinter || stormContinues)
+            return;
+        if (Random.value >= blizzardChancePerWinterMonth)
+            return;
+        data.blizzardForecast = true;
+        MarketSystem.Announce(MarketEventType.Blizzard, MarketSystem.BlizzardMagnitude, true);
     }
 
     private BuildingEffectRules.MonthlyEffects CollectBuildingEffects()
@@ -229,15 +280,20 @@ public class GlobalSystemManager : MonoBehaviour
         BuildingEffectRules.MonthlyEffects fx = CollectBuildingEffects();
         LastBuildingEffects = fx;
         data.treasuryGold += fx.gold;
-        if (fx.reputation != 0f)
-            ModifyReputation(fx.reputation);
         data.authorityPoints = (ushort)Mathf.Min(ImmigrationRules.MaxAuthority,
             data.authorityPoints + ImmigrationRules.AuthorityRegenPerMonth);
-        if (data.reputation < 0f)
-            ModifyReputation(Mathf.Min(-data.reputation, ImmigrationRules.ReputationRecoveryPerMonth));
-        data.riotRiskMeter = Mathf.Max(0f, data.riotRiskMeter - fx.riotReduction);
 
-        int foodPerCapita = data.CurrentSeason == SeasonType.Winter ? 2 : 1;
+        // GDD 6.4: đổi mức thuế nhập thành có hiệu lực từ tháng sau
+        data.entryTaxLevel = data.pendingEntryTaxLevel;
+        data.wageLevel = data.pendingWageLevel;
+        data.incomeTaxLevel = data.pendingIncomeTaxLevel;
+
+        // GDD 9.6: Reputation tự kéo về 50 một đoạn 10% chênh lệch, cộng ảnh hưởng thuế nhập thành
+        // (Admit / Deny / người chết hay bỏ đi ngoài tường cộng trừ ngay khi xảy ra)
+        data.reputation = StabilityRules.PullTowardStart(data.reputation);
+        ModifyReputation(StabilityRules.GetEntryTaxReputation(data.entryTaxLevel));
+
+        int foodPerCapita = GetFoodPerCapita(data.CurrentSeason);
         int needFood = data.totalPopulation * foodPerCapita;
         int consumedFood = Mathf.Min(data.stockFood, needFood);
         data.stockFood -= consumedFood;
@@ -248,13 +304,11 @@ public class GlobalSystemManager : MonoBehaviour
             ? (float)peopleHungry / data.totalPopulation
             : 0f;
 
-        data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastHungryRate * 10f);
         GameEvents.Post(EventID.HungerResolved, LastHungryRate);
 
         // Nước: Giếng nước cấp cho dân, thiếu thì một phần dân bị khát
         LastWaterCapacity = WaterRules.GetCapacity(fx.wells);
         LastThirstyRate = WaterRules.GetThirstyRate(data.totalPopulation, LastWaterCapacity);
-        data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastThirstyRate * WaterRules.ThirstRiotFactor);
         GameEvents.Post(EventID.ThirstResolved, LastThirstyRate);
 
         int coalPerCapita = data.CurrentSeason == SeasonType.Winter ? 1 : 0;
@@ -264,40 +318,34 @@ public class GlobalSystemManager : MonoBehaviour
         int consumedCoal = Mathf.Min(data.stockCoal, needCoal);
         data.stockCoal -= consumedCoal;
 
+        // Lệnh khẩn cấp "Đốt gỗ sưởi ấm" (GDD 9.4): 2 gỗ thay 1 than cho phần thiếu, nhà kém ấm hơn 20%
+        int woodWarm = 0;
+        if (EmergencyOrders.BurnWoodActive && coalPerCapita > 0 && consumedCoal < needCoal)
+        {
+            int woodNeed = Mathf.CeilToInt((needCoal - consumedCoal) * EmergencyOrders.WoodPerCoal);
+            int woodUsed = Mathf.Min(data.stockWood, woodNeed);
+            data.stockWood -= woodUsed;
+            woodWarm = Mathf.FloorToInt(woodUsed / EmergencyOrders.WoodPerCoal / coalPerCapita * EmergencyOrders.WoodHeatEfficiency);
+        }
+
         int peopleWarm = coalPerCapita > 0
-            ? Mathf.Min(data.totalPopulation, consumedCoal / coalPerCapita + fx.warmPeople)
+            ? Mathf.Min(data.totalPopulation, consumedCoal / coalPerCapita + woodWarm + fx.warmPeople)
             : data.totalPopulation;
         int peopleCold = Mathf.Max(0, data.totalPopulation - peopleWarm);
         LastColdRate = data.totalPopulation > 0
             ? (float)peopleCold / data.totalPopulation
             : 0f;
-        data.riotRiskMeter = Mathf.Min(100f, data.riotRiskMeter + LastColdRate * 10f);
         GameEvents.Post(EventID.ColderResolved, LastColdRate);
 
         LastDiseasePressure = CalculateDiseasePressure();
         GameEvents.Post(EventID.DiseasePressure, LastDiseasePressure);
     }
 
-    private float CalculateDiseasePressure()
-    {
-        float pressure = 0.015f;
-
-        if (data.CurrentSeason == SeasonType.Winter)
-            pressure += 0.02f;
-
-        if (data.currentWeather == WeatherEvent.Blizzard)
-            pressure += 0.025f;
-        else if (data.currentWeather == WeatherEvent.ToxicFog)
-            pressure += 0.05f;
-
-        pressure += LastHungryRate * 0.03f;
-        pressure += LastColdRate * 0.03f;
-        pressure += LastThirstyRate * WaterRules.ThirstDiseaseFactor;   // Thiếu giếng -> uống nước bẩn
-        pressure += CrisisManager.GetDiseasePressure(in data);   // GDD 3.7: Miasma từ xác chưa thu gom
-        pressure -= LastBuildingEffects.diseaseReduction;
-
-        return Mathf.Clamp01(pressure);
-    }
+    /// <summary>
+    /// GDD v0.3 mục 7.4: không còn "áp lực dịch" chung — bệnh chỉ đến từ người bệnh (cổng, nhà, chỗ làm) và Miasma.
+    /// Giá trị gửi đi = xác suất một cư dân nằm trong ít nhất một vùng Miasma (vùng không cộng dồn).
+    /// </summary>
+    private float CalculateDiseasePressure() => CrisisManager.GetMiasmaCoverage(in data);
 
     // ==========================================
     // CÁC HÀM TIỆN ÍCH TƯƠNG TÁC TÀI NGUYÊN (API)
@@ -307,10 +355,41 @@ public class GlobalSystemManager : MonoBehaviour
     {
         data.reputation = Mathf.Clamp(
             data.reputation + amount,
-            ImmigrationRules.MinReputation,
-            ImmigrationRules.MaxReputation);
+            StabilityRules.ReputationMin,
+            StabilityRules.ReputationMax);
         GameEvents.Post(EventID.ResourcesChanged);
     }
+
+    /// <summary>Chọn mức thuế nhập thành — có hiệu lực từ tháng sau (GDD 6.4).</summary>
+    public void SetPendingEntryTax(EntryTaxLevel level)
+    {
+        data.pendingEntryTaxLevel = level;
+        GameEvents.Post(EventID.ResourcesChanged);
+    }
+
+    public void SetPendingWage(WageLevel level)
+    {
+        data.pendingWageLevel = level;
+        GameEvents.Post(EventID.ResourcesChanged);
+    }
+
+    public void SetPendingIncomeTax(EntryTaxLevel level)
+    {
+        data.pendingIncomeTaxLevel = level;
+        GameEvents.Post(EventID.ResourcesChanged);
+    }
+
+    /// <summary>Chính sách cấp phát / cắt khẩu phần — áp dụng ngay tháng tới khi tính tiền ăn của hộ.</summary>
+    public void SetFeedPolicy(FeedPolicy policy)
+    {
+        data.feedPolicy = policy;
+        GameEvents.Post(EventID.ResourcesChanged);
+    }
+
+    public BuildingEffectRules.MonthlyEffects CurrentBuildingEffects => CollectBuildingEffects();
+
+    /// <summary>Lương thực / người / tháng theo mùa (mùa đông ăn gấp đôi).</summary>
+    public static int GetFoodPerCapita(SeasonType season) => season == SeasonType.Winter ? 2 : 1;
 
     public void ModifyGold(int amount)
     {

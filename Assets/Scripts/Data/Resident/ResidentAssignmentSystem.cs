@@ -157,17 +157,81 @@ public static class ResidentAssignmentSystem
         BuildingData[] buildings,
         int buildingCount)
     {
+        FamilyHandled.Clear();
         for (int i = 0; i < residentCount; i++)
         {
             ref ResidentData r = ref residents[i];
             if (!ResidentAssignmentRules.NeedsHousing(in r))
                 continue;
 
+            // GDD v0.3 mục 4.3: gia đình ở chung một nhà; không nhà nào đủ chỗ cho cả nhà -> cả nhà Homeless
+            if (r.familyID != 0 && !ResidentAssignmentRules.NeedsQuarantineHousing(in r))
+            {
+                if (FamilyHandled.Add(r.familyID))
+                    AssignFamilyHousing(r.familyID, residents, residentCount, buildings, buildingCount);
+                continue;
+            }
+
             int bestIndex = FindBestHousingIndex(in r, buildings, buildingCount);
             if (bestIndex < 0)
                 continue;
 
             ResidentAssignmentRules.AssignHousing(ref r, buildings[bestIndex].buildingID);
+            buildings[bestIndex].currentOccupancy++;
+        }
+    }
+
+    private static readonly System.Collections.Generic.HashSet<int> FamilyHandled = new System.Collections.Generic.HashSet<int>();
+    private static readonly System.Collections.Generic.List<int> FamilyMembers = new System.Collections.Generic.List<int>(8);
+
+    private static void AssignFamilyHousing(
+        int familyId,
+        ResidentData[] residents,
+        int residentCount,
+        BuildingData[] buildings,
+        int buildingCount)
+    {
+        FamilyMembers.Clear();
+        short homeId = ResidentAssignmentRules.UnassignedId;
+        for (int i = 0; i < residentCount; i++)
+        {
+            ref ResidentData m = ref residents[i];
+            if (!m.isAlive || m.familyID != familyId || ResidentAssignmentRules.NeedsQuarantineHousing(in m))
+                continue;
+            if (m.assignedHouseID < 0)
+                FamilyMembers.Add(i);
+            else if (homeId < 0)
+                homeId = m.assignedHouseID;   // Người nhà đã có chỗ (vd. vừa ra khỏi trạm cách ly): ưu tiên về ở cùng
+        }
+        if (FamilyMembers.Count == 0)
+            return;
+
+        int need = FamilyMembers.Count;
+        int bestIndex = -1;
+        int bestPriority = -1;
+        for (int b = 0; b < buildingCount; b++)
+        {
+            ref BuildingData house = ref buildings[b];
+            if (house.buildingType == BuildingType.QuarantineWard)
+                continue;
+            int priority = ResidentAssignmentRules.HousingPriority(in residents[FamilyMembers[0]], in house);
+            if (priority < 0 || EmergencyOrders.GetHousingCapacity(in house) - house.currentOccupancy < need)
+                continue;
+            if (homeId >= 0 && house.buildingID == (ushort)homeId)
+                priority += 1000;
+            if (priority > bestPriority)
+            {
+                bestPriority = priority;
+                bestIndex = b;
+            }
+        }
+
+        if (bestIndex < 0)
+            return;
+
+        foreach (int i in FamilyMembers)
+        {
+            ResidentAssignmentRules.AssignHousing(ref residents[i], buildings[bestIndex].buildingID);
             buildings[bestIndex].currentOccupancy++;
         }
     }

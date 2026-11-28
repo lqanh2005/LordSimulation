@@ -121,7 +121,7 @@ public static class EdictDataSerializer
         {
             RuleAction.Deny => new RuleActionData(RuleActionType.ImmigrationDeny),
             RuleAction.Quarantine => new RuleActionData(RuleActionType.ImmigrationQuarantine, quarantineDuration),
-            RuleAction.EscortToDesk => new RuleActionData(RuleActionType.ImmigrationEscort, authorityCost),
+            RuleAction.ManualReview => new RuleActionData(RuleActionType.ImmigrationManualReview),
             _ => new RuleActionData(RuleActionType.ImmigrationAdmit, tariffPercent)
         };
 

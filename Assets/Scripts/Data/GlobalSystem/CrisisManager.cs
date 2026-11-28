@@ -6,45 +6,40 @@ public struct CrisisReportPayload
     public int collected;      // Thi thể được thu gom tháng này
     public int unburied;       // Còn nằm lại (tươi + đang phân hủy)
     public int rotting;        // Đang phân hủy -> sinh Miasma
-    public float miasma;
-    public float diseasePressureAdded;
+    public float miasma;                 // Số vùng Miasma có hiệu lực tháng tới
+    public float diseasePressureAdded;   // Độ phủ Miasma (xác suất một cư dân nằm trong vùng)
 }
 
 /// <summary>
 /// GDD 3.7 Crisis Chain: thiếu than → chết cóng → đội thu gom không kịp → xác phân hủy sau 1 tháng
 /// sinh khí độc Miasma → dịch bệnh bùng phát → bệnh xá quá tải → bạo loạn.
 ///
+/// GDD v0.3 mục 7.4:
 /// - Người chết (mọi nguyên nhân) để lại thi thể.
-/// - Mỗi tháng thu gom được: nền + theo số lính gác và thầy thuốc đang làm việc.
-/// - Thi thể để quá 1 tháng (qua 1 lần tick) mới phân hủy sinh Miasma; Miasma giảm dần theo thời gian.
-/// - Miasma cộng vào áp lực dịch bệnh (GlobalSystemManager) và gây bất ổn nhẹ.
+/// - Mỗi người làm ở Corpse Collection Post (hiện là Trạm gác) thu gom 4 thi thể / tháng.
+/// - Thi thể chưa thu gom sau 1 tháng tạo một vùng Miasma bán kính 3 ô, kéo dài 2 tháng;
+///   cư dân trong vùng có 20% bị lây Sốt Đỏ mỗi tháng (ResidentDiseaseSystem), vùng không cộng dồn.
+/// - Tạm thời chưa có vị trí thi thể: mỗi vùng phủ khoảng <see cref="ZoneCoverage"/> thành phố,
+///   độ phủ = 1 − (1 − ZoneCoverage)^số vùng.
 /// </summary>
 public class CrisisManager : MonoBehaviour
 {
     [Header("Thu gom thi thể")]
-    [SerializeField, Min(0)] private int baseCollectPerMonth = 2;
-    [Tooltip("Mỗi lính gác đang làm việc thu gom thêm bao nhiêu thi thể / tháng")]
-    [SerializeField, Min(0)] private int collectPerGuard = 3;
-    [SerializeField, Min(0)] private int collectPerDoctor = 1;
+    [Tooltip("Thu gom nền khi chưa có ai làm (GDD: không ai thu gom thì xác nằm lại)")]
+    [SerializeField, Min(0)] private int baseCollectPerMonth = 0;
+    [Tooltip("GDD 7.4: mỗi người làm ở Corpse Collection Post thu gom 4 thi thể / tháng")]
+    [SerializeField, Min(0)] private int collectPerGuard = 4;
 
-    [Header("Miasma")]
-    [SerializeField, Min(0f)] private float miasmaPerRottingCorpse = 0.5f;
-    [SerializeField, Range(0f, 1f)] private float miasmaDecayPerMonth = 0.3f;
-    [Tooltip("Áp lực dịch bệnh cộng thêm cho mỗi điểm Miasma")]
-    [SerializeField, Min(0f)] private float diseasePressurePerMiasma = 0.004f;
-    [SerializeField, Min(0f)] private float riotPerMiasma = 0.05f;
+    /// <summary>Tỉ lệ thành phố một vùng Miasma (bán kính 3 ô) phủ tới — xấp xỉ khi chưa có vị trí thi thể.</summary>
+    public const float ZoneCoverage = 0.15f;
 
     [SerializeField] private GlobalSystemManager globalSystemManager;
     [SerializeField] private BuildingManager buildingManager;
-
-    /// <summary>Hệ số Miasma → áp lực dịch bệnh, đọc bởi GlobalSystemManager.</summary>
-    public static float DiseaseFactor { get; private set; } = 0.004f;
 
     public void Init(GlobalSystemManager global, BuildingManager buildings)
     {
         globalSystemManager = global;
         buildingManager = buildings;
-        DiseaseFactor = diseasePressurePerMiasma;
         _newCorpses = 0;   // static: xoá số dư từ ván trước
     }
 
@@ -105,7 +100,8 @@ public class CrisisManager : MonoBehaviour
         ref GlobalSystemData d = ref globalSystemManager.GetGlobalDataRef();
         var report = new CrisisReportPayload();
 
-        // 1. Xác tươi tháng trước còn nằm lại -> đã đủ 1 tháng -> phân hủy; người chết tháng này là xác tươi
+        // 1. Xác tươi tháng trước còn nằm lại -> đã đủ 1 tháng -> phân hủy, mỗi xác tạo 1 vùng Miasma
+        int newZones = d.corpsesFresh;
         d.corpsesRotting += d.corpsesFresh;
         d.corpsesFresh = _newCorpses;
         _newCorpses = 0;
@@ -119,13 +115,9 @@ public class CrisisManager : MonoBehaviour
         d.corpsesFresh -= fromFresh;
         report.collected = fromRotting + fromFresh;
 
-        // 3. Miasma: giảm dần rồi cộng theo số xác đang phân hủy
-        d.miasma = d.miasma * (1f - miasmaDecayPerMonth) + d.corpsesRotting * miasmaPerRottingCorpse;
-        if (d.miasma < 0.05f)
-            d.miasma = 0f;
-
-        if (d.miasma > 0f)
-            d.riotRiskMeter = Mathf.Min(100f, d.riotRiskMeter + d.miasma * riotPerMiasma);
+        // 3. Vùng Miasma kéo dài 2 tháng (tháng tạo + tháng sau); xác còn nằm lại vẫn giữ vùng của nó
+        d.miasma = Mathf.Max(newZones + d.miasmaZonesPrev, d.corpsesRotting);
+        d.miasmaZonesPrev = newZones;
 
         report.unburied = d.corpsesFresh + d.corpsesRotting;
         report.rotting = d.corpsesRotting;
@@ -136,8 +128,11 @@ public class CrisisManager : MonoBehaviour
             GameEvents.Post(EventID.CrisisReport, report);
     }
 
-    /// <summary>Áp lực dịch bệnh do Miasma (GlobalSystemManager cộng vào mỗi tháng).</summary>
-    public static float GetDiseasePressure(in GlobalSystemData d) => d.miasma * DiseaseFactor;
+    /// <summary>Xác suất một cư dân nằm trong ít nhất một vùng Miasma (vùng không cộng dồn).</summary>
+    public static float GetMiasmaCoverage(in GlobalSystemData d) =>
+        d.miasma <= 0f ? 0f : 1f - Mathf.Pow(1f - ZoneCoverage, d.miasma);
+
+    public static float GetDiseasePressure(in GlobalSystemData d) => GetMiasmaCoverage(in d);
 
     private int GetCollectCapacity()
     {
@@ -155,21 +150,15 @@ public class CrisisManager : MonoBehaviour
 
     public int BaseCollectPerMonth => baseCollectPerMonth;
 
-    /// <summary>Công trình này có tham gia thu gom thi thể không (Trạm gác, Phòng khám).</summary>
-    public static bool IsCollector(BuildingType type) =>
-        type == BuildingType.GuardPost || type == BuildingType.Clinic;
+    /// <summary>Công trình thu gom thi thể (Trạm gác đóng vai Corpse Collection Post).</summary>
+    public static bool IsCollector(BuildingType type) => type == BuildingType.GuardPost;
 
     /// <summary>Số thi thể công trình này thu gom được mỗi tháng (0 nếu chưa chạy / không có người).</summary>
     public int GetCollectRate(in BuildingData b)
     {
         if (b.buildingState != BuildingState.Active || !b.isOperational)
             return 0;
-        return b.buildingType switch
-        {
-            BuildingType.GuardPost => b.currentWorkers * collectPerGuard,
-            BuildingType.Clinic => b.currentWorkers * collectPerDoctor,
-            _ => 0
-        };
+        return b.buildingType == BuildingType.GuardPost ? b.currentWorkers * collectPerGuard : 0;
     }
 
     /// <summary>Mô tả ngắn cho popup công trình: thu gom bao nhiêu, thành còn bao nhiêu thi thể.</summary>
@@ -178,7 +167,7 @@ public class CrisisManager : MonoBehaviour
         if (!IsCollector(b.buildingType))
             return string.Empty;
 
-        int perWorker = b.buildingType == BuildingType.GuardPost ? collectPerGuard : collectPerDoctor;
+        int perWorker = collectPerGuard;
         int rate = GetCollectRate(in b);
         int pending = 0;
         if (globalSystemManager != null)

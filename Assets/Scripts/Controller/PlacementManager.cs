@@ -418,7 +418,10 @@ public class PlacementManager : MonoBehaviour
     /// Phá công trình: giải phóng ô (IsOccupied = false), xoá view + data, hoàn trả một phần tài nguyên,
     /// rồi bắn BuildingDemolished để cư dân bỏ nhà / chỗ làm và tìm đường lại.
     /// </summary>
-    public bool DemolishBuilding(ushort buildingId)
+    public bool DemolishBuilding(ushort buildingId) => DemolishBuilding(buildingId, true);
+
+    /// <param name="refund">false khi công trình mất vì tai họa (vd. cháy nhà do đốt gỗ sưởi) — không hoàn tài nguyên.</param>
+    public bool DemolishBuilding(ushort buildingId, bool refund)
     {
         if (!CanDemolish(buildingId))
             return false;
@@ -446,7 +449,8 @@ public class PlacementManager : MonoBehaviour
             buildingId = buildingId,
             type = removed.buildingType
         };
-        RefundResources(in removed, ref payload);
+        if (refund)
+            RefundResources(in removed, ref payload);
 
         RoadNetwork.MarkDirty();
         GameEvents.Post(EventID.BuildingDemolished, payload);

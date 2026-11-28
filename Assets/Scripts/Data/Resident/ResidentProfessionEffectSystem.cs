@@ -3,9 +3,6 @@ using UnityEngine;
 public static class ResidentProfessionEffectSystem
 {
     private static readonly float[] TeacherPowerByBuilding = new float[BuildingManager.MAX_BUILDINGS];
-    private static readonly float[] DoctorPowerByBuilding = new float[BuildingManager.MAX_BUILDINGS];
-    private static readonly int[] DoctorTokensByBuilding = new int[BuildingManager.MAX_BUILDINGS];
-    private static readonly int[] DoctorCountByBuilding = new int[BuildingManager.MAX_BUILDINGS];
 
     public static void ProcessMonthly(
         ResidentData[] residents,
@@ -17,83 +14,9 @@ public static class ResidentProfessionEffectSystem
         if (residents == null)
             return;
 
-        ApplyDoctorCare(residents, residentCount, buildings, buildingCount, global);
+        // Điều trị bệnh nhân Infirmary chuyển sang ResidentDiseaseSystem (GDD 7.4)
         ApplySchooling(residents, residentCount, buildings, buildingCount);
-        ApplyGuardPatrol(residents, residentCount, global);
-    }
-
-    private static void ApplyDoctorCare(
-        ResidentData[] residents,
-        int residentCount,
-        BuildingData[] buildings,
-        int buildingCount,
-        GlobalSystemManager global)
-    {
-        if (buildings == null || buildingCount <= 0)
-            return;
-
-        for (int i = 0; i < buildingCount; i++)
-        {
-            DoctorPowerByBuilding[i] = 0f;
-            DoctorTokensByBuilding[i] = 0;
-            DoctorCountByBuilding[i] = 0;
-        }
-
-        for (int i = 0; i < residentCount; i++)
-        {
-            ref ResidentData doctor = ref residents[i];
-            if (!ResidentProfessionEffectRules.IsWorkingDoctor(in doctor))
-                continue;
-
-            int clinicIndex = FindBuildingIndexById(
-                buildings, buildingCount, (ushort)doctor.assignedWorkID);
-            if (clinicIndex < 0 || buildings[clinicIndex].buildingType != BuildingType.Clinic)
-                continue;
-
-            DoctorCountByBuilding[clinicIndex]++;
-            DoctorPowerByBuilding[clinicIndex] += doctor.WorkMultiplier;
-            DoctorTokensByBuilding[clinicIndex] += ResidentProfessionEffectRules.GetDoctorCareTokens(in doctor);
-        }
-
-        // Mỗi bệnh nhân mẫu đại diện cho (dân thật / mẫu) người -> thuốc tiêu hao theo đúng tỉ lệ đó
-        int medicinePerPatient = Mathf.Max(1, Mathf.RoundToInt(GetSampleScale(residents, residentCount, global)));
-
-        for (int i = 0; i < residentCount; i++)
-        {
-            ref ResidentData patient = ref residents[i];
-            if (!patient.isAlive || patient.healthStatus != HealthStatus.ActiveInfected)
-                continue;
-            if (patient.assignedWorkID < 0)
-                continue;
-
-            int clinicIndex = FindBuildingIndexById(
-                buildings, buildingCount, (ushort)patient.assignedWorkID);
-            if (clinicIndex < 0 || buildings[clinicIndex].buildingType != BuildingType.Clinic)
-                continue;
-
-            int tokens = DoctorTokensByBuilding[clinicIndex];
-            if (tokens <= 0)
-                continue;
-
-            DoctorTokensByBuilding[clinicIndex] = tokens - 1;
-
-            int doctorCount = DoctorCountByBuilding[clinicIndex];
-            float treatChance = ResidentProfessionEffectRules.GetUnmedicatedTreatChance(
-                doctorCount > 0 ? DoctorPowerByBuilding[clinicIndex] / doctorCount : 0f);
-
-            bool treated = false;
-            if (global != null && global.TryConsumeMedicine(medicinePerPatient))
-                treated = true;
-            else if (treatChance > 0f && Random.value < treatChance)
-                treated = true;
-
-            if (!treated)
-                continue;
-
-            ResidentDiseaseRules.BeginTreatment(ref patient);
-            ResidentProfessionEffectRules.AddHappiness(
-                ref patient, ResidentProfessionEffectRules.TreatedHappinessGain);
-        }
+        // Tuần tra giảm Riot đã bỏ: Riot theo công thức GDD 9.6 (Thiết quân luật là [Later]); lính gác lo thu gom thi thể
     }
 
     private static void ApplySchooling(
@@ -143,36 +66,6 @@ public static class ResidentProfessionEffectSystem
             ResidentProfessionEffectRules.AddHappiness(
                 ref student, ResidentProfessionEffectRules.StudentHappinessGain);
         }
-    }
-
-    private static void ApplyGuardPatrol(
-        ResidentData[] residents,
-        int residentCount,
-        GlobalSystemManager global)
-    {
-        if (global == null)
-            return;
-
-        int alive = 0;
-        float guardPower = 0f;
-
-        for (int i = 0; i < residentCount; i++)
-        {
-            ref ResidentData r = ref residents[i];
-            if (!r.isAlive)
-                continue;
-
-            alive++;
-            if (ResidentProfessionEffectRules.IsWorkingGuard(in r))
-                guardPower += r.WorkMultiplier;
-        }
-
-        float reduction = ResidentProfessionEffectRules.GetRiotReduction(guardPower, alive);
-        if (reduction <= 0f)
-            return;
-
-        ref GlobalSystemData data = ref global.GetGlobalDataRef();
-        data.riotRiskMeter = Mathf.Max(0f, data.riotRiskMeter - reduction);
     }
 
     /// <summary>Số dân thật mà mỗi cư dân mẫu còn sống đại diện (>= 1).</summary>

@@ -38,7 +38,7 @@ public struct MerchantSaveData
 /// <summary>
 /// GDD MVP — Trade: thỉnh thoảng một thương nhân đến Cổng, người chơi mua / bán Lương thực, Than, Gỗ bằng Vàng.
 /// - Mỗi tháng (khi vắng) có xác suất ghé, tăng theo Uy tín, giảm vào mùa đông; vắng quá lâu thì chắc chắn ghé.
-/// - Ở lại vài tháng. Giá đổi theo mùa (than đắt vào thu/đông, lương thực đắt vào đông) ± ngẫu nhiên.
+/// - Ở lại vài tháng. Giá theo thị trường (MarketSystem): bán ×1,25, mua ×0,75 giá hiện tại.
 /// - Thương nhân có giới hạn hàng để bán và vàng để mua lại hàng của người chơi.
 /// </summary>
 public class MerchantManager : MonoBehaviour
@@ -55,12 +55,6 @@ public class MerchantManager : MonoBehaviour
     [SerializeField, Min(1)] private int stayMonths = 2;
 
     [Header("Hàng & giá")]
-    [SerializeField, Min(1)] private int basePriceFood = 2;
-    [SerializeField, Min(1)] private int basePriceCoal = 3;
-    [SerializeField, Min(1)] private int basePriceWood = 2;
-    [Tooltip("Giá thương nhân mua lại = giá bán × hệ số này")]
-    [SerializeField, Range(0.1f, 1f)] private float sellBackRatio = 0.5f;
-    [SerializeField, Range(0f, 0.5f)] private float priceVariance = 0.15f;
     [SerializeField] private Vector2Int stockRange = new Vector2Int(30, 80);
     [SerializeField] private Vector2Int budgetRange = new Vector2Int(60, 150);
 
@@ -132,11 +126,16 @@ public class MerchantManager : MonoBehaviour
 
     private bool ShouldVisit(SeasonType season)
     {
+        if (EmergencyOrders.GateClosed)
+            return false;   // GDD 11: Đóng cổng thì thương nhân cũng không vào được
+
         if (_state.monthsSinceVisit >= maxMonthsAbsent)
             return true;
 
         float reputation = globalSystemManager != null ? globalSystemManager.GetGlobalDataRef().reputation : 0f;
-        float chance = baseVisitChance + reputationVisitBonus * Mathf.Clamp(reputation, -100f, 100f) / 100f;
+        // Reputation 0–100 (mốc 50): uy tín trên 50 thương nhân ghé nhiều hơn, dưới 50 ít hơn
+        float chance = baseVisitChance + reputationVisitBonus
+            * (Mathf.Clamp(reputation, StabilityRules.ReputationMin, StabilityRules.ReputationMax) - StabilityRules.ReputationStart) / 50f;
         if (season == SeasonType.Winter)
             chance *= winterVisitMultiplier;
 
@@ -152,35 +151,32 @@ public class MerchantManager : MonoBehaviour
         _state.foodStock = RollStock();
         _state.coalStock = RollStock();
         _state.woodStock = RollStock();
-        _state.foodPrice = RollPrice(basePriceFood, season == SeasonType.Winter ? 1.4f : season == SeasonType.Summer ? 0.85f : 1f);
-        _state.coalPrice = RollPrice(basePriceCoal, season == SeasonType.Winter ? 1.6f : season == SeasonType.Autumn ? 1.3f : 0.9f);
-        _state.woodPrice = RollPrice(basePriceWood, 1f);
+        // Giá không chốt lúc tới nữa: luôn theo giá thị trường hiện tại (MarketSystem)
 
         GameEvents.Post(EventID.MerchantArrived, true);
     }
 
     private int RollStock() => Random.Range(stockRange.x, stockRange.y + 1);
 
-    private int RollPrice(int basePrice, float seasonMult)
-    {
-        float variance = 1f + Random.Range(-priceVariance, priceVariance);
-        return Mathf.Max(1, Mathf.RoundToInt(basePrice * seasonMult * variance));
-    }
 
     // ==========================================
     // MUA / BÁN
     // ==========================================
 
-    public int GetBuyPrice(ResourceType type) => type switch
-    {
-        ResourceType.Food => _state.foodPrice,
-        ResourceType.Coal => _state.coalPrice,
-        ResourceType.Wood => _state.woodPrice,
-        _ => 0
-    };
+    // GDD v0.3 mục 6.6: thương nhân bán cho thành giá ×1,25 và mua của thành giá ×0,75 giá thị trường hiện tại
+    public const float MerchantSellMarkup = 1.25f;
+    public const float MerchantBuyMarkdown = 0.75f;
+
+    private float MarketPrice(ResourceType type) =>
+        globalSystemManager != null ? MarketSystem.GetPrice(type, in globalSystemManager.GetGlobalDataRef()) : MarketSystem.GetBasePrice(type);
+
+    /// <summary>Giá người chơi MUA 1 đơn vị của thương nhân.</summary>
+    public int GetBuyPrice(ResourceType type) =>
+        System.Array.IndexOf(TradeGoods, type) < 0 ? 0 : Mathf.Max(1, Mathf.CeilToInt(MarketPrice(type) * MerchantSellMarkup - 0.001f));
 
     /// <summary>Giá thương nhân trả khi người chơi bán 1 đơn vị.</summary>
-    public int GetSellPrice(ResourceType type) => Mathf.Max(1, Mathf.FloorToInt(GetBuyPrice(type) * sellBackRatio));
+    public int GetSellPrice(ResourceType type) =>
+        System.Array.IndexOf(TradeGoods, type) < 0 ? 0 : Mathf.Max(1, Mathf.FloorToInt(MarketPrice(type) * MerchantBuyMarkdown + 0.001f));
 
     public int GetMerchantStock(ResourceType type) => type switch
     {

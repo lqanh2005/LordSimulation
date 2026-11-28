@@ -1,4 +1,4 @@
-#if UNITY_INCLUDE_TESTS
+#if UNITY_INCLUDE_TESTS && UNITY_EDITOR
 using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
@@ -177,6 +177,9 @@ public abstract class GameSessionFixture
     protected static ResidentData HealthyApplicant(byte wealth = 0)
     {
         ResidentData a = ImmigrationRules.CreateApplicant(9000);
+        a.age = 6;            // Người lớn (tuổi nén GDD v0.3) — tránh ngẫu nhiên ra trẻ em / người già
+        a.familyID = 0;       // Đi một mình
+        a.rolledNotes = 0;
         a.wealth = wealth;
         a.originRegion = OriginRegion.YellowZone;
         a.factionType = FactionType.Commoner;

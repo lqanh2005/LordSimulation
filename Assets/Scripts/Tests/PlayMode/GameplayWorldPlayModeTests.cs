@@ -1,4 +1,4 @@
-#if UNITY_INCLUDE_TESTS
+#if UNITY_INCLUDE_TESTS && UNITY_EDITOR
 using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
@@ -150,11 +150,18 @@ public class PM_BlizzardTests : GameSessionFixture
         yield return AdvanceMonths(1);
         Assert.AreEqual(WeatherEvent.Clear, Data.currentWeather, "Mùa hạ không có bão tuyết");
 
+        // GDD 9.2: bão tuyết luôn được báo trước 1 tháng -> tháng 10 có dự báo, tháng 11 mới có bão
         Data.currentMonth = 9;
-        int pop = Data.totalPopulation;
         yield return AdvanceMonths(1);
         Assert.AreEqual(SeasonType.Winter, Data.CurrentSeason);
+        Assert.AreEqual(WeatherEvent.Clear, Data.currentWeather, "Chưa báo trước thì chưa có bão");
+        Assert.IsTrue(Data.blizzardForecast, "Phải báo trước bão cho tháng sau");
+
+        int pop = Data.totalPopulation;
+        yield return AdvanceMonths(1);
         Assert.AreEqual(WeatherEvent.Blizzard, Data.currentWeather);
+        Assert.AreEqual(MarketSystem.BlizzardMagnitude, MarketSystem.GetEventMultiplier(ResourceType.Coal, in Data), 1e-4f,
+            "GDD 6.6: bão tuyết -> giá than ×2");
         Assert.AreEqual(-30f, Data.environmentTemperature, 1e-3f);
         Assert.AreEqual(-2 * pop, GlobalSystem.LastMonthNet.coal, "Bão tuyết: 2 than/người/tháng");
     }
@@ -180,7 +187,7 @@ public class PM_BlizzardTests : GameSessionFixture
 public class PM_CorpseTests : GameSessionFixture
 {
     [UnityTest]
-    public IEnumerator CR02_LinhGacThuGom3XacMoiNguoi()
+    public IEnumerator CR02_LinhGacThuGom4XacMoiNguoi()
     {
         CrisisManager crisis = Contain.crisisManager;
         Assert.AreEqual(crisis.BaseCollectPerMonth, crisis.TotalCollectPerMonth, "Ván mới chỉ có sức thu gom nền");
@@ -189,7 +196,7 @@ public class PM_CorpseTests : GameSessionFixture
         {
             buildingType = BuildingType.GuardPost, buildingState = BuildingState.Active, isOperational = true, currentWorkers = 2
         };
-        Assert.AreEqual(6, crisis.GetCollectRate(in post));
+        Assert.AreEqual(8, crisis.GetCollectRate(in post), "GDD v0.3 mục 7.4: 4 thi thể / người / tháng");
 
         post.isOperational = false;
         Assert.AreEqual(0, crisis.GetCollectRate(in post), "Tạm dừng thì không thu gom");
@@ -198,7 +205,7 @@ public class PM_CorpseTests : GameSessionFixture
         {
             buildingType = BuildingType.Clinic, buildingState = BuildingState.Active, isOperational = true, currentWorkers = 2
         };
-        Assert.AreEqual(2, crisis.GetCollectRate(in clinic));
+        Assert.AreEqual(0, crisis.GetCollectRate(in clinic), "GDD v0.3: chỉ Corpse Collection Post (Trạm gác) thu gom");
         yield return null;
     }
 

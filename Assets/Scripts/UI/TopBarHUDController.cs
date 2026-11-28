@@ -40,7 +40,7 @@ public class TopBarHUDController : MonoBehaviour
     [SerializeField] private TMP_Text txtPopulation;       // "Dân: 120"
     [SerializeField] private TMP_Text txtHappiness;        // "Vui: 75%"
     [SerializeField] private TMP_Text txtInfection;        // "Dịch bệnh: 3%"
-    [SerializeField] private TMP_Text txtReputation;       // Uy tín: -50..100 (ảnh hưởng lượng người tới Cổng)
+    [SerializeField] private TMP_Text txtReputation;       // Uy tín: 0..100, mốc 50 (ảnh hưởng quy mô đợt di cư)
 
     [Header("Thanh Đo Bạo Loạn")]
     [SerializeField] private Image imgRiotFill;            // Image Type = Filled
@@ -52,6 +52,15 @@ public class TopBarHUDController : MonoBehaviour
     private void Start()
     {
         globalSystemManager = HUDLocator.ResolveGlobalSystem(globalSystemManager);
+
+        // GDD v0.3 mục 6.4: bấm vào số Vàng để mở Ngân khố (mức lương, thuế thu nhập, cấp phát / cắt khẩu phần)
+        if (txtGold != null && txtGold.GetComponent<Button>() == null)
+        {
+            txtGold.raycastTarget = true;
+            Button goldButton = txtGold.gameObject.AddComponent<Button>();
+            goldButton.transition = Selectable.Transition.None;
+            goldButton.onClick.AddListener(TreasuryWindow.Toggle);
+        }
 
         if (globalSystemManager != null)
         {
@@ -82,6 +91,7 @@ public class TopBarHUDController : MonoBehaviour
     {
         MonthChangedPayload payload = (MonthChangedPayload)param;
         HandleMonthChanged(payload.year, payload.month, payload.season);
+        TreasuryWindow.RefreshIfOpen();
     }
 
     private void OnResourcesChanged(object param)
@@ -176,9 +186,10 @@ public class TopBarHUDController : MonoBehaviour
     {
         if (txtReputation == null) return;
 
+        // Reputation 0–100, mốc 50 (GDD 9.6)
         int value = Mathf.RoundToInt(reputation);
-        string color = value >= 20 ? "#3FC14F" : value < 0 ? "#E04B4B" : "#D6BD8B";
-        txtReputation.text = $"<color={color}>{(value > 0 ? "+" : "")}{value}</color>";
+        string color = value >= 60 ? "#3FC14F" : value < 40 ? "#E04B4B" : "#D6BD8B";
+        txtReputation.text = $"<color={color}>{value}</color>";
     }
 
     private void UpdateRate(TMP_Text text, int amount)

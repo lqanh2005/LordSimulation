@@ -14,6 +14,8 @@ public class ImmigrationPopupUI : MonoBehaviour
     [SerializeField] private TMP_Text titleText;      // tên người xin vào
     [SerializeField] private TMP_Text bodyText;       // dòng gợi ý + "Vì sao" / thông báo khi trống
     [SerializeField] private TMP_Text queueText;
+    private TMP_Text _entryTaxLabel;   // Nút chọn mức thuế nhập thành (GDD 6.4)
+    private TMP_Text _autoLogText;     // Gate Clerk + danh sách gia đình đã được rule xử lý
     [SerializeField] private Button acceptButton;
     [SerializeField] private Button denyButton;
     [SerializeField] private Button quarantineButton;
@@ -48,6 +50,7 @@ public class ImmigrationPopupUI : MonoBehaviour
     private void OnDisable()
     {
         Unsubscribe();
+        SetGateTime(false);
     }
 
     private void Subscribe()
@@ -81,6 +84,7 @@ public class ImmigrationPopupUI : MonoBehaviour
 
     private void OnPopulationOrResourcesChanged(object param)
     {
+        RefreshEntryTaxLabel();
         if (!IsOpen || _manager == null)
             return;
         if (!_manager.TryGetCurrent(out _))
@@ -89,56 +93,121 @@ public class ImmigrationPopupUI : MonoBehaviour
             queueText.text = FormatQueue(_manager.waitingCount);
     }
 
-    public void ShowApplicant(in ResidentData applicant, RuleAction suggested, int waitingCount, string edictReason = null, bool hasThermometer = false)
+    /// <summary>
+    /// GDD v0.3 mục 4.1–4.3: thẻ hồ sơ của cả gia đình — dữ liệu từng thành viên, dữ liệu cả nhà, và note
+    /// (chỉ hiện khi có vấn đề, theo cấp hồ sơ). Phán quyết áp dụng cho cả nhà.
+    /// </summary>
+    public void ShowFamily(in ApplicantFamily family, RuleAction suggested, int waitingCount, int familyCount, string edictReason = null)
     {
         EnsureUi();
         UIPopupAnim.Show(root);
+        SetGateTime(true);
+        RefreshEntryTaxLabel();
+        RefreshAutoLog();
         root.transform.SetAsLastSibling();
         LoadBackground();
 
+        ref ResidentData head = ref family.Head;
         if (titleText != null)
-            titleText.text = NameDatabase.GetFullName(applicant.firstNameID, applicant.lastNameID);
+            titleText.text = $"Nhà {NameDatabase.GetLastName(head.lastNameID)}";
         if (queueText != null)
-            queueText.text = FormatQueue(waitingCount);
+            queueText.text = FormatQueue(waitingCount, familyCount);
 
         _rows.Clear();
-        ImmigrationRules.AppendProfileRows(in applicant, hasThermometer, _rows);
-        if (applicant.hungerMonths > 0)
-            _rows.Add(("Đói trong hàng:", $"<color=#E86A5A>{applicant.hungerMonths} tháng (sắp bỏ đi)</color>"));
+        int workers = FamilyRules.CountWorkers(in family);
+        _rows.Add(("Gia đình:", $"{family.count} người · {workers} làm được việc"));
+        _rows.Add(("Nguồn gốc:", ImmigrationRules.OriginLabel(head.originRegion)));
+        _rows.Add(("Wealth:", family.profileLevel >= FamilyRules.ProfileLevelExam
+            ? $"{FamilyRules.TotalWealth(in family)} ({FamilyRules.WealthClassLabel(FamilyRules.GetWealthClass(in family))})"
+            : "<i>cần Khám sơ bộ</i>"));
+        if (head.hungerMonths > 0)
+            _rows.Add(("Chờ ngoài tường:", $"<color=#E86A5A>{head.hungerMonths} tháng — đang đói</color>"));
+        if ((FamilyRules.GetFamilyNotes(in family) & NoteFlags.MarketRumor) != 0)
+        {
+            GlobalSystemManager g = ResolveGlobal();
+            string rumor = g != null ? MarketSystem.DescribeRumor(in g.GetGlobalDataRef()) : null;
+            if (!string.IsNullOrEmpty(rumor))
+                _rows.Add(("Tin đồn:", $"<size=15><color=#FFD77E>{rumor}</color></size>"));
+        }
+
+        for (int i = 0; i < family.count && _rows.Count < MaxRows; i++)
+        {
+            ref ResidentData m = ref family[i];
+            string info = $"{FamilyRules.AgeStageLabel(m.GetAgeGroup())} {m.age}t · {ResidentInfoPopup.GetProfessionName(m.professionType)}";
+            NoteFlags notes = FamilyRules.GetVisibleNotes(in m, family.profileLevel);
+            if (notes != NoteFlags.None)
+                info += $"\n<color=#E86A5A>{FamilyRules.DescribeNotes(notes)}</color>";
+            _rows.Add((NameDatabase.FirstNames[m.firstNameID % NameDatabase.FirstNames.Length] + ":", $"<size=15>{info}</size>"));
+        }
         ShowRows();
 
         if (bodyText != null)
         {
-            string text = $"Gợi ý: <color=#FFD77E>{ImmigrationRules.ActionLabel(suggested)}</color>";
+            string text = suggested == RuleAction.ManualReview
+                ? "Duyệt tay: <color=#FFD77E>bạn quyết định cho cả nhà</color>"
+                : $"Gợi ý: <color=#FFD77E>{ImmigrationRules.ActionLabel(suggested)}</color> (cả nhà)";
             if (!string.IsNullOrEmpty(edictReason))
                 text += $"\n<size=14><i>Vì sao: {edictReason}</i></size>";
+            if (EmergencyOrders.GateClosed)
+                text = $"<color=#E86A5A>Cổng đang đóng ({EmergencyOrders.State.gateClosedMonths} tháng) — chỉ có thể Từ chối</color>\n" + text;
             bodyText.text = text;
         }
 
         UISkin skin = UISkin.Instance;
         if (_portrait != null)
         {
-            Sprite sprite = skin == null ? null : applicant.age < 16 ? skin.portraitKid : skin.portraitAdult;
+            Sprite sprite = skin == null ? null : head.GetAgeGroup() == AgeGroupType.Child ? skin.portraitKid : skin.portraitAdult;
             _portrait.sprite = sprite;
             _portrait.enabled = sprite != null;
         }
 
         SetButtons(true);
+        if (EmergencyOrders.GateClosed)
+        {
+            if (acceptButton != null) acceptButton.interactable = false;
+            if (quarantineButton != null) quarantineButton.interactable = false;
+        }
         HighlightSuggestion(suggested);
     }
 
-    /// <summary>"Số người di cư đang chờ: 20/32" — đỏ khi hàng đông tới mức gây bất ổn.</summary>
-    private static string FormatQueue(int waitingCount)
+    /// <summary>Cột trái: Gate Clerk + các gia đình rule đã xử lý tự động tháng này.</summary>
+    private void RefreshAutoLog()
     {
-        string text = $"Số người di cư đang chờ: {waitingCount}/{ImmigrationRules.MaxWaiting}";
-        bool crowded = waitingCount > ImmigrationRules.MaxWaiting * ImmigrationRules.YardCrowdThreshold;
-        return crowded ? $"<color=#E86A5A>{text} — quá đông!</color>" : text;
+        if (_autoLogText == null || _manager == null)
+            return;
+        var sb = new System.Text.StringBuilder(256);
+        if (!EdictRules.EdictsUnlocked)
+            sb.Append("<b>Gate Clerk</b>: cần nghiên cứu Bộ luật");
+        else
+        {
+            int clerks = _manager.ActiveClerks;
+            sb.Append("<b>Gate Clerk</b>: ").Append(clerks > 0
+                ? $"{clerks} người — tự duyệt tối đa {clerks * ImmigrationManager.FamiliesPerClerk} gia đình/tháng theo sắc lệnh"
+                : "<color=#E86A5A>chưa có ai rảnh việc để giao</color>");
+        }
+        if (_manager.RecentAutoDecisions.Count > 0)
+        {
+            sb.Append("\n\n<b>Đã được sắc lệnh xử lý:</b>");
+            foreach (string line in _manager.RecentAutoDecisions)
+                sb.Append("\n• ").Append(line);
+        }
+        _autoLogText.text = sb.ToString();
+    }
+
+    /// <summary>"Số người di cư đang chờ: 20/32" — đỏ khi hàng đông tới mức gây bất ổn.</summary>
+    private static string FormatQueue(int waitingCount, int familyCount = -1)
+    {
+        return familyCount >= 0
+            ? $"Đang chờ: {familyCount} gia đình ({waitingCount} người)"
+            : $"Số người di cư đang chờ: {waitingCount}";
     }
 
     public void ShowEmpty()
     {
         EnsureUi();
         UIPopupAnim.Show(root);
+        SetGateTime(true);
+        RefreshEntryTaxLabel();
         root.transform.SetAsLastSibling();
         LoadBackground();
         if (titleText != null)
@@ -184,7 +253,48 @@ public class ImmigrationPopupUI : MonoBehaviour
     public void Hide()
     {
         UIPopupAnim.Hide(root);
+        SetGateTime(false);
     }
+
+    private static GlobalSystemManager ResolveGlobal() =>
+        GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
+            ? GamePlayController.Instance.playerContain.globalSystemManager
+            : null;
+
+    private void CycleEntryTax()
+    {
+        GlobalSystemManager global = ResolveGlobal();
+        if (global == null)
+            return;
+        EntryTaxLevel next = (EntryTaxLevel)(((int)global.GetGlobalDataRef().pendingEntryTaxLevel + 1) % 5);
+        global.SetPendingEntryTax(next);
+        RefreshEntryTaxLabel();
+    }
+
+    private void RefreshEntryTaxLabel()
+    {
+        if (_entryTaxLabel == null)
+            return;
+        GlobalSystemManager global = ResolveGlobal();
+        if (global == null)
+            return;
+        ref GlobalSystemData d = ref global.GetGlobalDataRef();
+        string text = $"Thuế nhập thành: {StabilityRules.EntryTaxLabel(d.entryTaxLevel)} ({StabilityRules.GetEntryTaxPercent(d.entryTaxLevel):0}%)";
+        if (d.pendingEntryTaxLevel != d.entryTaxLevel)
+            text += $" → <color=#FFD77E>{StabilityRules.EntryTaxLabel(d.pendingEntryTaxLevel)} từ tháng sau</color>";
+        _entryTaxLabel.text = text;
+    }
+
+    /// <summary>GDD v0.3 mục 3: ở màn Cổng thời gian chạy chậm 1/4, không dừng / tăng tốc được.</summary>
+    private static void SetGateTime(bool open)
+    {
+        GlobalSystemManager global = GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
+            ? GamePlayController.Instance.playerContain.globalSystemManager
+            : null;
+        if (global != null)
+            global.SetGateView(open);
+    }
+
 
     private void ShowRows()
     {
@@ -214,7 +324,7 @@ public class ImmigrationPopupUI : MonoBehaviour
     private void HighlightSuggestion(RuleAction suggested)
     {
         Mark(acceptButton, suggested == RuleAction.Admit);
-        Mark(denyButton, suggested == RuleAction.Deny || suggested == RuleAction.EscortToDesk);
+        Mark(denyButton, suggested == RuleAction.Deny);
         Mark(quarantineButton, suggested == RuleAction.Quarantine);
     }
 
@@ -322,6 +432,7 @@ public class ImmigrationPopupUI : MonoBehaviour
         _background.type = Image.Type.Simple;
         root = screen.gameObject;
         UIPopupAnim.Attach(root, null).Hidden += ReleaseBackground;
+        UIPopupAnim.Attach(root, null).Hidden += () => SetGateTime(false);
 
         // Góc trái trên: số người đang chờ
         RectTransform queue = UIWidgets.Rect(screen, "Queue");
@@ -331,6 +442,16 @@ public class ImmigrationPopupUI : MonoBehaviour
         RectTransform qr = (RectTransform)queueText.transform;
         UIWidgets.Stretch(qr);
         qr.offsetMin = new Vector2(26f, 0f);
+
+        // Dưới số người chờ: mức thuế nhập thành — bấm để đổi, có hiệu lực từ tháng sau (GDD 6.4)
+        Button taxButton = UIWidgets.BoxButton(screen, "Btn_EntryTax", "", 17f, CycleEntryTax, false);
+        UIWidgets.TopLeft((RectTransform)taxButton.transform, 50f, 104f, 420f, 46f);
+        _entryTaxLabel = taxButton.GetComponentInChildren<TMP_Text>();
+        RefreshEntryTaxLabel();
+
+        _autoLogText = UIWidgets.Text(screen, "Txt_AutoLog", "", 15f, UISkin.Cream, TextAlignmentOptions.TopLeft, false);
+        _autoLogText.textWrappingMode = TextWrappingModes.Normal;
+        UIWidgets.TopLeft(_autoLogText.rectTransform, 50f, 166f, 360f, 520f);
 
         // Góc phải trên: quay về thành
         RectTransform back = UIWidgets.Rect(screen, "Btn_Back");

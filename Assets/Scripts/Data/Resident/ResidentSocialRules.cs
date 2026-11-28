@@ -1,6 +1,6 @@
 public static class ResidentSocialRules
 {
-    public const byte MaxWealth = 100;
+    public const byte MaxWealth = 255;   // GDD v0.3: Wealth = phần lương để dành (chưa có chỗ tiêu — [Later])
     public const float PoorHappinessPenalty = 0.04f;
     public const float ModestHappinessPenalty = 0.02f;
     public const float RichHappinessGain = 0.02f;

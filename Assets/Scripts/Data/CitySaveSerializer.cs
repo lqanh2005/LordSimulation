@@ -4,7 +4,7 @@ using System.IO;
 public static class CitySaveSerializer
 {
     private const string FILE_MAGIC = "CITYSAVE";
-    public const int SaveVersion = 11;   // v10: ResidentData.quarantineMonths · v11: ResidentData.thirstMonths
+    public const int SaveVersion = 16;   // v10: quarantineMonths · v11: thirstMonths · v12: GDD v0.3 (tuổi nén, miễn dịch, Reputation 0–100, thuế nhập thành) · v13: gia đình, note, Gate Clerk · v14: lương, thuế thu nhập, nợ lương · v15: giá thị trường, tin đồn, báo trước bão tuyết · v16: Lệnh khẩn cấp
 
     public static void ValidateSaveCounts(
         int residentCount, int residentCapacity,
@@ -100,6 +100,40 @@ public static class CitySaveSerializer
         writer.Write(globalData.corpsesFresh);
         writer.Write(globalData.corpsesRotting);
         writer.Write(globalData.miasma);
+
+        // 11. GDD v0.3 (v12+)
+        writer.Write((byte)globalData.entryTaxLevel);
+        writer.Write((byte)globalData.pendingEntryTaxLevel);
+        writer.Write(globalData.miasmaZonesPrev);
+        writer.Write(globalData.disasterWaveBoost);
+
+        // 12. GDD v0.3 Đợt 2 (v13+)
+        writer.Write(globalData.gateClerkResidentID);
+
+        // 13. GDD v0.3 Đợt 3 (v14+)
+        writer.Write((byte)globalData.wageLevel);
+        writer.Write((byte)globalData.pendingWageLevel);
+        writer.Write((byte)globalData.incomeTaxLevel);
+        writer.Write((byte)globalData.pendingIncomeTaxLevel);
+        writer.Write((byte)globalData.feedPolicy);
+
+        // 14. GDD v0.3 Đợt 4 (v15+)
+        writer.Write(globalData.foodPriceEvent);
+        writer.Write(globalData.coalPriceEvent);
+        writer.Write(globalData.woodPriceEvent);
+        writer.Write((byte)globalData.marketActiveEvent);
+        writer.Write(globalData.marketActiveMonths);
+        writer.Write(globalData.marketActiveMagnitude);
+        writer.Write((byte)globalData.marketPendingEvent);
+        writer.Write(globalData.marketPendingInMonths);
+        writer.Write(globalData.marketPendingMagnitude);
+        writer.Write((byte)globalData.rumorEvent);
+        writer.Write(globalData.rumorInMonths);
+        writer.Write(globalData.rumorTrue);
+        writer.Write(globalData.blizzardForecast);
+
+        // 15. Lệnh khẩn cấp (v16+)
+        EmergencyOrders.State.Write(writer);
     }
 
     // --- ĐỌC TOÀN BỘ GAME (LOAD) ---
@@ -172,7 +206,11 @@ public static class CitySaveSerializer
 
         immigrantCount = 0;
         if (version < 3)
+        {
+            MigrateGlobalToV12(ref globalData);
+            EmergencyOrders.State = new EmergencyState();
             return;
+        }
 
         immigrantCount = reader.ReadInt32();
         if (immigrantCount < 0 || immigrantCount > immigrants.Length)
@@ -199,5 +237,75 @@ public static class CitySaveSerializer
             globalData.corpsesRotting = reader.ReadInt32();
             globalData.miasma = reader.ReadSingle();
         }
+
+        // 11. GDD v0.3 (v12+)
+        if (version >= 12)
+        {
+            globalData.entryTaxLevel = (EntryTaxLevel)reader.ReadByte();
+            globalData.pendingEntryTaxLevel = (EntryTaxLevel)reader.ReadByte();
+            globalData.miasmaZonesPrev = reader.ReadInt32();
+            globalData.disasterWaveBoost = reader.ReadBoolean();
+        }
+        else
+        {
+            MigrateGlobalToV12(ref globalData);
+        }
+
+        // 12. GDD v0.3 Đợt 2 (v13+)
+        if (version >= 13)
+            globalData.gateClerkResidentID = reader.ReadInt32();
+
+        // 13. GDD v0.3 Đợt 3 (v14+) — save cũ: mức Vừa, cấp phát
+        if (version >= 14)
+        {
+            globalData.wageLevel = (WageLevel)reader.ReadByte();
+            globalData.pendingWageLevel = (WageLevel)reader.ReadByte();
+            globalData.incomeTaxLevel = (EntryTaxLevel)reader.ReadByte();
+            globalData.pendingIncomeTaxLevel = (EntryTaxLevel)reader.ReadByte();
+            globalData.feedPolicy = (FeedPolicy)reader.ReadByte();
+        }
+        else
+        {
+            globalData.wageLevel = globalData.pendingWageLevel = WageLevel.Normal;
+            globalData.incomeTaxLevel = globalData.pendingIncomeTaxLevel = EntryTaxLevel.Normal;
+            globalData.feedPolicy = FeedPolicy.Subsidize;
+        }
+
+        // 14. GDD v0.3 Đợt 4 (v15+) — save cũ: giá gốc, chưa có sự kiện
+        if (version >= 15)
+        {
+            globalData.foodPriceEvent = reader.ReadSingle();
+            globalData.coalPriceEvent = reader.ReadSingle();
+            globalData.woodPriceEvent = reader.ReadSingle();
+            globalData.marketActiveEvent = (MarketEventType)reader.ReadByte();
+            globalData.marketActiveMonths = reader.ReadByte();
+            globalData.marketActiveMagnitude = reader.ReadSingle();
+            globalData.marketPendingEvent = (MarketEventType)reader.ReadByte();
+            globalData.marketPendingInMonths = reader.ReadByte();
+            globalData.marketPendingMagnitude = reader.ReadSingle();
+            globalData.rumorEvent = (MarketEventType)reader.ReadByte();
+            globalData.rumorInMonths = reader.ReadByte();
+            globalData.rumorTrue = reader.ReadBoolean();
+            globalData.blizzardForecast = reader.ReadBoolean();
+        }
+        else
+        {
+            globalData.foodPriceEvent = globalData.coalPriceEvent = globalData.woodPriceEvent = 1f;
+        }
+
+        // 15. Lệnh khẩn cấp (v16+) — save cũ: chưa dùng lệnh nào
+        EmergencyOrders.State = version >= 16 ? EmergencyState.Read(reader) : new EmergencyState();
+    }
+
+    /// <summary>Save trước v12: Reputation thang −50..100 (bắt đầu 0) -> 0..100 (bắt đầu 50); Miasma cũ là mức khí độc, không phải số vùng.</summary>
+    private static void MigrateGlobalToV12(ref GlobalSystemData g)
+    {
+        g.reputation = UnityEngine.Mathf.Clamp(g.reputation + StabilityRules.ReputationStart,
+            StabilityRules.ReputationMin, StabilityRules.ReputationMax);
+        g.entryTaxLevel = StabilityRules.DefaultEntryTax;
+        g.pendingEntryTaxLevel = StabilityRules.DefaultEntryTax;
+        g.miasma = 0f;
+        g.miasmaZonesPrev = 0;
+        g.disasterWaveBoost = false;
     }
 }

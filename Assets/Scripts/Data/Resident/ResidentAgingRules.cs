@@ -1,9 +1,10 @@
 public static class ResidentAgingRules
 {
-    public const byte ElderlyAge = 65;
-    public const float BaseDeathChance = 0.05f;
-    public const float DeathChancePerYear = 0.03f;
-    public const float MaxDeathChance = 0.85f;
+    // GDD v0.3 mục 5.4: Elderly từ 15 tuổi (tuổi nén), mỗi THÁNG có nguy cơ chết già tăng dần theo tuổi
+    public const byte ElderlyAge = ResidentData.ElderlyAge;
+    public const float BaseDeathChance = 0.01f;       // / tháng khi vừa thành Elderly
+    public const float DeathChancePerYear = 0.01f;    // + mỗi năm sau 15
+    public const float MaxDeathChance = 0.3f;
 
     public static float GetOldAgeDeathChance(in ResidentData resident)
     {
@@ -15,16 +16,11 @@ public static class ResidentAgingRules
             yearsPast = 0;
 
         float chance = BaseDeathChance + yearsPast * DeathChancePerYear;
-        if (resident.hungerMonths > 0)
-            chance += 0.05f;
+        // Người già dễ chết hơn khi đói / lạnh (chết vì bệnh tính riêng ở ResidentDiseaseSystem)
+        if (resident.hungerMonths > 0 || resident.thirstMonths > 0)
+            chance *= 1.5f;
         if (resident.coldMonths > 0)
-            chance += 0.05f;
-        if (resident.thirstMonths > 0)
-            chance += WaterRules.ThirstAgingDeathBonus;
-        if (resident.healthStatus == HealthStatus.ActiveInfected)
-            chance += 0.08f;
-        if (resident.endurance < 30)
-            chance += 0.04f;
+            chance *= 1.5f;
 
         return chance > MaxDeathChance ? MaxDeathChance : chance;
     }

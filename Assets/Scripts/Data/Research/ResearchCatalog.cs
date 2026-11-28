@@ -26,7 +26,7 @@ public enum ResearchID : byte
     Masonry = 24,
     Insulation = 25,
     Administration = 26,
-    Thermometer = 27,       // GDD Tier 1: đo thân nhiệt người nhập cư tại Cổng
+    Thermometer = 27,       // GDD v0.3 Tier 1 "Khám sơ bộ": hồ sơ cấp 1 (giữ tên enum cho save cũ)
     CodeOfLaw = 28          // GDD Tier 1: mở hệ thống Sắc lệnh (Tier 0 = kiểm duyệt thủ công)
 }
 
@@ -143,10 +143,10 @@ public static class ResearchCatalog
             ResearchEffect.Production(BuildingType.Mine, 10f)),
 
         // ===== XÃ HỘI & Y TẾ (hàng 4-6) =====
-        new ResearchNode(ResearchID.Thermometer, ResearchBranch.Society, "Nhiệt kế",
-            "Đo thân nhiệt người xin vào tại Cổng. Mở điều kiện \"Thân nhiệt\" trong Sắc lệnh.", 12, 0, 6f, NoPrereq),
+        new ResearchNode(ResearchID.Thermometer, ResearchBranch.Society, "Khám sơ bộ",
+            "Hồ sơ cấp 1: thấy Wealth của gia đình và các note Sốt, Ho, Đi qua vùng có dịch. Sắc lệnh dùng được các điều kiện đó.", 12, 0, 6f, NoPrereq),
         new ResearchNode(ResearchID.CodeOfLaw, ResearchBranch.Society, "Bộ luật",
-            "Ban hành Sắc lệnh (tối đa 3 luật IF/AND) để gợi ý quyết định ở Cổng và điều hành thành.", 15, 0, 7f, NoPrereq),
+            "Ban hành Sắc lệnh (tối đa 3 luật IF + AND/OR) và mở 1 chỗ Gate Clerk tự duyệt tối đa 4 gia đình mỗi tháng.", 15, 0, 7f, NoPrereq),
         new ResearchNode(ResearchID.Sanitation, ResearchBranch.Society, "Vệ sinh",
             "Đun nước sôi, dọn rác thải để hạn chế dịch bệnh.", 20, 0, 4.5f, NoPrereq,
             ResearchEffect.Disease(0.006f)),

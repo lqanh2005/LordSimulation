@@ -2,8 +2,6 @@ using UnityEngine;
 
 public static class ResidentReproductionSystem
 {
-    private static readonly bool[] Claimed = new bool[ResidentManager.MAX_RESIDENTS];
-
     public static int ProcessMonthly(
         ResidentData[] residents,
         ref int residentCount,
@@ -16,54 +14,60 @@ public static class ResidentReproductionSystem
         if (residents == null || residentCount <= 0)
             return 0;
 
+        if (buildings == null || buildingCount <= 0)
+            return 0;
+
         int aliveBefore = 0;
         int parentCount = residentCount;
         int births = 0;
-
         for (int i = 0; i < parentCount; i++)
-        {
-            Claimed[i] = false;
             if (residents[i].isAlive)
                 aliveBefore++;
-        }
 
-        for (int i = 0; i < parentCount && residentCount < maxResidents; i++)
+        // GDD v0.3 mục 5.4 + 9.6: mỗi nhà có >= 2 Adult và còn chỗ trống, mỗi tháng
+        // có 5% × (Happiness trung bình của hộ / 50) khả năng sinh một Child.
+        // Bằng 0 khi có người trong nhà đói hoặc nhà không được sưởi; Lều không sinh con.
+        for (int h = 0; h < buildingCount && residentCount < maxResidents; h++)
         {
-            if (Claimed[i] || !ResidentReproductionRules.CanBeMother(in residents[i]))
+            ref BuildingData house = ref buildings[h];
+            if (!ResidentReproductionRules.IsFamilyHouse(house.buildingType)
+                || !ResidentAssignmentRules.HasHousingSlot(in house))
                 continue;
 
-            int fatherIndex = FindFather(residents, parentCount, i);
-            if (fatherIndex < 0)
+            int motherIndex = -1, fatherIndex = -1, adults = 0, members = 0;
+            float happinessSum = 0f;
+            bool blocked = false;
+            for (int i = 0; i < parentCount; i++)
+            {
+                ref ResidentData r = ref residents[i];
+                if (!r.isAlive || r.assignedHouseID != (short)house.buildingID)
+                    continue;
+                members++;
+                happinessSum += r.happiness;
+                if (ResidentReproductionRules.BlocksBirth(in r))
+                    blocked = true;
+                if (!ResidentReproductionRules.CanReproduce(in r))
+                    continue;
+                adults++;
+                if (r.gender == GenderType.Female && motherIndex < 0) motherIndex = i;
+                else if (fatherIndex < 0) fatherIndex = i;
+                else if (motherIndex < 0) motherIndex = i;
+            }
+
+            if (blocked || adults < ResidentReproductionRules.MinAdultsPerHouse || motherIndex < 0 || fatherIndex < 0)
                 continue;
 
-            Claimed[i] = true;
-            Claimed[fatherIndex] = true;
-
-            float chance = ResidentReproductionRules.GetBirthChance(
-                in residents[i], in residents[fatherIndex], season);
+            float chance = ResidentReproductionRules.GetHouseBirthChance(happinessSum / members);
             if (chance <= 0f || Random.value >= chance)
-                continue;
-
-            int houseIndex = -1;
-            if (buildings != null && residents[i].assignedHouseID >= 0)
-                houseIndex = FindBuildingIndexById(
-                    buildings, buildingCount, (ushort)residents[i].assignedHouseID);
-
-            if (houseIndex >= 0 && !ResidentAssignmentRules.HasHousingSlot(in buildings[houseIndex]))
                 continue;
 
             int newId = NextResidentId(residents, residentCount);
             ResidentData child = ResidentReproductionRules.CreateChild(
-                in residents[i], in residents[fatherIndex], newId);
-            if (houseIndex < 0)
-                child.assignedHouseID = ResidentAssignmentRules.UnassignedId;
-
+                in residents[motherIndex], in residents[fatherIndex], newId);
             residents[residentCount] = child;
             residentCount++;
             births++;
-
-            if (houseIndex >= 0)
-                buildings[houseIndex].currentOccupancy++;
+            house.currentOccupancy++;
         }
 
         if (global != null && aliveBefore > 0 && births > 0)
@@ -79,22 +83,6 @@ public static class ResidentReproductionSystem
         return births;
     }
 
-    private static int FindFather(ResidentData[] residents, int parentCount, int motherIndex)
-    {
-        short houseId = residents[motherIndex].assignedHouseID;
-        for (int i = 0; i < parentCount; i++)
-        {
-            if (i == motherIndex || Claimed[i])
-                continue;
-            if (residents[i].assignedHouseID != houseId)
-                continue;
-            if (ResidentReproductionRules.CanBeFather(in residents[i]))
-                return i;
-        }
-
-        return -1;
-    }
-
     private static int NextResidentId(ResidentData[] residents, int residentCount)
     {
         int maxId = 0;
@@ -105,19 +93,5 @@ public static class ResidentReproductionSystem
         }
 
         return maxId + 1;
-    }
-
-    private static int FindBuildingIndexById(
-        BuildingData[] buildings,
-        int buildingCount,
-        ushort buildingId)
-    {
-        for (int i = 0; i < buildingCount; i++)
-        {
-            if (buildings[i].buildingID == buildingId)
-                return i;
-        }
-
-        return -1;
     }
 }

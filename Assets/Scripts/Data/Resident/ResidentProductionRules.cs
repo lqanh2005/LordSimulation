@@ -8,7 +8,7 @@ public static class ResidentProductionRules
     public const float HerbFarmMedicinePerWorker = 2f;
     public const float CoalStoreCoalPerWorker = 4f;
     public const float ForgeIronPerWorker = 2.5f;
-    public const float IncubatingWorkPenalty = 0.8f;
+    public const float RecoveringWorkPenalty = 0.5f;   // GDD 7.4: Recovering làm việc 50% hiệu suất
 
     public static bool IsProducer(ProfessionType profession) =>
         profession == ProfessionType.Farmer
@@ -23,9 +23,13 @@ public static class ResidentProductionRules
 
     public static float GetWorkerPower(in ResidentData resident)
     {
-        float power = resident.WorkMultiplier;
-        if (resident.healthStatus == HealthStatus.Incubating)
-            power *= IncubatingWorkPenalty;
+        // GDD 6.4: đình công -> hiệu suất 0
+        if (resident.IsStriking)
+            return 0f;
+        // GDD 9.6: hiệu suất = 0,6 + 0,8 × Happiness/100; ủ bệnh vẫn làm bình thường
+        float power = resident.WorkMultiplier * StabilityRules.GetWorkEfficiency(resident.happiness);
+        if (resident.healthStatus == HealthStatus.Treated)
+            power *= RecoveringWorkPenalty;
         return power;
     }
 

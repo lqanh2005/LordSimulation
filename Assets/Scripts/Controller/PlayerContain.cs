@@ -21,6 +21,12 @@ public class PlayerContain : MonoBehaviour
             crisisManager = gameObject.AddComponent<CrisisManager>();
         crisisManager.Init(globalSystemManager, buildingManager);
 
+        // GDD v0.3 mục 9.4: Lệnh khẩn cấp qua thông báo sự kiện
+        EmergencyManager emergency = GetComponentInChildren<EmergencyManager>(true);
+        if (emergency == null)
+            emergency = gameObject.AddComponent<EmergencyManager>();
+        emergency.Init(this);
+
         if (merchantManager == null)
             merchantManager = GetComponentInChildren<MerchantManager>(true);
         if (merchantManager == null)

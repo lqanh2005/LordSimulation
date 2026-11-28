@@ -1,4 +1,4 @@
-#if UNITY_INCLUDE_TESTS
+#if UNITY_INCLUDE_TESTS && UNITY_EDITOR
 using System.Collections;
 using NUnit.Framework;
 using UnityEngine;

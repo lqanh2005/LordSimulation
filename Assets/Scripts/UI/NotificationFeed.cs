@@ -146,12 +146,11 @@ public class NotificationFeed : MonoBehaviour
             return;
 
         if (p.rotting > 0)
-            Push($"{p.rotting} thi thể chưa được thu gom đang phân hủy — cần thêm lính gác", NoticeLevel.Warning, "corpses",
+            Push($"{p.rotting} thi thể chưa được thu gom đang phân hủy — cần thêm người ở Trạm gác thu gom", NoticeLevel.Critical, "corpses",
                 () => UIActions.OpenBuildCategory("Hạ tầng"));
-        if (p.miasma >= 5f)
-            Push($"Khí độc Miasma lan khắp thành: áp lực dịch bệnh +{p.diseasePressureAdded * 100f:0.#}%", NoticeLevel.Critical, "miasma");
-        else if (p.miasma >= 1f)
-            Push($"Khí độc Miasma xuất hiện (mức {p.miasma:0.#})", NoticeLevel.Warning, "miasma");
+        if (p.miasma >= 1f)
+            Push($"{Mathf.RoundToInt(p.miasma)} vùng Miasma: khoảng {Mathf.RoundToInt(p.diseasePressureAdded * 100f)}% dân sống trong vùng, 20%/tháng nhiễm Sốt Đỏ",
+                p.diseasePressureAdded >= 0.3f ? NoticeLevel.Critical : NoticeLevel.Warning, "miasma");
     }
 
     private void OnWaitingYardReport(object param)
@@ -162,15 +161,12 @@ public class NotificationFeed : MonoBehaviour
         if (p.left > 0)
             Push($"{p.left} người trong hàng chờ bỏ đi vì đói (giảm uy tín)", NoticeLevel.Warning, "yard-left", UIActions.OpenGate);
         if (p.died > 0)
-            Push($"{p.died} người chết bệnh trong hàng chờ ở Cổng", NoticeLevel.Warning, "yard-died", UIActions.OpenGate);
+            Push($"{p.died} người chết ngoài tường thành (uy tín giảm, thi thể sát tường)", NoticeLevel.Warning, "yard-died", UIActions.OpenGate);
         if (p.hungry > 0)
-            Push($"Không đủ lương thực cho hàng chờ: {p.hungry} người bị đói", NoticeLevel.Warning, "yard-hungry", UIActions.OpenGate);
+            Push($"Hàng ngoài tường đang đói: {p.hungry} người chờ quá 1 tháng", NoticeLevel.Warning, "yard-hungry", UIActions.OpenGate);
         if (p.newlyInfected > 0)
             Push($"Bệnh lây trong hàng chờ: thêm {p.newlyInfected} người nhiễm", NoticeLevel.Warning, "yard-infect", UIActions.OpenGate);
-        if (p.riotAdded >= 1f)
-            Push($"Hàng chờ quá đông ({p.waiting}/{ImmigrationRules.MaxWaiting}): bạo loạn +{p.riotAdded:0.#}", NoticeLevel.Warning, "yard-crowd", UIActions.OpenGate);
-        else if (p.waiting > 0 && p.foodEaten > 0 && p.waiting * 2 >= ImmigrationRules.MaxWaiting)
-            Push($"Hàng chờ đã ăn {p.foodEaten} lương thực tháng này", NoticeLevel.Info, "yard-food", UIActions.OpenGate);
+
     }
 
     private void OnMerchantArrived(object param)
@@ -373,9 +369,10 @@ public class NotificationFeed : MonoBehaviour
         _lastWeather = d.currentWeather;
 
         // Dịch bệnh
-        float infectedPct = pop > 0 ? d.totalInfected * 100f / pop : 0f;
-        if (infectedPct >= 10f)
-            Push($"Dịch bệnh bùng phát: {Mathf.RoundToInt(infectedPct)}% dân đang nhiễm bệnh", NoticeLevel.Critical, "disease");
+        // GDD 7.4: từ 3 người Infected trong thành -> Critical "Dịch bùng phát"
+        if (d.totalInfected >= ResidentDiseaseSystem.OutbreakInfectedThreshold)
+            Push($"Dịch bùng phát: {d.totalInfected} người đang mắc Sốt Đỏ"
+                    + (ResidentDiseaseSystem.LastInfirmaryOverloaded ? " — Bệnh xá quá tải" : ""), NoticeLevel.Critical, "disease");
         else if (d.totalInfected > _lastInfected)
             Push($"Có thêm ca bệnh mới ({d.totalInfected} người đang bệnh)", NoticeLevel.Info, "disease");
         _lastInfected = d.totalInfected;
@@ -415,9 +412,10 @@ public class NotificationFeed : MonoBehaviour
                     ? $"Bạo loạn đã bùng nổ! Còn {left} tháng để dẹp yên trước khi bị lật đổ"
                     : "Bạo loạn đã bùng nổ!", NoticeLevel.Critical, "riot-critical", UIActions.OpenEdicts);
         }
-        else if (d.riotRiskMeter >= 75f)
+        else if (d.riotRiskMeter >= StabilityRules.RiotCriticalThreshold)
         {
-            Push($"Dân chúng bất mãn: nguy cơ bạo loạn {Mathf.RoundToInt(d.riotRiskMeter)}%", NoticeLevel.Warning, "riot", UIActions.OpenEdicts);
+            // GDD 9.6: Riot >= 70 -> Critical
+            Push($"Bạo loạn sắp nổ ra: {Mathf.RoundToInt(d.riotRiskMeter)}%", NoticeLevel.Critical, "riot", UIActions.OpenEdicts);
         }
     }
 

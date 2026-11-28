@@ -197,7 +197,14 @@ public class ResidentInfoPopup : MonoBehaviour
         _sb.Append("Sức khỏe: ").Append(DescribeHealth(in r)).Append('\n');
         _sb.Append("Hạnh phúc: ").Append(ColorPercent(r.happiness)).Append('\n');
         _sb.Append("Nhà ở: ").Append(DescribeBuilding(r.assignedHouseID, "<color=#E86A5A>Vô gia cư</color>")).Append('\n');
-        _sb.Append("Nơi làm: ").Append(DescribeBuilding(r.assignedWorkID, "Không có")).Append('\n');
+        bool isClerk = GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
+            && GamePlayController.Instance.playerContain.globalSystemManager != null
+            && GamePlayController.Instance.playerContain.globalSystemManager.GetGlobalDataRef().gateClerkResidentID == r.residentID;
+        _sb.Append("Nơi làm: ").Append(isClerk ? "Gate Clerk ở Cổng" : DescribeBuilding(r.assignedWorkID, "Không có")).Append('\n');
+        if (r.familyID != 0)
+            _sb.Append("Gia đình: Nhà ").Append(NameDatabase.GetLastName(r.lastNameID)).Append('\n');
+        // GDD 14.2: người vào qua sắc lệnh — rule nào đã cho họ vào
+        _sb.Append("Vào thành: ").Append(r.processedByRule > 0 ? $"sắc lệnh ưu tiên {r.processedByRule} (Gate Clerk)" : "duyệt tay / có sẵn").Append('\n');
 
         if (r.hungerMonths > 0 || r.coldMonths > 0 || r.thirstMonths > 0)
         {

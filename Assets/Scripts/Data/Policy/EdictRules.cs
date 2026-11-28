@@ -69,7 +69,7 @@ public static class EdictRules
 
     public static bool IsImmigrationAction(RuleActionType type)
     {
-        return type >= RuleActionType.ImmigrationAdmit && type <= RuleActionType.ImmigrationEscort;
+        return type >= RuleActionType.ImmigrationAdmit && type <= RuleActionType.ImmigrationManualReview;
     }
 
     public static bool UsesApplicant(in EdictRuleData rule)
@@ -99,10 +99,13 @@ public static class EdictRules
         return type != RuleActionType.None && !IsImmigrationAction(type);
     }
 
+    /// <summary>
+    /// GDD v0.3 mục 8.4: AND tính trước OR (giống && và ||) — A OR B AND C = A OR (B AND C).
+    /// </summary>
     public static bool EvaluateConditions(
         in EdictRuleData rule,
         in GlobalSystemData global,
-        in ResidentData applicant,
+        in ApplicantFamily family,
         bool hasApplicant)
     {
         int count = rule.ConditionCount;
@@ -115,7 +118,7 @@ public static class EdictRules
         for (int i = 0; i < count; i++)
         {
             ref readonly RuleCondition condition = ref rule.conditions[i];
-            bool matched = EvaluateCondition(in condition, in global, in applicant, hasApplicant);
+            bool matched = EvaluateCondition(in condition, in global, in family, hasApplicant);
 
             if (i > 0 && condition.link == LogicalLink.OR)
             {
@@ -134,30 +137,82 @@ public static class EdictRules
     public static bool EvaluateCondition(
         in RuleCondition condition,
         in GlobalSystemData global,
-        in ResidentData applicant,
+        in ApplicantFamily family,
         bool hasApplicant)
     {
-        if (IsApplicantVariable(condition.variable) && !hasApplicant)
+        bool applicantVar = IsApplicantVariable(condition.variable);
+        if (applicantVar && (!hasApplicant || !family.IsValid))
             return false;
         if (!IsUnlocked(condition.variable))
             return false;
 
-        float value = GetValue(condition.variable, in global, in applicant);
+        if (applicantVar)
+            return EvaluateFamilyCondition(in condition, in family);
+
+        float value = GetValue(condition.variable, in global);
         return Compare(value, condition.op, condition.value);
+    }
+
+    /// <summary>Điều kiện về thành viên đúng khi có ít nhất một thành viên thoả; ≠ nghĩa là không ai thoả.</summary>
+    private static bool EvaluateFamilyCondition(in RuleCondition c, in ApplicantFamily f)
+    {
+        switch (c.variable)
+        {
+            case RuleVariable.ApplicantProfession:
+            {
+                bool any = false;
+                for (int i = 0; i < f.count; i++)
+                    if ((byte)f[i].professionType == (byte)Mathf.RoundToInt(c.value)) { any = true; break; }
+                return c.op == ComparisonOp.NotEqual ? !any : any;
+            }
+            case RuleVariable.FamilyHasNote:
+            {
+                int idx = Mathf.Clamp(Mathf.RoundToInt(c.value), 0, FamilyRules.AllNotes.Length - 1);
+                NoteFlags note = FamilyRules.AllNotes[idx];
+                bool any = (FamilyRules.GetFamilyNotes(in f) & note) != 0;
+                return c.op == ComparisonOp.NotEqual ? !any : any;
+            }
+            case RuleVariable.FamilyNoHealthNote:
+            {
+                bool none = (FamilyRules.GetFamilyNotes(in f) & FamilyRules.HealthNotes) == 0;
+                return Compare(none ? 1f : 0f, c.op, c.value);
+            }
+            case RuleVariable.FamilyHasChildOrElderly:
+                return Compare(FamilyRules.HasChildOrElderly(in f) ? 1f : 0f, c.op, c.value);
+            case RuleVariable.FamilySize:
+                return Compare(f.count, c.op, c.value);
+            case RuleVariable.FamilyWorkers:
+                return Compare(FamilyRules.CountWorkers(in f), c.op, c.value);
+            case RuleVariable.FamilyWealthClass:
+                return Compare(FamilyRules.GetWealthClass(in f), c.op, c.value);
+            case RuleVariable.ApplicantOrigin:
+                return Compare((byte)f.Head.originRegion, c.op, c.value);
+            case RuleVariable.ApplicantWealth:
+                return Compare(f.count > 0 ? (float)FamilyRules.TotalWealth(in f) / f.count : 0f, c.op, c.value);
+            case RuleVariable.ApplicantBodyTemp:
+            {
+                float max = 0f;
+                for (int i = 0; i < f.count; i++)
+                    max = Mathf.Max(max, f[i].bodyTemperature);
+                return Compare(max, c.op, c.value);
+            }
+            default:
+                return false;
+        }
     }
 
     public static RuleActionData Resolve(
         in EdictRuleData rule,
         in GlobalSystemData global,
-        in ResidentData applicant,
+        in ApplicantFamily family,
         bool hasApplicant,
         out bool matched)
     {
-        matched = EvaluateConditions(in rule, in global, in applicant, hasApplicant);
+        matched = EvaluateConditions(in rule, in global, in family, hasApplicant);
         return matched ? rule.thenAction : rule.elseAction;
     }
 
-    public static float GetValue(RuleVariable variable, in GlobalSystemData global, in ResidentData applicant)
+    public static float GetValue(RuleVariable variable, in GlobalSystemData global)
     {
         return variable switch
         {
@@ -183,10 +238,6 @@ public static class EdictRules
             RuleVariable.Month => global.currentMonth,
             RuleVariable.Season => (byte)global.CurrentSeason,
             RuleVariable.Weather => (byte)global.currentWeather,
-            RuleVariable.ApplicantBodyTemp => applicant.bodyTemperature,
-            RuleVariable.ApplicantWealth => applicant.wealth,
-            RuleVariable.ApplicantOrigin => (byte)applicant.originRegion,
-            RuleVariable.ApplicantProfession => (byte)applicant.professionType,
             _ => 0f
         };
     }
@@ -213,7 +264,7 @@ public static class EdictRules
     public static bool TryResolveImmigration(
         EdictRuleData[] edicts,
         int edictCount,
-        in ResidentData applicant,
+        in ApplicantFamily family,
         in GlobalSystemData global,
         out RuleActionData action,
         out int edictIndex,
@@ -236,7 +287,7 @@ public static class EdictRules
             if (!edict.isActive || !HasImmigrationAction(in edict))
                 continue;
 
-            bool matched = EvaluateConditions(in edict, in global, in applicant, true);
+            bool matched = EvaluateConditions(in edict, in global, in family, true);
             if (matched)
             {
                 if (IsImmigrationAction(edict.thenAction.type) && edict.executionOrder < bestThenOrder)
@@ -268,26 +319,13 @@ public static class EdictRules
         return false;
     }
 
-    public static bool TryGetSuggestedAction(
-        EdictRuleData[] edicts,
-        int edictCount,
-        in ResidentData applicant,
-        in GlobalSystemData global,
-        out RuleAction action,
-        out int edictIndex)
-    {
-        bool found = TryResolveImmigration(edicts, edictCount, in applicant, in global, out RuleActionData resolved, out edictIndex, out _);
-        action = found ? ToRuleAction(resolved.type) : RuleAction.Admit;
-        return found;
-    }
-
     public static RuleAction ToRuleAction(RuleActionType type)
     {
         return type switch
         {
             RuleActionType.ImmigrationDeny => RuleAction.Deny,
             RuleActionType.ImmigrationQuarantine => RuleAction.Quarantine,
-            RuleActionType.ImmigrationEscort => RuleAction.EscortToDesk,
+            RuleActionType.ImmigrationManualReview => RuleAction.ManualReview,
             _ => RuleAction.Admit
         };
     }

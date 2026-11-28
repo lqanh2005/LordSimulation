@@ -51,11 +51,25 @@ public struct ResidentData
     public byte intellect;  // Trí lực: 0 - 100
     public byte quarantineMonths;  // Số tháng cách ly còn lại (0 = không bị cách ly) — lưu từ save v10
     public byte thirstMonths;  // Số tháng khát liên tục (0 = no) — lưu từ save v11
+    public byte immunityMonths;  // Miễn dịch Sốt Đỏ còn lại sau khi khỏi (GDD 7.4: 12 tháng) — save v12
+    public byte griefMonths;     // Người thân cùng nhà chết trong N tháng qua (GDD 9.6: −15 Happiness) — save v12
+    public int familyID;         // Gia đình di cư (GDD 4.1): cùng id = cùng hộ, ở chung nhà; 0 = đi một mình — save v13
+    public byte rolledNotes;     // NoteFlags ngẫu nhiên lúc tạo (Bị thương / Sốt khi ủ bệnh / Ho) — save v13
+    public byte processedByRule; // 0 = duyệt tay; n = sắc lệnh ưu tiên n đã xử lý ("Why was this NPC processed?") — save v13
+    public ushort wageDebt;      // Nợ lương thành còn thiếu người này (vàng, tính theo mẫu) — save v14
+    public byte debtMonths;      // Số tháng liên tiếp bị nợ lương — save v14
+    public byte strikeMonths;    // Số tháng đang đình công (0 = đi làm) — save v14
+
+    public readonly bool IsStriking => strikeMonths > 0;
+
+    // GDD v0.3 mục 5.4: tuổi nén (năm trong game) — Child 0–3, Adult 3–15, Elderly 15+
+    public const byte AdultAge = 3;
+    public const byte ElderlyAge = 15;
 
     public readonly AgeGroupType GetAgeGroup()
     {
-        if (age < 18) return AgeGroupType.Child;
-        if (age < 65) return AgeGroupType.Adult;
+        if (age < AdultAge) return AgeGroupType.Child;
+        if (age < ElderlyAge) return AgeGroupType.Adult;
         return AgeGroupType.Elderly;
     }
 

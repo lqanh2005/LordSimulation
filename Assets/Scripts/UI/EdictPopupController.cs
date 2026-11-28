@@ -63,16 +63,15 @@ public class EdictPopupController : MonoBehaviour
         new ActionPreset("Trợ cấp dân chúng", RuleActionType.ModifyGoldMonthly, -50f),
         new ActionPreset("Xoa dịu dân chúng", RuleActionType.ReduceRiotRisk, 10f),
         new ActionPreset("Củng cố uy tín", RuleActionType.ModifyReputation, 5f),
-        new ActionPreset("Cho nhập cư", RuleActionType.ImmigrationAdmit),
-        new ActionPreset("Từ chối nhập cư", RuleActionType.ImmigrationDeny),
-        new ActionPreset("Cách ly người nhập cư", RuleActionType.ImmigrationQuarantine, ImmigrationRules.DefaultQuarantineMonths),
-        new ActionPreset("Áp giải tới bàn thẩm vấn", RuleActionType.ImmigrationEscort, 5f)
+        new ActionPreset("ADMIT — Cho vào", RuleActionType.ImmigrationAdmit),
+        new ActionPreset("DENY — Từ chối", RuleActionType.ImmigrationDeny),
+        new ActionPreset("QUARANTINE — Cách ly", RuleActionType.ImmigrationQuarantine, ImmigrationRules.DefaultQuarantineMonths),
+        new ActionPreset("MANUAL REVIEW — Duyệt tay", RuleActionType.ImmigrationManualReview)
     };
 
     private readonly List<EdictConditionRowView> rows = new List<EdictConditionRowView>(EdictRuleData.MaxConditions);
     private readonly List<EdictRuleCardView> cards = new List<EdictRuleCardView>();
     private readonly List<string> variableOptions = new List<string>();
-    private readonly List<string> operatorOptions = new List<string>();
     private RuleVariable[] variables;
     private LogicalLink pendingLink = LogicalLink.AND;
     private bool initialized;
@@ -126,19 +125,26 @@ public class EdictPopupController : MonoBehaviour
             return;
         initialized = true;
 
-        variables = new RuleVariable[EdictRuleCatalog.CityVariables.Length + EdictRuleCatalog.ApplicantVariables.Length];
-        EdictRuleCatalog.CityVariables.CopyTo(variables, 0);
-        EdictRuleCatalog.ApplicantVariables.CopyTo(variables, EdictRuleCatalog.CityVariables.Length);
+        // GDD v0.3 mục 8.2: các trường xét gia đình lên đầu, trường thành phố (sắc lệnh thành phố) ở sau
+        variables = new RuleVariable[EdictRuleCatalog.ApplicantVariables.Length + EdictRuleCatalog.CityVariables.Length];
+        EdictRuleCatalog.ApplicantVariables.CopyTo(variables, 0);
+        EdictRuleCatalog.CityVariables.CopyTo(variables, EdictRuleCatalog.ApplicantVariables.Length);
 
         foreach (RuleVariable variable in variables)
             variableOptions.Add(EdictRuleCatalog.GetVariableName(variable));
 
-        foreach (ComparisonOp op in EdictRuleCatalog.Operators)
-            operatorOptions.Add(EdictRuleCatalog.GetOperatorSymbol(op));
+        // Scene cũ còn lưu preset "Áp giải" (cùng mã với MANUAL REVIEW) -> đổi nhãn cho đúng
+        for (int i = 0; i < actionPresets.Length; i++)
+        {
+            if (actionPresets[i].type == RuleActionType.ImmigrationManualReview)
+                actionPresets[i] = new ActionPreset("MANUAL REVIEW — Duyệt tay", RuleActionType.ImmigrationManualReview);
+            else if (actionPresets[i].type == RuleActionType.ImmigrationAdmit)
+                actionPresets[i].label = "ADMIT — Cho vào";
+        }
 
         if (firstConditionRow != null)
         {
-            firstConditionRow.Setup(variableOptions, operatorOptions, LogicalLink.None, true, defaultConditionValue);
+            firstConditionRow.Setup(variables, variableOptions, LogicalLink.None, true, defaultConditionValue);
             rows.Add(firstConditionRow);
         }
 
@@ -204,7 +210,7 @@ public class EdictPopupController : MonoBehaviour
         Transform parent = conditionContainer != null ? conditionContainer : firstConditionRow.transform.parent;
         EdictConditionRowView row = Instantiate(firstConditionRow, parent);
         row.name = $"ConditionRow_{rows.Count}";
-        row.Setup(variableOptions, operatorOptions, pendingLink, false, defaultConditionValue);
+        row.Setup(variables, variableOptions, pendingLink, false, defaultConditionValue);
         row.RemoveRequested += RemoveCondition;
         rows.Add(row);
 
@@ -256,9 +262,13 @@ public class EdictPopupController : MonoBehaviour
                 return;
             }
 
-            RuleVariable variable = variables[Mathf.Clamp(row.VariableIndex, 0, variables.Length - 1)];
-            ComparisonOp op = EdictRuleCatalog.Operators[Mathf.Clamp(row.OperatorIndex, 0, EdictRuleCatalog.Operators.Length - 1)];
-            builder.AddCondition(i == 0 ? LogicalLink.None : row.Link, variable, op, value);
+            RuleVariable variable = row.CurrentVariable;
+            if (!EdictRules.IsUnlocked(variable))
+            {
+                SetStatus($"Điều kiện {i + 1} cần nghiên cứu Khám sơ bộ (hồ sơ cấp 1).", errorColor);
+                return;
+            }
+            builder.AddCondition(i == 0 ? LogicalLink.None : row.Link, variable, row.CurrentOperator, value);
         }
 
         builder.ThenDo(preset.type, preset.param0, preset.param1);
@@ -384,9 +394,16 @@ public class EdictPopupController : MonoBehaviour
         {
             RuleCondition condition = rule.conditions[i];
             links.Append(i == 0 ? "If" : EdictRuleCatalog.GetLinkName(condition.link)).Append('\n');
-            details.Append(EdictRuleCatalog.GetVariableName(condition.variable))
-                .Append(' ').Append(EdictRuleCatalog.GetOperatorSymbol(condition.op))
-                .Append(' ').Append(FormatValue(condition.value)).Append('\n');
+            string text = EdictRuleCatalog.DescribeCondition(in condition, true);
+            int tab = text.IndexOf('\t');
+            details.Append(tab >= 0 ? text.Substring(tab + 1) : text).Append('\n');
+        }
+
+        // GDD 8.4: hiện ngoặc tự động để thấy rõ rule được hiểu thế nào (AND tính trước OR)
+        if (count > 1)
+        {
+            links.Append("Hiểu là\n");
+            details.Append("<size=85%><i>").Append(EdictRuleCatalog.DescribeLogic(in rule)).Append("</i></size>\n");
         }
 
         links.Append("Then");

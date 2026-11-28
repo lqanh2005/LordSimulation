@@ -32,18 +32,16 @@ public class ResidentManager : MonoBehaviour
     [Header("Dân khởi đầu (New Game)")]
     [SerializeField] private int startingResidentCount = 5;
     [Tooltip("Tuổi dân khởi đầu — nằm trong nhóm Adult (18-64) để dùng sprite Young")]
-    [SerializeField] private Vector2Int startingAgeRange = new Vector2Int(18, 30);
+    [SerializeField] private Vector2Int startingAgeRange = new Vector2Int(3, 8);   // Tuổi nén GDD v0.3 (Adult 3–14)
 
     [Header("Đói / Chết đói")]
     [SerializeField] [Range(0f, 1f)] private float starveDeathChance = 0.1f;
     [Header("Lạnh / Chết rét")]
     [SerializeField] [Range(0f, 1f)] private float freezeDeathChance = 0.1f;
-    [SerializeField] private float hungerHappinessPenalty = 0.1f;
-    [SerializeField] private float coldHappinessPenalty = 0.1f;
+    // Đói / lạnh / khát trừ Happiness qua mục tiêu GDD 9.6 (ResidentSocialSystem), không trừ trực tiếp nữa
 
     [Header("Bệnh mẫu — RedFever")]
-    [SerializeField] [Range(0f, 1f)] private float diseaseSpreadFactor = 0.15f;
-    [SerializeField] [Range(0f, 1f)] private float naturalRecoveryChance = 0.08f;
+    // Lây / hồi phục Sốt Đỏ: hằng số GDD 7.4 trong ResidentDiseaseSystem
 
     [Header("Grid → World")]
     [SerializeField] private Grid isometricGrid;
@@ -473,8 +471,9 @@ public class ResidentManager : MonoBehaviour
             return;
 
         int nextId = PeekMaxResidentId() + 1;
-        int minAge = Mathf.Max(18, startingAgeRange.x);
-        int maxAge = Mathf.Min(64, Mathf.Max(minAge, startingAgeRange.y));
+        // GDD v0.3: tuổi nén, Adult = 3–14 năm trong game
+        int minAge = Mathf.Max(ResidentData.AdultAge, startingAgeRange.x);
+        int maxAge = Mathf.Min(ResidentData.ElderlyAge - 1, Mathf.Max(minAge, startingAgeRange.y));
         int added = 0;
 
         for (int i = 0; i < startingResidentCount; i++)
@@ -535,6 +534,25 @@ public class ResidentManager : MonoBehaviour
 
     private void ProcessYearlyAging()
     {
+        for (int i = 0; i < activeCount; i++)
+        {
+            ref ResidentData r = ref allResidents[i];
+            if (!r.isAlive)
+                continue;
+
+            if (r.age < byte.MaxValue)
+                r.age++;
+
+            if (ResidentAgingRules.ShouldRetire(in r))
+                ResidentAgingRules.Retire(ref r);
+        }
+
+        RefreshVisualPopulation();
+    }
+
+    /// <summary>GDD 5.4: người già mỗi tháng có nguy cơ chết già, tăng dần theo tuổi.</summary>
+    private void ProcessMonthlyOldAge()
+    {
         int aliveBefore = 0;
         int deaths = 0;
 
@@ -545,23 +563,31 @@ public class ResidentManager : MonoBehaviour
                 continue;
 
             aliveBefore++;
-            if (r.age < byte.MaxValue)
-                r.age++;
-
-            if (ResidentAgingRules.ShouldRetire(in r))
-                ResidentAgingRules.Retire(ref r);
-
             float deathChance = ResidentAgingRules.GetOldAgeDeathChance(in r);
             if (deathChance <= 0f || UnityEngine.Random.value >= deathChance)
                 continue;
 
+            MarkHouseholdGrief(r.assignedHouseID, i);
             ResidentAgingRules.DieOfAge(ref r);
             deaths++;
         }
 
         ApplyMacroDeaths(deaths, aliveBefore, DeathCause.OldAge);
+    }
 
-        RefreshVisualPopulation();
+    /// <summary>GDD 9.6: người thân (cùng nhà) chết trong 3 tháng qua -> −15 Happiness.</summary>
+    private void MarkHouseholdGrief(short houseId, int deadIndex)
+    {
+        if (houseId < 0)
+            return;
+        for (int j = 0; j < activeCount; j++)
+        {
+            if (j == deadIndex)
+                continue;
+            ref ResidentData other = ref allResidents[j];
+            if (other.isAlive && other.assignedHouseID == houseId)
+                other.griefMonths = StabilityRules.GriefMonths;
+        }
     }
 
     /// <summary>Quy số chết trong mẫu ra dân số thật, trừ vào tổng và báo cho UI.</summary>
@@ -633,7 +659,6 @@ public class ResidentManager : MonoBehaviour
                 if (r.hungerMonths < byte.MaxValue)
                     r.hungerMonths++;
 
-                r.happiness = Mathf.Max(0f, r.happiness - hungerHappinessPenalty);
             }
             else
             {
@@ -675,7 +700,6 @@ public class ResidentManager : MonoBehaviour
                 if (r.thirstMonths < byte.MaxValue)
                     r.thirstMonths++;
 
-                r.happiness = Mathf.Max(0f, r.happiness - WaterRules.ThirstHappinessPenalty);
             }
             else
             {
@@ -716,7 +740,6 @@ public class ResidentManager : MonoBehaviour
             {
                 if(r.coldMonths < byte.MaxValue)
                     r.coldMonths++;
-                r.happiness = Mathf.Max(0f, r.happiness - coldHappinessPenalty);
             }
             else r.coldMonths = 0;
             if(r.coldMonths >= ColdMonthsBeforeDeathRisk && UnityEngine.Random.value < freezeDeathChance)
@@ -740,9 +763,7 @@ public class ResidentManager : MonoBehaviour
             activeCount,
             buildingManager != null ? buildingManager.allBuildings : null,
             buildingManager != null ? buildingManager.activeCount : 0,
-            diseasePressure,
-            diseaseSpreadFactor,
-            naturalRecoveryChance,
+            diseasePressure,   // = độ phủ vùng Miasma (GDD 7.4)
             globalSystemManager);
 
         RefreshVisualPopulation();
@@ -795,9 +816,21 @@ public class ResidentManager : MonoBehaviour
             buildingManager.activeCount,
             globalSystemManager);
 
+        ProcessMonthlyOldAge();
+
+        // GDD v0.3 mục 6.4: lương, thuế thu nhập, tiền ăn / sưởi của hộ, nợ lương -> đình công (trước Happiness)
+        EconomySystem.ProcessMonthly(
+            allResidents,
+            activeCount,
+            buildingManager.allBuildings,
+            buildingManager.activeCount,
+            globalSystemManager);
+
         ResidentSocialSystem.ProcessMonthly(
             allResidents,
             activeCount,
+            buildingManager.allBuildings,
+            buildingManager.activeCount,
             globalSystemManager);
 
         ResidentReproductionSystem.ProcessMonthly(
@@ -841,8 +874,8 @@ public class ResidentManager : MonoBehaviour
                 infected++;
         }
 
-        // overallHappiness lưu theo % (0-100, như giá trị khởi đầu 50 và cách HUD hiển thị); từng cư dân là 0-1
-        float avgHappiness = alive > 0 ? happinessSum / alive * 100f : 0f;
+        // Trung bình hạnh phúc mẫu, thang 0–1 (đổi sang % khi ghi vào overallHappiness bên dưới)
+        float avgHappiness = alive > 0 ? happinessSum / alive : 0f;
 
         ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
         // Mẫu là tập con của dân thật: dân số thật luôn >= số mẫu còn sống (không để làm tròn kéo lệch),
@@ -949,6 +982,13 @@ public class ResidentManager : MonoBehaviour
 
     private void CompactDeadResidents()
     {
+        // Người chết còn giữ nhà (đói / lạnh / khát / bệnh) -> người cùng nhà để tang 3 tháng
+        for (int i = 0; i < activeCount; i++)
+        {
+            if (!allResidents[i].isAlive && allResidents[i].assignedHouseID >= 0)
+                MarkHouseholdGrief(allResidents[i].assignedHouseID, i);
+        }
+
         int write = 0;
         for (int read = 0; read < activeCount; read++)
         {

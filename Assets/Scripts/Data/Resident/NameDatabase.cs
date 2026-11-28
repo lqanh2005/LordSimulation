@@ -8,6 +8,8 @@ public static class NameDatabase
     private static readonly ushort[] MaleNameIds = { 0, 1, 2, 5, 7, 9 };
     private static readonly ushort[] FemaleNameIds = { 3, 4, 6, 8 };
 
+    public static string GetLastName(ushort lastIdx) => lastIdx < LastNames.Length ? LastNames[lastIdx] : "Citizen";
+
     public static string GetFullName(ushort firstIdx, ushort lastIdx)
     {
         string first = firstIdx < FirstNames.Length ? FirstNames[firstIdx] : "Unknown";

@@ -11,11 +11,100 @@ public static class EdictRuleCatalog
         RuleVariable.Season, RuleVariable.Weather
     };
 
+    /// <summary>GDD v0.3 mục 8.2: các trường xét gia đình (theo thứ tự trong bảng của GDD).</summary>
     public static readonly RuleVariable[] ApplicantVariables =
     {
-        RuleVariable.ApplicantBodyTemp, RuleVariable.ApplicantWealth,
-        RuleVariable.ApplicantOrigin, RuleVariable.ApplicantProfession
+        RuleVariable.ApplicantProfession, RuleVariable.ApplicantOrigin, RuleVariable.FamilyHasNote,
+        RuleVariable.FamilyNoHealthNote, RuleVariable.FamilySize, RuleVariable.FamilyWorkers,
+        RuleVariable.FamilyHasChildOrElderly, RuleVariable.FamilyWealthClass
     };
+
+    private static readonly ComparisonOp[] EqualityOps = { ComparisonOp.Equal, ComparisonOp.NotEqual };
+    private static readonly ComparisonOp[] EqualOnly = { ComparisonOp.Equal };
+    private static readonly ComparisonOp[] RangeOps = { ComparisonOp.GreaterOrEqual, ComparisonOp.LessOrEqual };
+
+    /// <summary>Phép so sánh chọn được cho từng trường (GDD 8.2). Trường thành phố dùng đủ 6 phép.</summary>
+    public static ComparisonOp[] GetAllowedOperators(RuleVariable variable) => variable switch
+    {
+        RuleVariable.ApplicantProfession or RuleVariable.ApplicantOrigin or RuleVariable.FamilyHasNote => EqualityOps,
+        RuleVariable.FamilyNoHealthNote or RuleVariable.FamilyHasChildOrElderly or RuleVariable.FamilyWealthClass => EqualOnly,
+        RuleVariable.FamilySize or RuleVariable.FamilyWorkers => RangeOps,
+        _ => Operators
+    };
+
+    private static readonly ProfessionType[] ProfessionChoices =
+    {
+        ProfessionType.Farmer, ProfessionType.Miner, ProfessionType.Lumberjack, ProfessionType.Craftsman,
+        ProfessionType.Doctor, ProfessionType.Teacher, ProfessionType.Guard, ProfessionType.None
+    };
+
+    /// <summary>
+    /// Danh sách giá trị chọn được (nhãn, giá trị lưu) — mọi phần của rule chọn từ danh sách, không gõ tay.
+    /// Trả null với trường thành phố (nhập số). Note chỉ liệt kê những note hồ sơ hiện tại đã mở.
+    /// </summary>
+    public static System.Collections.Generic.List<(string label, float value)> GetValueOptions(RuleVariable variable)
+    {
+        var list = new System.Collections.Generic.List<(string, float)>();
+        switch (variable)
+        {
+            case RuleVariable.ApplicantProfession:
+                foreach (ProfessionType p in ProfessionChoices)
+                    list.Add((ResidentInfoPopup.GetProfessionName(p), (byte)p));
+                return list;
+            case RuleVariable.ApplicantOrigin:
+                list.Add((ImmigrationRules.OriginLabel(OriginRegion.GreenZone), (byte)OriginRegion.GreenZone));
+                list.Add((ImmigrationRules.OriginLabel(OriginRegion.YellowZone), (byte)OriginRegion.YellowZone));
+                list.Add((ImmigrationRules.OriginLabel(OriginRegion.RedZone), (byte)OriginRegion.RedZone));
+                return list;
+            case RuleVariable.FamilyHasNote:
+            {
+                byte level = FamilyRules.CurrentProfileLevel;
+                for (int i = 0; i < FamilyRules.AllNotes.Length; i++)
+                    if (FamilyRules.IsNoteVisible(FamilyRules.AllNotes[i], level))
+                        list.Add((FamilyRules.NoteLabel(FamilyRules.AllNotes[i]), i));
+                return list;
+            }
+            case RuleVariable.FamilyNoHealthNote:
+            case RuleVariable.FamilyHasChildOrElderly:
+                list.Add(("Có", 1f));
+                list.Add(("Không", 0f));
+                return list;
+            case RuleVariable.FamilySize:
+                for (int i = 1; i <= 5; i++) list.Add((i.ToString(), i));
+                return list;
+            case RuleVariable.FamilyWorkers:
+                for (int i = 0; i <= 5; i++) list.Add((i.ToString(), i));
+                return list;
+            case RuleVariable.FamilyWealthClass:
+                for (int i = FamilyRules.WealthPoor; i <= FamilyRules.WealthRich; i++)
+                    list.Add((FamilyRules.WealthClassLabel(i), i));
+                return list;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>Nhãn của giá trị điều kiện (vd. "Sốt", "Vùng Đỏ", "Có").</summary>
+    public static string FormatConditionValue(RuleVariable variable, float value)
+    {
+        switch (variable)
+        {
+            case RuleVariable.ApplicantProfession:
+                return ResidentInfoPopup.GetProfessionName((ProfessionType)(byte)UnityEngine.Mathf.RoundToInt(value));
+            case RuleVariable.ApplicantOrigin:
+                return ImmigrationRules.OriginLabel((OriginRegion)(byte)UnityEngine.Mathf.RoundToInt(value));
+            case RuleVariable.FamilyHasNote:
+                int idx = UnityEngine.Mathf.Clamp(UnityEngine.Mathf.RoundToInt(value), 0, FamilyRules.AllNotes.Length - 1);
+                return FamilyRules.NoteLabel(FamilyRules.AllNotes[idx]);
+            case RuleVariable.FamilyNoHealthNote:
+            case RuleVariable.FamilyHasChildOrElderly:
+                return value >= 0.5f ? "Có" : "Không";
+            case RuleVariable.FamilyWealthClass:
+                return FamilyRules.WealthClassLabel(UnityEngine.Mathf.RoundToInt(value));
+            default:
+                return FormatNumber(value);
+        }
+    }
 
     public static readonly ComparisonOp[] Operators =
     {
@@ -32,7 +121,7 @@ public static class EdictRuleCatalog
     public static readonly RuleActionType[] ImmigrationActions =
     {
         RuleActionType.ImmigrationAdmit, RuleActionType.ImmigrationDeny,
-        RuleActionType.ImmigrationQuarantine, RuleActionType.ImmigrationEscort
+        RuleActionType.ImmigrationQuarantine, RuleActionType.ImmigrationManualReview
     };
 
     public static string GetVariableName(RuleVariable variable)
@@ -57,12 +146,18 @@ public static class EdictRuleCatalog
             RuleVariable.Month => "Tháng",
             RuleVariable.Season => "Mùa",
             RuleVariable.Weather => "Thời tiết",
-            RuleVariable.ApplicantBodyTemp => EdictRules.IsUnlocked(RuleVariable.ApplicantBodyTemp)
-                ? "Thân nhiệt người nhập cư"
-                : "Thân nhiệt (cần nghiên cứu Nhiệt kế)",
-            RuleVariable.ApplicantWealth => "Tài sản người nhập cư",
-            RuleVariable.ApplicantOrigin => "Vùng xuất thân",
-            RuleVariable.ApplicantProfession => "Nghề nghiệp",
+            RuleVariable.ApplicantBodyTemp => "Thân nhiệt cao nhất trong nhà",
+            RuleVariable.ApplicantWealth => "Tài sản trung bình mỗi người",
+            RuleVariable.ApplicantOrigin => "Nguồn gốc",
+            RuleVariable.ApplicantProfession => "Có thành viên làm nghề",
+            RuleVariable.FamilyHasNote => "Có thành viên có note",
+            RuleVariable.FamilyNoHealthNote => "Không có note sức khoẻ",
+            RuleVariable.FamilySize => "Số người trong gia đình",
+            RuleVariable.FamilyWorkers => "Số người làm được việc",
+            RuleVariable.FamilyHasChildOrElderly => "Có trẻ em / người già",
+            RuleVariable.FamilyWealthClass => EdictRules.IsUnlocked(RuleVariable.FamilyWealthClass)
+                ? "Wealth"
+                : "Wealth (cần nghiên cứu Khám sơ bộ)",
             _ => variable.ToString()
         };
     }
@@ -107,10 +202,10 @@ public static class EdictRuleCatalog
         return type switch
         {
             RuleActionType.None => "Không làm gì",
-            RuleActionType.ImmigrationAdmit => "Cho nhập cư",
-            RuleActionType.ImmigrationDeny => "Từ chối nhập cư",
-            RuleActionType.ImmigrationQuarantine => "Cách ly người nhập cư",
-            RuleActionType.ImmigrationEscort => "Áp giải tới bàn thẩm vấn",
+            RuleActionType.ImmigrationAdmit => "ADMIT — Cho vào",
+            RuleActionType.ImmigrationDeny => "DENY — Từ chối",
+            RuleActionType.ImmigrationQuarantine => "QUARANTINE — Cách ly",
+            RuleActionType.ImmigrationManualReview => "MANUAL REVIEW — Duyệt tay",
             RuleActionType.BoostProduction => "Thay đổi sản xuất",
             RuleActionType.AddResourceMonthly => "Thêm/bớt tài nguyên mỗi tháng",
             RuleActionType.ModifyGoldMonthly => "Thêm/bớt vàng mỗi tháng",
@@ -162,14 +257,12 @@ public static class EdictRuleCatalog
         switch (type)
         {
             case RuleActionType.ImmigrationAdmit:
-                param0Label = "Thuế (%)";
-                return 1;
+                return 0;   // GDD 6.4: thuế nhập thành là mức chung chỉnh ở màn Cổng, sắc lệnh không đặt thuế riêng
             case RuleActionType.ImmigrationQuarantine:
                 param0Label = "Số tháng cách ly";
                 return 1;
-            case RuleActionType.ImmigrationEscort:
-                param0Label = "Điểm quyền lực";
-                return 1;
+            case RuleActionType.ImmigrationManualReview:
+                return 0;
             case RuleActionType.BoostProduction:
                 param0Label = "Công trình";
                 param1Label = "Thay đổi (%)";
@@ -195,7 +288,9 @@ public static class EdictRuleCatalog
     public static string DescribeCondition(in RuleCondition condition, bool isFirst)
     {
         string link = isFirst ? "If" : GetLinkName(condition.link);
-        return $"{link}\t{GetVariableName(condition.variable)} {GetOperatorSymbol(condition.op)} {FormatNumber(condition.value)}";
+        if (condition.variable == RuleVariable.FamilyNoHealthNote)
+            return $"{link}\t{GetVariableName(condition.variable)}{(condition.value >= 0.5f ? "" : " = Không")}";
+        return $"{link}\t{GetVariableName(condition.variable)} {GetOperatorSymbol(condition.op)} {FormatConditionValue(condition.variable, condition.value)}";
     }
 
     public static string DescribeAction(in RuleActionData action)
@@ -209,9 +304,7 @@ public static class EdictRuleCatalog
     {
         return action.type switch
         {
-            RuleActionType.ImmigrationAdmit when action.param0 > 0f => $"Cho nhập cư (thuế {FormatNumber(action.param0)}%)",
             RuleActionType.ImmigrationQuarantine => $"Cách ly {FormatNumber(action.param0)} tháng",
-            RuleActionType.ImmigrationEscort => $"Áp giải tới bàn thẩm vấn (-{FormatNumber(action.param0)} quyền lực)",
             RuleActionType.BoostProduction => $"{(action.param1 >= 0f ? "Tăng" : "Giảm")} sản xuất {GetBuildingName((BuildingType)(byte)action.param0)} {FormatNumber(System.Math.Abs(action.param1))}%",
             RuleActionType.AddResourceMonthly => $"{(action.param1 >= 0f ? "Thêm" : "Tiêu thụ")} {FormatNumber(System.Math.Abs(action.param1))} {GetResourceName((ResourceType)(byte)action.param0)} mỗi tháng",
             RuleActionType.ModifyGoldMonthly => $"{(action.param0 >= 0f ? "Thu" : "Chi")} {FormatNumber(System.Math.Abs(action.param0))} vàng mỗi tháng",
@@ -219,6 +312,39 @@ public static class EdictRuleCatalog
             RuleActionType.ReduceRiotRisk => $"Giảm nguy cơ bạo loạn {FormatNumber(action.param0)}",
             _ => GetActionName(action.type)
         };
+    }
+
+    /// <summary>
+    /// GDD 8.4: hiện ngoặc tự động để người chơi thấy rule được hiểu thế nào — A HOẶC B VÀ C = A HOẶC (B VÀ C).
+    /// </summary>
+    public static string DescribeLogic(in EdictRuleData rule)
+    {
+        int count = rule.ConditionCount;
+        if (count == 0)
+            return string.Empty;
+
+        var groups = new System.Collections.Generic.List<System.Collections.Generic.List<string>>();
+        groups.Add(new System.Collections.Generic.List<string>());
+        for (int i = 0; i < count; i++)
+        {
+            RuleCondition c = rule.conditions[i];
+            if (i > 0 && c.link == LogicalLink.OR)
+                groups.Add(new System.Collections.Generic.List<string>());
+            string text = DescribeCondition(in c, true);
+            int tab = text.IndexOf('\t');
+            groups[groups.Count - 1].Add(tab >= 0 ? text.Substring(tab + 1) : text);
+        }
+
+        var sb = new StringBuilder();
+        for (int g = 0; g < groups.Count; g++)
+        {
+            if (g > 0) sb.Append(" HOẶC ");
+            bool paren = groups.Count > 1 && groups[g].Count > 1;
+            if (paren) sb.Append('(');
+            sb.Append(string.Join(" VÀ ", groups[g]));
+            if (paren) sb.Append(')');
+        }
+        return sb.ToString();
     }
 
     public static string Describe(in EdictRuleData rule)

@@ -2,78 +2,27 @@ using UnityEngine;
 
 public static class ResidentReproductionRules
 {
-    public const byte MinFertileAge = 18;
-    public const byte MaxFertileAge = 40;
-    public const float MinHappiness = 0.35f;
-    public const float BaseMonthlyChance = 0.005f;
-    public const float MaxMonthlyChance = 0.02f;
+    // GDD v0.3 mục 5.4 + 9.6: sinh con theo nhà
+    public const int MinAdultsPerHouse = 2;
+    public const float BaseHouseBirthChance = 0.05f;   // 5% / tháng ở Happiness trung bình 50
 
-    public static bool CanReproduce(in ResidentData resident)
-    {
-        if (!resident.isAlive)
-            return false;
+    public static bool IsFamilyHouse(BuildingType type) =>
+        type == BuildingType.House || type == BuildingType.LargeHouse;   // Lều không sinh con, Trạm cách ly không tính
 
-        if (resident.age < MinFertileAge || resident.age > MaxFertileAge)
-            return false;
+    /// <summary>Adult trong nhà tính là cha/mẹ được (không đang mắc bệnh / cách ly).</summary>
+    public static bool CanReproduce(in ResidentData resident) =>
+        resident.isAlive
+        && resident.GetAgeGroup() == AgeGroupType.Adult
+        && resident.healthStatus != HealthStatus.ActiveInfected
+        && !ResidentAssignmentRules.NeedsQuarantineHousing(in resident);
 
-        if (resident.GetAgeGroup() != AgeGroupType.Adult)
-            return false;
+    /// <summary>Có người trong nhà đói / khát hoặc bị lạnh (nhà không được sưởi) -> tỷ lệ sinh bằng 0.</summary>
+    public static bool BlocksBirth(in ResidentData resident) =>
+        resident.hungerMonths > 0 || resident.thirstMonths > 0 || resident.coldMonths > 0;
 
-        if (resident.healthStatus == HealthStatus.ActiveInfected)
-            return false;
-
-        if (resident.assignedHouseID < 0)
-            return false;
-
-        // Đang trong thời hạn cách ly hoặc mang bệnh (ủ bệnh / điều trị) thì không sinh con
-        if (ResidentAssignmentRules.NeedsQuarantineHousing(in resident))
-            return false;
-
-        if (resident.hungerMonths > 0 || resident.coldMonths > 0 || resident.thirstMonths > 0)
-            return false;
-
-        return resident.happiness >= MinHappiness;
-    }
-
-    public static bool CanBeMother(in ResidentData resident) =>
-        CanReproduce(in resident) && resident.gender == GenderType.Female;
-
-    public static bool CanBeFather(in ResidentData resident) =>
-        CanReproduce(in resident) && resident.gender == GenderType.Male;
-
-    public static float GetBirthChance(in ResidentData mother, in ResidentData father, SeasonType season)
-    {
-        float chance = BaseMonthlyChance
-            + ((mother.happiness + father.happiness) * 0.5f) * 0.004f
-            + ((mother.wealth + father.wealth) * 0.5f / 100f) * 0.003f;
-
-        FactionType faction = mother.factionType;
-        chance *= faction switch
-        {
-            FactionType.Aristocrat => 0.7f,
-            FactionType.Commoner => 1.1f,
-            FactionType.Zealot => 0.9f,
-            _ => 1f
-        };
-
-        chance *= mother.originRegion switch
-        {
-            OriginRegion.GreenZone => 1.1f,
-            OriginRegion.RedZone => 0.85f,
-            _ => 1f
-        };
-
-        chance *= season switch
-        {
-            SeasonType.Spring => 1.2f,
-            SeasonType.Winter => 0.75f,
-            _ => 1f
-        };
-
-        if (chance < 0f)
-            return 0f;
-        return chance > MaxMonthlyChance ? MaxMonthlyChance : chance;
-    }
+    /// <summary>Tỷ lệ sinh = 5% × Happiness trung bình của hộ / 50.</summary>
+    public static float GetHouseBirthChance(float avgHappiness01) =>
+        BaseHouseBirthChance * Mathf.Clamp01(avgHappiness01) * 100f / 50f;
 
     public static ResidentData CreateChild(in ResidentData mother, in ResidentData father, int residentId)
     {
@@ -105,6 +54,7 @@ public static class ResidentReproductionRules
             symptoms = SymptomFlags.None,
             assignedHouseID = mother.assignedHouseID,
             assignedWorkID = ResidentAssignmentRules.UnassignedId,
+            familyID = mother.familyID,   // Con sinh ra thuộc hộ của mẹ
             isAlive = true,
             hungerMonths = 0,
             coldMonths = 0,

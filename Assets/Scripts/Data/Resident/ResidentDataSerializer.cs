@@ -30,6 +30,14 @@ public static class ResidentDataSerializer
         writer.Write((byte)residentData.gender);
         writer.Write(residentData.quarantineMonths);   // v10+
         writer.Write(residentData.thirstMonths);       // v11+
+        writer.Write(residentData.immunityMonths);     // v12+
+        writer.Write(residentData.griefMonths);        // v12+
+        writer.Write(residentData.familyID);           // v13+
+        writer.Write(residentData.rolledNotes);        // v13+
+        writer.Write(residentData.processedByRule);    // v13+
+        writer.Write(residentData.wageDebt);           // v14+
+        writer.Write(residentData.debtMonths);         // v14+
+        writer.Write(residentData.strikeMonths);       // v14+
     }
 
     public static void ReadResident(BinaryReader reader, out ResidentData residentData, int saveVersion)
@@ -66,5 +74,36 @@ public static class ResidentDataSerializer
             residentData.quarantineMonths = reader.ReadByte();
         if (saveVersion >= 11)
             residentData.thirstMonths = reader.ReadByte();
+        if (saveVersion >= 12)
+        {
+            residentData.immunityMonths = reader.ReadByte();
+            residentData.griefMonths = reader.ReadByte();
+        }
+        else
+        {
+            residentData.age = ConvertLegacyAge(residentData.age);
+        }
+        if (saveVersion >= 13)
+        {
+            residentData.familyID = reader.ReadInt32();
+            residentData.rolledNotes = reader.ReadByte();
+            residentData.processedByRule = reader.ReadByte();
+        }
+        if (saveVersion >= 14)
+        {
+            residentData.wageDebt = reader.ReadUInt16();
+            residentData.debtMonths = reader.ReadByte();
+            residentData.strikeMonths = reader.ReadByte();
+        }
+    }
+
+    /// <summary>Save trước v12 dùng tuổi thật (trẻ &lt;18, già 65+): quy về tuổi nén GDD v0.3 (0–3 / 3–15 / 15+).</summary>
+    public static byte ConvertLegacyAge(byte age)
+    {
+        if (age < 18)
+            return (byte)(age * ResidentData.AdultAge / 18);
+        if (age < 65)
+            return (byte)(ResidentData.AdultAge + (age - 18) * (ResidentData.ElderlyAge - ResidentData.AdultAge) / 47);
+        return (byte)System.Math.Min(255, ResidentData.ElderlyAge + (age - 65) / 4);
     }
 }

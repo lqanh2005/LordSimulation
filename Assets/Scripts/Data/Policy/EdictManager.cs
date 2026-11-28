@@ -187,7 +187,7 @@ public class EdictManager : MonoBehaviour
             return;
 
         ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
-        ResidentData noApplicant = default;
+        ApplicantFamily noApplicant = default;
 
         for (int i = 0; i < activeCount; i++)
         {

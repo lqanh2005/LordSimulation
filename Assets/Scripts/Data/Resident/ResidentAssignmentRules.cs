@@ -3,7 +3,7 @@ using UnityEngine;
 public static class ResidentAssignmentRules
 {
     public const short UnassignedId = -1;
-    public const byte SchoolStartAge = 6;
+    public const byte SchoolStartAge = 1;   // Tuổi nén GDD v0.3 (Child 0–3)
 
     public static bool IsHousingBuilding(BuildingType type) =>
         IsNormalHousing(type) || type == BuildingType.QuarantineWard;
@@ -94,8 +94,8 @@ public static class ResidentAssignmentRules
         if (resident.GetAgeGroup() != AgeGroupType.Adult)
             return false;
 
-        if (resident.healthStatus == HealthStatus.ActiveInfected
-            || resident.healthStatus == HealthStatus.Treated)
+        // GDD 7.4: Infected không làm việc; Recovering (Treated) làm được với 50% hiệu suất
+        if (resident.healthStatus == HealthStatus.ActiveInfected)
             return false;
 
         if (resident.professionType == ProfessionType.None
@@ -122,8 +122,7 @@ public static class ResidentAssignmentRules
 
     public static bool NeedsClinicCare(in ResidentData resident) =>
         resident.isAlive
-        && (resident.healthStatus == HealthStatus.ActiveInfected
-            || resident.healthStatus == HealthStatus.Treated);
+        && resident.healthStatus == HealthStatus.ActiveInfected;   // Nằm Infirmary khi Infected (GDD 7.4)
 
     public static bool IsClinicPatient(in ResidentData resident) =>
         NeedsClinicCare(in resident);
@@ -161,7 +160,7 @@ public static class ResidentAssignmentRules
     public static bool HasHousingSlot(in BuildingData building) =>
         IsHousingBuilding(building.buildingType)
         && IsBuildingAcceptingResidents(in building)
-        && building.currentOccupancy < building.maxOccupancy;
+        && building.currentOccupancy < EmergencyOrders.GetHousingCapacity(in building);   // Dồn người: nhà gỗ 150%
 
     public static bool HasWorkSlot(in BuildingData building) =>
         IsWorkplaceBuilding(building.buildingType)

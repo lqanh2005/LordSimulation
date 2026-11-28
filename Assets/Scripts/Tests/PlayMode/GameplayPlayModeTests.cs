@@ -1,4 +1,4 @@
-#if UNITY_INCLUDE_TESTS
+#if UNITY_INCLUDE_TESTS && UNITY_EDITOR
 using System.Collections;
 using System.IO;
 using NUnit.Framework;
@@ -100,28 +100,27 @@ public class PM_GateTests : GameSessionFixture
     [UnityTest]
     public IEnumerator GT05_TuChoiNguoiKhoe_TruUyTin()
     {
-        Data.reputation = 0f;
+        Data.reputation = 50f;
         SetSingleApplicant(HealthyApplicant(wealth: 0));
         Contain.immigrationManager.DenyCurrent();
         yield return null;
 
-        Assert.AreEqual(-1f, Data.reputation, 1e-4f);
+        Assert.AreEqual(50f + StabilityRules.DenyReputation, Data.reputation, 1e-4f);
         Assert.AreEqual(0, Contain.immigrationManager.waitingCount);
     }
 
     [UnityTest]
-    public IEnumerator GT06_TuChoiNguoiCoTrieuChung_CongUyTin()
+    public IEnumerator GT06_TuChoiTreEm_TruHaiUyTin()
     {
-        Data.reputation = 0f;
-        ResidentData sick = HealthyApplicant();
-        sick.healthStatus = HealthStatus.ActiveInfected;
-        sick.diseaseType = DiseaseType.RedFever;
-        sick.symptoms = SymptomFlags.Fever | SymptomFlags.Rash;
-        SetSingleApplicant(sick);
+        // GDD v0.3 mục 9.6: Deny −1, −2 nếu có trẻ em
+        Data.reputation = 50f;
+        ResidentData child = HealthyApplicant();
+        child.age = 1;
+        SetSingleApplicant(child);
 
         Contain.immigrationManager.DenyCurrent();
         yield return null;
-        Assert.AreEqual(ImmigrationRules.DenySickReputationGain, Data.reputation, 1e-4f);
+        Assert.AreEqual(50f + StabilityRules.DenyChildReputation, Data.reputation, 1e-4f);
     }
 
     [UnityTest]
@@ -361,6 +360,9 @@ public class PM_SystemsTests : GameSessionFixture
         });
         Data.treasuryGold = 100;
         int coal = Data.stockCoal;
+        int price = Contain.merchantManager.GetBuyPrice(ResourceType.Coal);
+        Assert.AreEqual(UnityEngine.Mathf.CeilToInt(MarketSystem.GetPrice(ResourceType.Coal, in Data) * 1.25f - 0.001f), price,
+            "GDD 6.6: thương nhân bán ×1,25 giá thị trường");
 
         int bought = Contain.merchantManager.Buy(ResourceType.Coal, 10, out string error);
         yield return null;
@@ -368,7 +370,7 @@ public class PM_SystemsTests : GameSessionFixture
         Assert.IsNull(error);
         Assert.AreEqual(10, bought);
         Assert.AreEqual(coal + 10, Data.stockCoal);
-        Assert.AreEqual(70, Data.treasuryGold);
+        Assert.AreEqual(100 - 10 * price, Data.treasuryGold);
         Assert.AreEqual(40, Contain.merchantManager.GetMerchantStock(ResourceType.Coal));
     }
 
@@ -381,10 +383,11 @@ public class PM_SystemsTests : GameSessionFixture
             coalStock = 50, coalPrice = 3, foodPrice = 2, woodPrice = 2
         });
         Data.treasuryGold = 10;
+        int price = Contain.merchantManager.GetBuyPrice(ResourceType.Coal);
         int bought = Contain.merchantManager.Buy(ResourceType.Coal, 10, out _);
         yield return null;
-        Assert.AreEqual(3, bought);
-        Assert.AreEqual(1, Data.treasuryGold);
+        Assert.AreEqual(10 / price, bought);
+        Assert.AreEqual(10 - (10 / price) * price, Data.treasuryGold);
     }
 
     [UnityTest]
@@ -418,6 +421,10 @@ public class PM_GameOverTests : GameSessionFixture
     {
         Data.riotRiskMeter = 100f;
         Data.stockFood = 0;   // đói giữ bạo loạn ở trần
+        // GDD 9.6: Riot theo Happiness (tiến dần 30%/tháng) — dân đang rất bất mãn thì Riot không tự hạ trong 1 tháng
+        var rm = Contain.residentManager;
+        for (int i = 0; i < rm.activeCount; i++)
+            rm.allResidents[i].happiness = 0.1f;
         yield return AdvanceMonths(1);
         Assert.IsTrue(Gameplay.IsIn(GamePlayStateID.GameOver), $"Đang {Gameplay.State}, bạo loạn {Data.riotRiskMeter}");
         Assert.AreEqual(GameOverReason.Riot, Gameplay.LastGameOverReason);

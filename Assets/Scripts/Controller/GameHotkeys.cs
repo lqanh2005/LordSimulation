@@ -90,14 +90,16 @@ public class GameHotkeys : MonoBehaviour
         if (gameplay == null || !gameplay.IsIn(GamePlayStateID.Playing))
             return;
 
-        if (kb.spaceKey.wasPressedThisFrame)
+        // GDD v0.3 mục 13.2: ở màn Gate, Space và Tab không có tác dụng (thời gian luôn chạy chậm 1/4)
+        bool atGate = GlobalSystemManager.GateViewOpen;
+        if (!atGate && kb.spaceKey.wasPressedThisFrame)
         {
             // Bỏ chọn nút UI để Space không "bấm lại" nút vừa click
             if (EventSystem.current != null)
                 EventSystem.current.SetSelectedGameObject(null);
             TogglePause();
         }
-        if (kb.tabKey.wasPressedThisFrame) CycleSpeed();
+        if (!atGate && kb.tabKey.wasPressedThisFrame) CycleSpeed();
         if (kb.f5Key.wasPressedThisFrame) QuickSave();
         if (kb.deleteKey.wasPressedThisFrame && _placement != null) _placement.ToggleDemolish();
         if (kb.gKey.wasPressedThisFrame) ToggleGate();
@@ -184,6 +186,7 @@ public class GameHotkeys : MonoBehaviour
         if (_merchantPopup != null && _merchantPopup.IsOpen) { _merchantPopup.Hide(); return true; }
         if (_research != null && UIPopupAnim.IsVisible(_research.gameObject)) { _research.Hide(); return true; }
         if (_edicts != null && UIPopupAnim.IsVisible(_edicts.gameObject)) { _edicts.Hide(); return true; }
+        if (TreasuryWindow.IsOpen) { TreasuryWindow.Close(); return true; }
         if (_buildMenu != null && _buildMenu.IsOpen) { _buildMenu.Close(); return true; }
         return false;
     }

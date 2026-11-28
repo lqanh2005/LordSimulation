@@ -115,6 +115,8 @@ public class GamePlayController : Singleton<GamePlayController>
         bool loadSave = mode != GameStartMode.NewGame && saveLoad != null && saveLoad.HasSaveFile();
 
         ResidentSocialSystem.ResetStats();
+        EconomySystem.ResetStatics();
+        EmergencyOrders.ResetStatics();
 
         if (!loadSave)
             playerContain.globalSystemManager.InitializeNewGame();
@@ -247,5 +249,53 @@ public class GamePlayController : Singleton<GamePlayController>
     [BoxGroup("Test cư dân"), Button("Xoá cư dân test"), EnableIf(nameof(CanTest))]
     public void TestClearResidents() =>
         Debug.Log($"[Test cư dân] Đã xoá {ResidentStressTest.Clear(playerContain)} cư dân test.");
+
+    // ==========================================
+    // TEST TẢI TỐI ĐA: lấp kín công trình + dân tới giới hạn rồi đo lag
+    // ==========================================
+
+    [System.NonSerialized, ShowInInspector, BoxGroup("Test tải tối đa"), LabelText("Số công trình tối đa"), PropertyRange(1, BuildingManager.MAX_BUILDINGS)]
+    private int maxLoadBuildings = BuildingManager.MAX_BUILDINGS;
+
+    [System.NonSerialized, ShowInInspector, BoxGroup("Test tải tối đa"), LabelText("Số cư dân tối đa"), PropertyRange(1, ResidentManager.MAX_RESIDENTS)]
+    private int maxLoadResidents = ResidentManager.MAX_RESIDENTS;
+
+    [System.NonSerialized, ShowInInspector, BoxGroup("Test tải tối đa"), LabelText("Hiện hình toàn bộ cư dân")]
+    private bool maxLoadShowAll = true;
+
+    [System.NonSerialized, ShowInInspector, BoxGroup("Test tải tối đa"), LabelText("Thời gian đo (giây)"), PropertyRange(2f, 30f)]
+    private float maxLoadSeconds = 5f;
+
+    [BoxGroup("Test tải tối đa"), Button("Spawn TỐI ĐA (công trình + cư dân) rồi đo lag", ButtonSizes.Gigantic), GUIColor(1f, 0.6f, 0.3f), EnableIf(nameof(CanTest))]
+    public void TestMaxLoad()
+    {
+        TestFillBuildings();
+        TestSpawnMaxResidents();
+        TestMeasureLag();
+    }
+
+    [BoxGroup("Test tải tối đa"), Button("Chỉ lấp kín công trình"), EnableIf(nameof(CanTest))]
+    public void TestFillBuildings() =>
+        Debug.Log("[Test tải tối đa] " + ResidentStressTest.FillMapWithBuildings(playerContain, maxLoadBuildings, out _));
+
+    [BoxGroup("Test tải tối đa"), Button("Chỉ spawn cư dân tối đa"), EnableIf(nameof(CanTest))]
+    public void TestSpawnMaxResidents()
+    {
+        ResidentManager rm = playerContain.residentManager;
+        int target = Mathf.Min(maxLoadResidents, ResidentManager.MAX_RESIDENTS);
+        if (maxLoadShowAll)
+            rm.MaxVisualAgents = Mathf.Max(rm.MaxVisualAgents, target);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int added = ResidentStressTest.Spawn(playerContain, Mathf.Max(0, target - rm.activeCount), true, true);
+        ResidentStressTest.Reassign(playerContain);
+        sw.Stop();
+        ResidentStressTest.FeedEveryone(playerContain);
+        Debug.Log($"[Test tải tối đa] Spawn {added} người trong {sw.Elapsed.TotalMilliseconds:0} ms. Dân {rm.activeCount}/{ResidentManager.MAX_RESIDENTS}, hình {rm.ActiveVisuals.Count}/{rm.MaxVisualAgents}.");
+    }
+
+    [BoxGroup("Test tải tối đa"), Button("Đo lag với số dân hiện tại", ButtonSizes.Large), EnableIf(nameof(CanTest))]
+    public void TestMeasureLag() =>
+        StartCoroutine(ResidentStressTest.MeasureLag(playerContain, maxLoadSeconds, Debug.Log));
 #endif
 }

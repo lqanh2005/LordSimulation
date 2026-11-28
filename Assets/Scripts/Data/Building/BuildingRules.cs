@@ -34,7 +34,7 @@ public static class BuildingRules
         BuildingType.House => 6,
         BuildingType.LargeHouse => 12,
         BuildingType.QuarantineWard => 8,
-        BuildingType.Clinic => 10,
+        BuildingType.Clinic => (byte)ResidentDiseaseSystem.InfirmaryBeds,   // GDD 7.4: Infirmary 8 giường
         BuildingType.School => 12,
         _ => 0
     };

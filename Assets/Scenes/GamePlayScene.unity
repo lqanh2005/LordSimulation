@@ -411619,7 +411619,7 @@ MonoBehaviour:
   commuteSpeed: 0.8
   maxPathRequestsPerFrame: 8
   startingResidentCount: 5
-  startingAgeRange: {x: 18, y: 30}
+  startingAgeRange: {x: 3, y: 8}
   starveDeathChance: 0.1
   freezeDeathChance: 0.1
   hungerHappinessPenalty: 0.1

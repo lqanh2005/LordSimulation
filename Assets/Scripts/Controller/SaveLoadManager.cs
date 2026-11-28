@@ -358,6 +358,7 @@ public class SaveLoadManager : MonoBehaviour
 
             _autoSaveTimer = 0f;
             ResidentSocialSystem.ResetStats();
+            EconomySystem.ResetStatics();
             Debug.Log("[SaveLoadManager] Nạp game thành công!");
             GameEvents.Post(EventID.LoadCompleted);
             return true;

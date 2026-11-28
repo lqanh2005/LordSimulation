@@ -7,8 +7,6 @@ using UnityEngine;
 public static class BuildingEffectRules
 {
     // Tòa thị chính: thu thuế + uy tín (chỉ được xây 1)
-    public const int CityHallGoldPerMonth = 30;
-    public const float CityHallReputationPerMonth = 0.5f;
 
     // Giếng nước: giảm áp lực dịch bệnh + nơi dân tụ tập, giảm nguy cơ bạo loạn (nhận lại từ Xe goòng cũ)
     public const float WellDiseaseReduction = 0.004f;
@@ -26,6 +24,7 @@ public static class BuildingEffectRules
     {
         public int gold;
         public float reputation;
+        public bool hasTaxOffice;
         public float diseaseReduction;
         public int warmPeople;
         public float riotReduction;
@@ -74,11 +73,9 @@ public static class BuildingEffectRules
             }
         }
 
-        if (hasCityHall)
-        {
-            fx.gold += CityHallGoldPerMonth;
-            fx.reputation += CityHallReputationPerMonth;
-        }
+        // GDD v0.3 mục 6.4: Tòa thị chính đóng vai Tax Office — mở thuế thu nhập (EconomySystem),
+        // không còn tự sinh vàng / uy tín mỗi tháng
+        fx.hasTaxOffice = hasCityHall;
 
         fx.diseaseReduction = Mathf.Min(fx.diseaseReduction, WellDiseaseReductionMax);
         fx.riotReduction = Mathf.Min(fx.riotReduction, DecorRiotReductionMax);

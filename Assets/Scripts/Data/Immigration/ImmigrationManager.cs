@@ -30,10 +30,8 @@ public class ImmigrationManager : MonoBehaviour
         popupUi.Bind(this);
         EnsureGate();
         gate.Bind(this);
-        if (waitingCount == 0)
-            EnqueueMonthlyArrivals(SeasonType.Spring);
-        else
-            gate.SetWaitingCount(waitingCount);
+        // GDD v0.3 mục 4.1: người di cư đến theo đợt (Xuân tháng 2, Hạ tháng 5, Thu tháng 8), không có sẵn từ đầu
+        gate.SetWaitingCount(waitingCount);
     }
 
     private void OnEnable()
@@ -62,73 +60,64 @@ public class ImmigrationManager : MonoBehaviour
         _lastArrivalYear = payload.year;
         _lastArrivalMonth = payload.month;
         ProcessQuarantineUpkeep();
-        ProcessWaitingYard();
-        EnqueueMonthlyArrivals(payload.season);
+        ProcessWaitingYard(payload.season);
+        EnqueueWaves(payload.year, payload.month);
+        ProcessGateClerk();
+        if (waitingCount > 0)
+            InspectIndex = FamilyStart(Mathf.Clamp(InspectIndex, 0, waitingCount - 1));
     }
 
     /// <summary>
-    /// Áp lực hàng chờ mỗi tháng (GDD 3.1.7): ăn lương thực của thành, ai không được ăn thì đói;
-    /// bệnh lây trong hàng; hàng đông gây bất ổn; đói lâu thì bỏ đi (mất uy tín).
+    /// Hàng chờ ngoài tường mỗi tháng (GDD v0.3 mục 4.5). Thành không nuôi người chờ:
+    /// - Chờ từ 1 tháng: mỗi tháng 10% chết đói (mùa đông ×2). Mỗi người chết: Reputation −2, để lại thi thể sát tường.
+    /// - Chờ từ 2 tháng: một phần bỏ đi (Reputation −1 mỗi người).
+    /// - Sốt Đỏ lây trong hàng: β 10% mỗi người bệnh × mức lây (ủ bệnh 0,3; phát bệnh 1,0).
     /// </summary>
-    private void ProcessWaitingYard()
+    private void ProcessWaitingYard(SeasonType season)
     {
         if (waitingCount <= 0)
             return;
 
         var report = new WaitingYardReportPayload();
 
-        // 1. Ăn uống: phục vụ theo thứ tự hàng, hết lương thực thì người phía sau đói
-        int stockFood = globalSystemManager != null ? globalSystemManager.GetGlobalDataRef().stockFood : 0;
-        int canFeed = ImmigrationRules.YardFoodPerPerson > 0 ? stockFood / ImmigrationRules.YardFoodPerPerson : waitingCount;
-        int fed = Mathf.Min(waitingCount, canFeed);
-        report.foodEaten = fed * ImmigrationRules.YardFoodPerPerson;
-        if (report.foodEaten > 0 && globalSystemManager != null)
-            globalSystemManager.ConsumeAvailable(ResourceType.Food, report.foodEaten);
-
-        // 2. Đếm người mang bệnh trước khi lây (tránh lây dây chuyền trong cùng tháng)
-        int carriers = 0;
-        DiseaseType yardDisease = DiseaseType.None;
+        // 1. Mức lây trong hàng (trạng thái đầu tháng)
+        float survive = 1f;
         for (int i = 0; i < waitingCount; i++)
-        {
-            ref ResidentData a = ref waitingApplicants[i];
-            if (a.healthStatus == HealthStatus.ActiveInfected || a.healthStatus == HealthStatus.Incubating)
-            {
-                carriers++;
-                if (yardDisease == DiseaseType.None)
-                    yardDisease = a.diseaseType;
-            }
-        }
-        float infectChance = ImmigrationRules.GetYardInfectChance(carriers, waitingCount);
+            survive *= 1f - ImmigrationRules.YardBeta * ResidentDiseaseSystem.GetInfectiousness(in waitingApplicants[i]);
+        float infectChance = Mathf.Clamp01(1f - survive);
 
         for (int i = 0; i < waitingCount; i++)
         {
             ref ResidentData a = ref waitingApplicants[i];
 
-            if (i < fed)
-            {
-                a.hungerMonths = 0;
-            }
-            else
-            {
-                if (a.hungerMonths < byte.MaxValue)
-                    a.hungerMonths++;
-                a.happiness = Mathf.Max(0f, a.happiness - ImmigrationRules.YardHungerHappinessPenalty);
+            // Lệnh khẩn cấp "Phát chẩn" (GDD 9.4): tháng này người chờ không đói
+            bool relief = EmergencyOrders.YardReliefActive;
+            int waited = relief ? 0 : a.hungerMonths;
+            if (!relief && a.hungerMonths < byte.MaxValue)
+                a.hungerMonths++;
+            if (!relief && a.hungerMonths >= 1)
                 report.hungry++;
+
+            // Chết đói / chết cóng
+            float starve = ImmigrationRules.GetYardStarveChance(waited, season);
+            if (starve > 0f && Random.value < starve)
+            {
+                a.isAlive = false;
+                continue;
             }
 
             switch (a.healthStatus)
             {
                 case HealthStatus.Healthy:
-                    if (infectChance > 0f && Random.value < infectChance)
+                    float chance = Mathf.Clamp01(infectChance * ResidentDiseaseSystem.GetPersonalMultiplier(in a));
+                    if (chance > 0f && Random.value < chance)
                     {
-                        ResidentDiseaseRules.Infect(ref a,
-                            yardDisease != DiseaseType.None ? yardDisease : ResidentDiseaseRules.RollRandomDisease());
+                        ResidentDiseaseRules.Infect(ref a, DiseaseType.RedFever);
                         report.newlyInfected++;
                     }
                     break;
 
                 case HealthStatus.Incubating:
-                    // Chờ lâu thì bệnh lộ ra -> thanh tra dễ phát hiện hơn, nhưng đã kịp lây
                     if (a.IncubationMonths < byte.MaxValue)
                         a.IncubationMonths++;
                     if (a.IncubationMonths >= ResidentDiseaseRules.GetIncubationLength(a.diseaseType))
@@ -139,25 +128,32 @@ public class ImmigrationManager : MonoBehaviour
                     break;
 
                 case HealthStatus.ActiveInfected:
-                    // Phát bệnh trong hàng chờ: không có thầy thuốc -> có thể chết (trước đây bệnh mãi không đổi)
-                    float deathChance = ResidentDiseaseRules.GetDeathChance(a.diseaseType) * ImmigrationRules.YardSickDeathMultiplier;
-                    if (a.hungerMonths > 0)
-                        deathChance += ImmigrationRules.YardSickHungryDeathBonus;
-                    if (Random.value < deathChance)
+                    // Không ai chữa: 15% chết / 25% hồi phục mỗi tháng (nhân hệ số đói, tuổi, mùa đông)
+                    float death = ResidentDiseaseSystem.UntreatedDeath * ResidentDiseaseSystem.HungryDeathMultiplier;
+                    if (season == SeasonType.Winter) death *= ResidentDiseaseSystem.ColdDeathMultiplier;
+                    AgeGroupType age = a.GetAgeGroup();
+                    if (age == AgeGroupType.Elderly) death *= ResidentDiseaseSystem.ElderlyDeathMultiplier;
+                    else if (age == AgeGroupType.Child) death *= ResidentDiseaseSystem.ChildDeathMultiplier;
+                    float roll = Random.value;
+                    if (roll < death)
                         a.isAlive = false;
+                    else if (roll < death + ResidentDiseaseSystem.UntreatedRecover)
+                        ResidentDiseaseRules.BeginTreatment(ref a);
+                    break;
+
+                case HealthStatus.Treated:
+                    if (a.recoveryMonths < byte.MaxValue)
+                        a.recoveryMonths++;
+                    if (a.recoveryMonths >= ResidentDiseaseRules.GetRecoveryLength(a.diseaseType))
+                    {
+                        ResidentDiseaseRules.ClearDisease(ref a);
+                        a.immunityMonths = ResidentDiseaseSystem.ImmunityMonths;
+                    }
                     break;
             }
         }
 
-        // 3. Bất ổn do hàng đông + người đói
-        report.riotAdded = ImmigrationRules.GetYardRiot(waitingCount, report.hungry);
-        if (report.riotAdded > 0f && globalSystemManager != null)
-        {
-            ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
-            global.riotRiskMeter = Mathf.Min(100f, global.riotRiskMeter + report.riotAdded);
-        }
-
-        // 4. Chết bệnh -> thi thể ở Cổng (vào chuỗi khủng hoảng); đói quá lâu -> bỏ đi, tiếng xấu lan ra ngoài
+        // 2. Người chết -> thi thể sát tường (vào chuỗi Miasma); chờ quá lâu -> một phần bỏ đi
         for (int i = waitingCount - 1; i >= 0; i--)
         {
             if (!waitingApplicants[i].isAlive)
@@ -167,15 +163,17 @@ public class ImmigrationManager : MonoBehaviour
                 continue;
             }
 
-            if (waitingApplicants[i].hungerMonths < ImmigrationRules.YardLeaveHungerMonths)
-                continue;
-
-            RemoveAt(i);
-            report.left++;
+            if (waitingApplicants[i].hungerMonths >= ImmigrationRules.YardLeaveAfterMonths
+                && Random.value < ImmigrationRules.YardLeaveChance)
+            {
+                RemoveAt(i);
+                report.left++;
+            }
         }
         CrisisManager.AddCorpses(report.died);
-        if (report.left > 0 && globalSystemManager != null)
-            globalSystemManager.ModifyReputation(-report.left * ImmigrationRules.YardLeaveReputationPenalty);
+        if (globalSystemManager != null && (report.left > 0 || report.died > 0))
+            globalSystemManager.ModifyReputation(
+                report.died * StabilityRules.YardDeathReputation + report.left * StabilityRules.YardLeaveReputation);
 
         report.waiting = waitingCount;
         if (report.left > 0 || report.died > 0)
@@ -267,26 +265,85 @@ public class ImmigrationManager : MonoBehaviour
         return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), 8f, 0, SpriteMeshType.FullRect);
     }
 
-    public void EnqueueMonthlyArrivals(SeasonType season)
+    /// <summary>
+    /// GDD v0.3 mục 4.1 + 9.6: đợt thường (tháng 2 / 5 / 8) và đợt tị nạn khi có thiên tai (bão tuyết).
+    /// Số người = gốc × 1,3^(năm−1) × (0,6 + 0,8 × Rep/100) × (1,5 nếu thiên tai).
+    /// </summary>
+    private readonly System.Collections.Generic.List<ResidentData> _familyBuffer = new System.Collections.Generic.List<ResidentData>(16);
+
+    public void EnqueueWaves(int year, byte month)
     {
-        float reputation = 0f;
+        if (globalSystemManager == null)
+            ResolveDependencies();
+        float reputation = StabilityRules.ReputationStart;
+        EntryTaxLevel tax = StabilityRules.DefaultEntryTax;
+        bool disaster = false;
         if (globalSystemManager != null)
-            reputation = globalSystemManager.GetGlobalDataRef().reputation;
-        int arrivals = ImmigrationRules.RollArrivalCount(season, reputation);
+        {
+            ref GlobalSystemData g = ref globalSystemManager.GetGlobalDataRef();
+            reputation = g.reputation;
+            tax = g.entryTaxLevel;
+            disaster = g.disasterWaveBoost;
+            g.disasterWaveBoost = false;
+        }
+
+        int added = 0;
+        Vector2Int regular = StabilityRules.GetBaseWave(month);
+        if (regular.y > 0)
+        {
+            // Hậu quả trễ của Lệnh khẩn cấp: Đóng cổng -> đợt sau nhỏ đi 30%; Phát chẩn -> đông hơn 30%, nghèo hơn
+            float mult = EmergencyOrders.ConsumeWaveMultiplier(out bool poorer);
+            int size = Mathf.RoundToInt(StabilityRules.RollWaveSize(regular, year, reputation, false) * mult);
+            added += EnqueueApplicants(size, poorer ? EntryTaxLevel.Harsh : tax, false);   // ít người giàu như khi thuế hà khắc
+        }
+        if (disaster)
+            added += EnqueueApplicants(StabilityRules.RollWaveSize(StabilityRules.RefugeeWave, year, reputation, true), tax, true);
+
+        if (added > 0)
+            NotificationFeed.Show(disaster
+                    ? $"Đợt tị nạn tới Cổng: {added} người đang chờ ngoài tường"
+                    : $"Đợt di cư tới Cổng: {added} người đang chờ ngoài tường",
+                NoticeLevel.Info, "wave", UIActions.OpenGate);
+    }
+
+    /// <summary>Thêm N người vào hàng chờ (test / đợt di cư). Trả số người thực sự được thêm.</summary>
+    public int EnqueueApplicants(int count, EntryTaxLevel tax, bool refugee)
+    {
+        // GDD v0.3 mục 4.1: người di cư đến theo gia đình 1–5 người (trung bình ~2,5); mỗi gia đình là một lượt duyệt
         int added = 0;
         int nextId = NextApplicantId();
-        for (int i = 0; i < arrivals && waitingCount < MAX_WAITING; i++)
+        _familyBuffer.Clear();
+        while (added + _familyBuffer.Count < count)
         {
-            waitingApplicants[waitingCount] = ImmigrationRules.CreateApplicant(nextId++);
+            int size = Mathf.Min(FamilyRules.RollFamilySize(), count - added - _familyBuffer.Count);
+            FamilyRules.CreateFamily(_familyBuffer, ref nextId, size, tax, refugee);
+        }
+        // GDD 6.6: đang có tin đồn thị trường -> một số gia đình kể lại ở Cổng (note "Tin đồn thị trường")
+        bool rumor = globalSystemManager != null && globalSystemManager.GetGlobalDataRef().rumorInMonths > 0;
+        for (int i = 0; i < _familyBuffer.Count && rumor; i++)
+        {
+            ResidentData m = _familyBuffer[i];
+            bool head = i == 0 || _familyBuffer[i - 1].familyID != m.familyID || m.familyID == 0;
+            if (head && Random.value < MarketSystem.RumorNoteChance)
+            {
+                m.rolledNotes |= (byte)NoteFlags.MarketRumor;
+                _familyBuffer[i] = m;
+            }
+        }
+        for (int i = 0; i < _familyBuffer.Count && waitingCount < MAX_WAITING; i++)
+        {
+            waitingApplicants[waitingCount] = _familyBuffer[i];
             waitingCount++;
             added++;
         }
+        // Mảng đầy giữa chừng: cắt mất phần cuối của một gia đình thì vẫn coi phần còn lại là một nhà
 
         if (added <= 0)
-            return;
+            return 0;
 
-        InspectIndex = Mathf.Clamp(InspectIndex, 0, waitingCount - 1);
+        InspectIndex = FamilyStart(Mathf.Clamp(InspectIndex, 0, waitingCount - 1));
         NotifyQueueChanged();
+        return added;
     }
 
     public void SetSuppressArrivals(bool suppress)
@@ -296,7 +353,14 @@ public class ImmigrationManager : MonoBehaviour
 
     public void RefreshAfterLoad()
     {
-        _interrogated.Clear();
+        int maxFamily = 0;
+        for (int i = 0; i < waitingCount; i++)
+            maxFamily = Mathf.Max(maxFamily, waitingApplicants[i].familyID);
+        if (residentManager != null)
+            for (int i = 0; i < residentManager.activeCount; i++)
+                maxFamily = Mathf.Max(maxFamily, residentManager.allResidents[i].familyID);
+        FamilyRules.EnsureFamilyIdAbove(maxFamily);
+        RecentAutoDecisions.Clear();
         if (globalSystemManager != null)
         {
             ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
@@ -319,10 +383,11 @@ public class ImmigrationManager : MonoBehaviour
             return;
         }
 
-        InspectIndex = Mathf.Clamp(InspectIndex, 0, waitingCount - 1);
+        InspectIndex = FamilyStart(Mathf.Clamp(InspectIndex, 0, waitingCount - 1));
         ShowCurrent();
     }
 
+    /// <summary>Chủ hộ của gia đình đang được xét.</summary>
     public bool TryGetCurrent(out ResidentData applicant)
     {
         if (waitingCount <= 0 || (uint)InspectIndex >= (uint)waitingCount)
@@ -335,93 +400,141 @@ public class ImmigrationManager : MonoBehaviour
         return true;
     }
 
-    public RuleAction GetSuggestedAction(in ResidentData applicant)
+    /// <summary>Gia đình đang được xét (đoạn liên tiếp trong hàng chờ).</summary>
+    public bool TryGetCurrentFamily(out ApplicantFamily family)
     {
-        if (edictManager == null || globalSystemManager == null)
-            return RuleAction.Admit;
-
-        if (EdictRules.TryGetSuggestedAction(
-                edictManager.allEdicts,
-                edictManager.activeCount,
-                in applicant,
-                in globalSystemManager.GetGlobalDataRef(),
-                out RuleAction action,
-                out _))
-            return action;
-
-        return RuleAction.Admit;
+        family = default;
+        if (waitingCount <= 0 || (uint)InspectIndex >= (uint)waitingCount)
+            return false;
+        family = GetFamilyAt(InspectIndex);
+        return family.IsValid;
     }
 
-    public void AcceptCurrent()
+    public ApplicantFamily GetFamilyAt(int index)
     {
-        if (!TryGetCurrent(out ResidentData applicant))
-            return;
-
-        CollectEntryTax(ref applicant, out int tax);
-        if (!Admit(in applicant, false))
-            return;
-
-        if (tax > 0 && globalSystemManager != null)
-            globalSystemManager.ModifyGold(tax);
-
-        RemoveCurrent();
+        FamilyRules.GetFamilyRange(waitingApplicants, waitingCount, index, out int start, out int length);
+        return new ApplicantFamily(waitingApplicants, start, length, FamilyRules.CurrentProfileLevel);
     }
 
-    public void DenyCurrent()
+    private int FamilyStart(int index)
     {
-        if (!TryGetCurrent(out ResidentData applicant))
-            return;
-
-        if (globalSystemManager != null)
-            globalSystemManager.ModifyReputation(ImmigrationRules.GetDenyReputationChange(
-                in applicant, globalSystemManager.GetGlobalDataRef().CurrentSeason));
-
-        RemoveCurrent();
+        FamilyRules.GetFamilyRange(waitingApplicants, waitingCount, index, out int start, out _);
+        return start;
     }
 
-    public void QuarantineCurrent()
-    {
-        if (!TryGetCurrent(out ResidentData applicant))
-            return;
+    public void AcceptCurrent() => DecideCurrent(RuleAction.Admit, 0);
+    public void DenyCurrent() => DecideCurrent(RuleAction.Deny, 0);
+    public void QuarantineCurrent() => DecideCurrent(RuleAction.Quarantine, 0);
 
-        // Không còn chỗ trong Trạm cách ly -> không cho "cách ly" (trước đây người đó lọt vào thành như dân thường)
-        if (FindFreeQuarantineWard() < 0)
+    /// <summary>
+    /// GDD v0.3 mục 4.3: phán quyết áp dụng cho cả gia đình. ruleOrder = 0 là duyệt tay, n là sắc lệnh ưu tiên n
+    /// (ghi vào cư dân để trả lời "Why was this NPC processed?"). Trả false nếu không thực hiện được.
+    /// </summary>
+    private bool DecideCurrent(RuleAction decision, byte ruleOrder, RuleActionData ruleAction = default)
+    {
+        if (!TryGetCurrentFamily(out ApplicantFamily family))
+            return false;
+
+        switch (decision)
         {
-            ConfirmDialog.Alert("Không còn chỗ trong Trạm cách ly.\nHãy xây thêm Trạm cách ly, hoặc chọn Cho vào / Từ chối.");
-            return;
+            case RuleAction.Admit when EmergencyOrders.GateClosed:
+            case RuleAction.Quarantine when EmergencyOrders.GateClosed:
+                if (ruleOrder == 0)
+                    ConfirmDialog.Alert("Cổng đang đóng (Lệnh khẩn cấp): hàng ngoài tường không được vào.\nChỉ có thể Từ chối.");
+                return false;
+
+            case RuleAction.Admit:
+            {
+                float reputation = GetAdmitReputation(in family);
+                int tax = 0;
+                for (int i = 0; i < family.count; i++)
+                {
+                    ResidentData member = family[i];
+                    CollectEntryTax(ref member, out int t);
+                    tax += t;
+                    member.processedByRule = ruleOrder;
+                    Admit(in member, false);
+                }
+                if (globalSystemManager != null)
+                {
+                    if (tax > 0)
+                        globalSystemManager.ModifyGold(tax);
+                    globalSystemManager.ModifyReputation(reputation);
+                }
+                break;
+            }
+
+            case RuleAction.Deny:
+                if (globalSystemManager != null)
+                    globalSystemManager.ModifyReputation(FamilyRules.HasChild(in family)
+                        ? StabilityRules.DenyChildReputation
+                        : StabilityRules.DenyReputation);
+                break;
+
+            case RuleAction.Quarantine:
+            {
+                // Cả nhà vào trạm (sức chứa tính theo người) — không đủ chỗ thì không cách ly được
+                if (GetFreeQuarantineSlots() < family.count)
+                {
+                    if (ruleOrder == 0)
+                        ConfirmDialog.Alert($"Trạm cách ly không đủ chỗ cho cả nhà ({family.count} người).\nHãy xây thêm Trạm cách ly, hoặc chọn Cho vào / Từ chối.");
+                    return false;
+                }
+
+                byte months = ruleAction.type == RuleActionType.ImmigrationQuarantine && ruleAction.param0 >= 1f
+                    ? (byte)Mathf.Clamp(Mathf.RoundToInt(ruleAction.param0), 1, 24)
+                    : ImmigrationRules.DefaultQuarantineMonths;
+                int tax = 0;
+                for (int i = 0; i < family.count; i++)
+                {
+                    ResidentData member = family[i];
+                    CollectEntryTax(ref member, out int t);
+                    tax += t;
+                    member.quarantineMonths = months;
+                    member.processedByRule = ruleOrder;
+                    Admit(in member, true);
+                }
+                if (tax > 0 && globalSystemManager != null)
+                    globalSystemManager.ModifyGold(tax);
+                break;
+            }
+
+            default:
+                return false;
         }
 
-        CollectEntryTax(ref applicant, out int tax);
-        applicant.quarantineMonths = ResolveQuarantineMonths(in applicant);
-        if (!Admit(in applicant, true))
-            return;
-
-        if (tax > 0 && globalSystemManager != null)
-            globalSystemManager.ModifyGold(tax);
+        residentManager?.NotifyPopulationChanged();
         RemoveCurrent();
+        return true;
     }
 
-    /// <summary>Thời hạn cách ly: lấy từ sắc lệnh Cách ly đang khớp (nếu có), không thì mặc định 3 tháng.</summary>
-    private byte ResolveQuarantineMonths(in ResidentData applicant)
+    /// <summary>GDD 9.6: Admit một gia đình +1 Reputation (+2 nếu có note sức khoẻ hoặc Nghèo kiệt).</summary>
+    public static float GetAdmitReputation(in ApplicantFamily family)
     {
-        if (edictManager != null && globalSystemManager != null
-            && EdictRules.TryResolveImmigration(
-                edictManager.allEdicts,
-                edictManager.activeCount,
-                in applicant,
-                in globalSystemManager.GetGlobalDataRef(),
-                out RuleActionData action,
-                out _,
-                out _)
-            && action.type == RuleActionType.ImmigrationQuarantine
-            && action.param0 >= 1f)
-            return (byte)Mathf.Clamp(Mathf.RoundToInt(action.param0), 1, 24);
-
-        return ImmigrationRules.DefaultQuarantineMonths;
+        NoteFlags notes = FamilyRules.GetFamilyNotes(in family);
+        return (notes & (FamilyRules.HealthNotes | NoteFlags.Destitute)) != 0
+            ? StabilityRules.AdmitNeedyReputation
+            : StabilityRules.AdmitReputation;
     }
 
     /// <summary>Có Trạm cách ly nào còn chỗ không (để nút Cách ly / sắc lệnh biết trước).</summary>
     public bool HasQuarantineSpace => FindFreeQuarantineWard() >= 0;
+
+    private int GetFreeQuarantineSlots()
+    {
+        if (buildingManager == null)
+            ResolveDependencies();
+        if (buildingManager == null)
+            return 0;
+        int free = 0;
+        for (int i = 0; i < buildingManager.activeCount; i++)
+        {
+            ref BuildingData b = ref buildingManager.GetBuildingRef(i);
+            if (b.buildingType == BuildingType.QuarantineWard && ResidentAssignmentRules.HasHousingSlot(in b))
+                free += b.maxOccupancy - b.currentOccupancy;
+        }
+        return free;
+    }
 
     private int FindFreeQuarantineWard()
     {
@@ -449,6 +562,7 @@ public class ImmigrationManager : MonoBehaviour
             return false;
 
         ResidentData admitted = applicant;
+        admitted.hungerMonths = 0;   // Trong hàng chờ hungerMonths = số tháng đã chờ; vào thành thì tính lại đói theo kho
         // Cấp số hiệu mới lớn hơn mọi cư dân + người chờ: trẻ sinh ra có thể đã lấy trùng số của người đang chờ
         admitted.residentID = NextApplicantId();
         int index = residentManager.AddResident(in admitted);
@@ -464,7 +578,6 @@ public class ImmigrationManager : MonoBehaviour
             global.totalPopulation++;
         }
 
-        residentManager.NotifyPopulationChanged();
         return true;
     }
 
@@ -475,23 +588,13 @@ public class ImmigrationManager : MonoBehaviour
             ImmigrationRules.PayTax(ref applicant, tax);
     }
 
+    /// <summary>GDD 6.4: thuế nhập thành là mức chung của thành (5 mức), không theo sắc lệnh.</summary>
     private float ResolveTariffPercent(in ResidentData applicant)
     {
-        if (edictManager == null || globalSystemManager == null)
-            return ImmigrationRules.DefaultTariffPercent;
-
-        if (!EdictRules.TryResolveImmigration(
-                edictManager.allEdicts,
-                edictManager.activeCount,
-                in applicant,
-                in globalSystemManager.GetGlobalDataRef(),
-                out RuleActionData action,
-                out _,
-                out _))
-            return ImmigrationRules.DefaultTariffPercent;
-
-        float tariff = EdictRules.GetTariffPercent(in action);
-        return tariff > 0f ? tariff : ImmigrationRules.DefaultTariffPercent;
+        EntryTaxLevel level = globalSystemManager != null
+            ? globalSystemManager.GetGlobalDataRef().entryTaxLevel
+            : StabilityRules.DefaultEntryTax;
+        return StabilityRules.GetEntryTaxPercent(level);
     }
 
     /// <summary>
@@ -548,15 +651,19 @@ public class ImmigrationManager : MonoBehaviour
         if (waitingCount <= 0)
             return;
 
-        _interrogated.Remove(waitingApplicants[InspectIndex].residentID);
-
-        // Dồn hàng: người kế tiếp lên đúng vị trí vừa xét (trước đây lấy người cuối hàng chen lên)
-        RemoveAt(InspectIndex);
+        // Xoá cả gia đình; dồn hàng: gia đình kế tiếp lên đúng vị trí vừa xét
+        FamilyRules.GetFamilyRange(waitingApplicants, waitingCount, InspectIndex, out int start, out int length);
+        for (int i = 0; i < length; i++)
+            RemoveAt(start);
+        InspectIndex = waitingCount > 0 ? FamilyStart(Mathf.Clamp(start, 0, waitingCount - 1)) : 0;
 
         NotifyQueueChanged();
+        // Chỉ vẽ lại khi màn Cổng đang mở (Gate Clerk duyệt ngầm không được bật màn Cổng lên)
+        if (popupUi == null || !popupUi.IsOpen)
+            return;
         if (waitingCount > 0)
             ShowCurrent();
-        else if (popupUi != null)
+        else
             popupUi.ShowEmpty();
     }
 
@@ -565,119 +672,160 @@ public class ImmigrationManager : MonoBehaviour
     {
         if (waitingCount <= 0)
             return;
-        InspectIndex = Mathf.Clamp(InspectIndex, 0, waitingCount - 1);
+        InspectIndex = FamilyStart(Mathf.Clamp(InspectIndex, 0, waitingCount - 1));
         ShowCurrent();
     }
 
     private void ShowCurrent()
     {
-        if (popupUi == null || !TryGetCurrent(out ResidentData applicant))
+        if (popupUi == null || !TryGetCurrentFamily(out ApplicantFamily family))
             return;
 
-        RuleAction suggested = ExplainSuggestion(in applicant, out string reason);
-        if (suggested == RuleAction.EscortToDesk)
-            suggested = Interrogate(in applicant, ref reason);
-        ResearchManager research = GamePlayController.Instance != null && GamePlayController.Instance.playerContain != null
-            ? GamePlayController.Instance.playerContain.researchManager
-            : null;
-        popupUi.ShowApplicant(in applicant, suggested, waitingCount, reason, research != null && research.HasThermometer);
+        RuleAction suggested = ExplainSuggestion(in family, out string reason);
+        popupUi.ShowFamily(in family, suggested, waitingCount, CountFamilies(), reason);
     }
 
-    // Người đã bị áp giải thẩm vấn (theo residentID) — chỉ trả quyền lực 1 lần / người. Không lưu save.
-    private readonly System.Collections.Generic.HashSet<int> _interrogated = new System.Collections.Generic.HashSet<int>();
+    public int CountFamilies()
+    {
+        int families = 0;
+        for (int i = 0; i < waitingCount;)
+        {
+            FamilyRules.GetFamilyRange(waitingApplicants, waitingCount, i, out _, out int length);
+            families++;
+            i += Mathf.Max(1, length);
+        }
+        return families;
+    }
+
+    public RuleAction ExplainSuggestion(in ResidentData applicant, out string reason) =>
+        ExplainSuggestion(ApplicantFamily.Single(in applicant, FamilyRules.CurrentProfileLevel), out reason);
 
     /// <summary>
-    /// Sắc lệnh "Áp giải tới bàn thẩm vấn": tốn điểm Quyền lực để tra hỏi kỹ, lộ tình trạng bệnh thật
-    /// (kể cả đang ủ bệnh, chưa có triệu chứng). Đổi gợi ý theo kết quả: mang bệnh -> Cách ly, khoẻ -> Cho vào.
+    /// GDD 8.4 "Why was this NPC processed?": rule nào khớp (ưu tiên trên → dưới, rule đầu tiên khớp được chạy)
+    /// và vì sao. Không khớp rule nào -> MANUAL REVIEW (người chơi tự duyệt).
     /// </summary>
-    private RuleAction Interrogate(in ResidentData applicant, ref string reason)
+    public RuleAction ExplainSuggestion(in ApplicantFamily family, out string reason)
     {
-        if (globalSystemManager == null)
-            return RuleAction.EscortToDesk;
-
-        ref GlobalSystemData global = ref globalSystemManager.GetGlobalDataRef();
-        if (!_interrogated.Contains(applicant.residentID))
+        if (!TryResolveFamily(in family, out RuleActionData action, out int index, out bool usedElse))
         {
-            int cost = ResolveEscortCost(in applicant);
-            if (global.authorityPoints < cost)
-            {
-                reason += $"\nKhông đủ quyền lực để áp giải (cần {cost}, còn {global.authorityPoints}) — hãy tự kiểm tra.";
-                return RuleAction.EscortToDesk;
-            }
-
-            global.authorityPoints = (ushort)(global.authorityPoints - cost);
-            _interrogated.Add(applicant.residentID);
-            GameEvents.Post(EventID.ResourcesChanged);
-        }
-
-        bool carrier = applicant.healthStatus == HealthStatus.Incubating
-            || applicant.healthStatus == HealthStatus.ActiveInfected;
-        string disease = ResidentInfoPopup.GetDiseaseName(applicant.diseaseType);
-        reason += applicant.healthStatus switch
-        {
-            HealthStatus.Incubating => $"\nThẩm vấn: đang ủ bệnh {disease}, chưa lộ triệu chứng!",
-            HealthStatus.ActiveInfected => $"\nThẩm vấn: đang mắc {disease}.",
-            HealthStatus.Treated => "\nThẩm vấn: đang hồi phục sau bệnh, không còn lây.",
-            _ => "\nThẩm vấn: khoẻ mạnh, không mang bệnh."
-        };
-        reason += $" (quyền lực còn {global.authorityPoints})";
-        return carrier ? RuleAction.Quarantine : RuleAction.Admit;
-    }
-
-    private int ResolveEscortCost(in ResidentData applicant)
-    {
-        if (edictManager != null && globalSystemManager != null
-            && EdictRules.TryResolveImmigration(
-                edictManager.allEdicts,
-                edictManager.activeCount,
-                in applicant,
-                in globalSystemManager.GetGlobalDataRef(),
-                out RuleActionData action,
-                out _,
-                out _)
-            && action.type == RuleActionType.ImmigrationEscort)
-            return Mathf.Max(0, Mathf.RoundToInt(action.param0));
-        return 0;
-    }
-
-    /// <summary>GDD 3.5: "Why was this NPC processed?" — sắc lệnh nào khớp (ưu tiên trên → dưới) và vì sao.</summary>
-    public RuleAction ExplainSuggestion(in ResidentData applicant, out string reason)
-    {
-        if (edictManager == null || globalSystemManager == null || edictManager.activeCount <= 0)
-        {
-            reason = "Chưa có sắc lệnh nhập cư — bạn tự quyết định.";
-            return RuleAction.Admit;
-        }
-
-        if (!EdictRules.TryResolveImmigration(
-                edictManager.allEdicts,
-                edictManager.activeCount,
-                in applicant,
-                in globalSystemManager.GetGlobalDataRef(),
-                out RuleActionData action,
-                out int index,
-                out bool usedElse))
-        {
-            reason = "Không sắc lệnh nào khớp với người này → mặc định Cho vào.";
-            return RuleAction.Admit;
+            reason = edictManager == null || edictManager.activeCount <= 0
+                ? "Chưa có sắc lệnh nhập cư — bạn tự quyết định."
+                : "Không sắc lệnh nào khớp với gia đình này → duyệt tay.";
+            return RuleAction.ManualReview;
         }
 
         ref EdictRuleData rule = ref edictManager.GetEdictRef(index);
         var sb = new System.Text.StringBuilder(128);
         string name = string.IsNullOrEmpty(rule.ruleName) ? $"#{rule.ruleID}" : rule.ruleName;
         sb.Append("Sắc lệnh \"").Append(name).Append("\" (ưu tiên ").Append(rule.executionOrder + 1).Append(") ");
-        sb.Append(usedElse
-            ? "— không luật nào khớp, dùng nhánh Else vì không thoả: "
-            : "khớp: ");
-        for (int i = 0; i < rule.ConditionCount; i++)
-        {
-            if (i > 0) sb.Append(' ');
-            sb.Append(EdictRuleCatalog.DescribeCondition(in rule.conditions[i], i == 0).Replace('\t', ' '));
-        }
+        sb.Append(usedElse ? "— không luật nào khớp, dùng nhánh Else vì không thoả: " : "khớp: ");
+        sb.Append(EdictRuleCatalog.DescribeLogic(in rule));
         sb.Append(" → ").Append(EdictRuleCatalog.DescribeAction(in action));
         reason = sb.ToString();
         return EdictRules.ToRuleAction(action.type);
     }
+
+    private bool TryResolveFamily(in ApplicantFamily family, out RuleActionData action, out int index, out bool usedElse)
+    {
+        action = default;
+        index = -1;
+        usedElse = false;
+        if (edictManager == null || globalSystemManager == null || edictManager.activeCount <= 0)
+            return false;
+        return EdictRules.TryResolveImmigration(
+            edictManager.allEdicts, edictManager.activeCount, in family,
+            in globalSystemManager.GetGlobalDataRef(), out action, out index, out usedElse);
+    }
+
+    // ==========================================
+    // GATE CLERK (GDD v0.3 mục 4.6)
+    // ==========================================
+    public const int FamiliesPerClerk = 4;
+    public const int ClerkSlotsTier1 = 1;
+
+    /// <summary>Các quyết định tự động gần đây (hiện ở màn Cổng: "đã được rule xử lý").</summary>
+    public readonly System.Collections.Generic.List<string> RecentAutoDecisions = new System.Collections.Generic.List<string>(8);
+
+    /// <summary>Số Clerk đang làm (0 nếu chưa nghiên cứu Bộ luật hoặc không có ai rảnh để giao việc).</summary>
+    public int ActiveClerks => ResolveGateClerk() ? ClerkSlotsTier1 : 0;
+
+    /// <summary>
+    /// Chỗ Gate Clerk (mở cùng Bộ luật, Tier 1): giao cho một người lớn đang không có việc. Người đó được tính là có việc
+    /// (không bị trừ Happiness thất nghiệp). Không còn ai rảnh thì chỗ trống và không duyệt tự động.
+    /// </summary>
+    public bool ResolveGateClerk()
+    {
+        if (globalSystemManager == null || residentManager == null)
+            ResolveDependencies();
+        if (globalSystemManager == null || residentManager == null || !EdictRules.EdictsUnlocked)
+            return false;
+
+        ref GlobalSystemData g = ref globalSystemManager.GetGlobalDataRef();
+        int current = -1;
+        int candidate = -1;
+        for (int i = 0; i < residentManager.activeCount; i++)
+        {
+            ref ResidentData r = ref residentManager.allResidents[i];
+            if (!IsClerkCandidate(in r))
+                continue;
+            if (r.residentID == g.gateClerkResidentID) { current = i; break; }
+            if (candidate < 0) candidate = i;
+        }
+
+        int chosen = current >= 0 ? current : candidate;
+        g.gateClerkResidentID = chosen >= 0 ? residentManager.allResidents[chosen].residentID : 0;
+        return chosen >= 0;
+    }
+
+    public static bool IsClerkCandidate(in ResidentData r) =>
+        ResidentAssignmentRules.CanWork(in r) && r.assignedWorkID < 0
+        && !ResidentAssignmentRules.NeedsQuarantineHousing(in r);
+
+    /// <summary>Mỗi Clerk xử lý tối đa 4 gia đình / tháng theo rule. MANUAL REVIEW hoặc không khớp rule thì để lại cho người chơi.</summary>
+    public int ProcessGateClerk()
+    {
+        int capacity = EmergencyOrders.GateClosed ? 0 : ActiveClerks * FamiliesPerClerk;
+        if (capacity <= 0 || waitingCount <= 0)
+            return 0;
+
+        RecentAutoDecisions.Clear();
+        int processed = 0;
+        int index = 0;
+        while (processed < capacity && index < waitingCount)
+        {
+            ApplicantFamily family = GetFamilyAt(index);
+            if (!TryResolveFamily(in family, out RuleActionData action, out int ruleIndex, out _)
+                || action.type == RuleActionType.ImmigrationManualReview)
+            {
+                index = family.start + family.count;   // để duyệt tay
+                continue;
+            }
+
+            RuleAction decision = EdictRules.ToRuleAction(action.type);
+            ref EdictRuleData rule = ref edictManager.GetEdictRef(ruleIndex);
+            byte order = (byte)Mathf.Min(254, rule.executionOrder + 1);
+            string label = $"{FamilyLabel(in family)} → {ImmigrationRules.ActionLabel(decision)} (sắc lệnh {order}: {rule.ruleName})";
+
+            InspectIndex = family.start;
+            if (!DecideCurrent(decision, order, action))
+            {
+                index = family.start + family.count;   // vd. trạm cách ly hết chỗ -> để duyệt tay
+                continue;
+            }
+
+            processed++;
+            RecentAutoDecisions.Add(label);
+            index = family.start;   // hàng đã dồn lên
+        }
+
+        InspectIndex = waitingCount > 0 ? FamilyStart(0) : 0;
+        if (processed > 0)
+            NotificationFeed.Show($"Gate Clerk đã xử lý {processed} gia đình theo sắc lệnh", NoticeLevel.Info, "gate-clerk", UIActions.OpenGate);
+        return processed;
+    }
+
+    public static string FamilyLabel(in ApplicantFamily family) =>
+        $"Nhà {NameDatabase.GetLastName(family.Head.lastNameID)} ({family.count} người)";
 
     private void NotifyQueueChanged()
     {

@@ -45,7 +45,7 @@ public static class ResidentStressTest
             {
                 // 20% trẻ em, 70% người lớn, 10% người già
                 float roll = Random.value;
-                r.age = (byte)(roll < 0.2f ? Random.Range(1, 18) : roll < 0.9f ? Random.Range(18, 65) : Random.Range(65, 81));
+                r.age = (byte)(roll < 0.2f ? Random.Range(0, ResidentData.AdultAge) : roll < 0.9f ? Random.Range(ResidentData.AdultAge, ResidentData.ElderlyAge) : Random.Range(ResidentData.ElderlyAge, ResidentData.ElderlyAge + 6));   // Tuổi nén GDD v0.3
                 r.professionType = ResidentProfessionRules.GetInitialProfession(in r);
             }
             if (healthy)
@@ -123,6 +123,160 @@ public static class ResidentStressTest
         if (skipped.Length > 0)
             sb.Append("| không đặt được (thiếu cấu hình / chưa nghiên cứu / hết chỗ): ").Append(skipped);
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Đặt công trình xoay vòng qua mọi loại cho tới khi hết chỗ trên bản đồ hoặc chạm maxBuildings,
+    /// rồi cho xây xong ngay. Vị trí quét được nhớ theo kích thước để không quét lại từ đầu mỗi lần.
+    /// </summary>
+    public static string FillMapWithBuildings(PlayerContain contain, int maxBuildings, out int placed)
+    {
+        placed = 0;
+        PlacementManager placement = Object.FindFirstObjectByType<PlacementManager>();
+        GridController grid = contain.residentManager.GridController;
+        if (placement == null || grid == null)
+            return "Không tìm thấy PlacementManager / GridController";
+
+        BuildingManager bm = contain.buildingManager;
+        int limit = Mathf.Min(maxBuildings, BuildingManager.MAX_BUILDINGS);
+        var cursors = new Dictionary<Vector2Int, int>();
+        var full = new HashSet<BuildingType>();
+        var perType = new Dictionary<BuildingType, int>();
+        ref GlobalSystemData g = ref contain.globalSystemManager.GetGlobalDataRef();
+
+        Stopwatch sw = Stopwatch.StartNew();
+        while (bm.activeCount < limit && full.Count < TownTypes.Length)
+        {
+            bool any = false;
+            foreach (BuildingType type in TownTypes)
+            {
+                if (bm.activeCount >= limit)
+                    break;
+                if (full.Contains(type))
+                    continue;
+
+                // Luôn đủ gỗ / vàng để phép đo không bị chặn vì thiếu tiền
+                g.stockWood = Mathf.Max(g.stockWood, 100000);
+                g.treasuryGold = Mathf.Max(g.treasuryGold, 100000);
+
+                if (PlaceInFreeSpot(placement, grid, type, cursors))
+                {
+                    any = true;
+                    placed++;
+                    perType.TryGetValue(type, out int n);
+                    perType[type] = n + 1;
+                }
+                else
+                {
+                    full.Add(type);
+                }
+            }
+            if (!any)
+                break;
+        }
+
+        for (int m = 0; m < 6; m++)
+            bm.ProcessMonthlyConstruction();
+        Reassign(contain);
+        sw.Stop();
+
+        var sb = new StringBuilder($"Đặt {placed} công trình trong {sw.Elapsed.TotalMilliseconds:0} ms (tổng {bm.activeCount}/{BuildingManager.MAX_BUILDINGS}): ");
+        foreach (var pair in perType)
+            sb.Append(pair.Key).Append(" x").Append(pair.Value).Append(", ");
+        return sb.ToString();
+    }
+
+    private static bool PlaceInFreeSpot(PlacementManager placement, GridController grid, BuildingType type,
+        Dictionary<Vector2Int, int> cursors)
+    {
+        BuildingConfig config = placement.database != null ? placement.database.GetConfig(type) : null;
+        if (config == null || !placement.IsResearched(type) || placement.IsUniqueLimitReached(type))
+            return false;
+
+        // Chừa 1 ô quanh công trình để cư dân còn lối đi
+        Vector2Int size = config.Footprint + new Vector2Int(2, 2);
+        int cols = grid.Width - size.x + 1;
+        int rows = grid.Height - size.y + 1;
+        if (cols <= 0 || rows <= 0)
+            return false;
+
+        // Ô đã không vừa thì sau này cũng không vừa (bản đồ chỉ đầy thêm) -> quét tiếp từ chỗ cũ
+        cursors.TryGetValue(size, out int start);
+        for (int k = start; k < cols * rows; k++)
+        {
+            int x = k % cols, y = k / cols;
+            if (!placement.CheckAreaAvailable(new Vector2Int(x, y), size))
+                continue;
+            cursors[size] = k;
+            if (placement.PlaceAt(new Vector2Int(x + 1, y + 1), type))
+                return true;
+        }
+        cursors[size] = cols * rows;
+        return false;
+    }
+
+    /// <summary>Đo FPS hiện tại trong vài giây, không đổi số dân (dùng sau khi đã spawn tối đa).</summary>
+    public static IEnumerator MeasureLag(PlayerContain contain, float seconds, System.Action<string> done)
+    {
+        ResidentManager rm = contain.residentManager;
+        int oldVSync = QualitySettings.vSyncCount;
+        int oldTarget = Application.targetFrameRate;
+        bool oldBackground = Application.runInBackground;
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = -1;
+        Application.runInBackground = true;
+
+        // Bỏ qua vài khung đầu (vừa spawn xong, đang khởi tạo hình)
+        yield return null;
+        yield return new WaitForSecondsRealtime(1f);
+
+        var samples = new List<float>(4096);
+        double tickNs = 0, pathNs = 0, gcBytes = 0;
+        ProfilerRecorder tick = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, TickMarker);
+        ProfilerRecorder path = ProfilerRecorder.StartNew(ProfilerCategory.Scripts, PathMarker);
+        ProfilerRecorder gc = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
+        try
+        {
+            float end = Time.realtimeSinceStartup + seconds;
+            while (Time.realtimeSinceStartup < end)
+            {
+                yield return null;
+                samples.Add(Time.unscaledDeltaTime * 1000f);
+                tickNs += tick.LastValue;
+                pathNs += path.LastValue;
+                gcBytes += gc.LastValue;
+            }
+        }
+        finally
+        {
+            tick.Dispose();
+            path.Dispose();
+            gc.Dispose();
+            QualitySettings.vSyncCount = oldVSync;
+            Application.targetFrameRate = oldTarget;
+            Application.runInBackground = oldBackground;
+        }
+
+        Stopwatch sw = Stopwatch.StartNew();
+        contain.globalSystemManager.DebugAdvanceMonth();
+        sw.Stop();
+
+        int n = Mathf.Max(1, samples.Count);
+        float sum = 0f;
+        foreach (float s in samples)
+            sum += s;
+        float avg = sum / n;
+        samples.Sort();
+        float worst1 = samples.Count > 0 ? samples[Mathf.Min(n - 1, Mathf.FloorToInt(n * 0.99f))] : 0f;
+        float worst = samples.Count > 0 ? samples[n - 1] : 0f;
+        float fps = avg > 0f ? 1000f / avg : 0f;
+        string verdict = avg <= 16.7f ? "MƯỢT (≥60 FPS)" : avg <= 33.3f ? "TẠM ỔN (30–60 FPS)" : "LAG (<30 FPS)";
+
+        done?.Invoke(
+            $"[Test tải tối đa] {verdict} — đo {seconds:0}s trong Editor (bản build thường nhanh hơn)\n" +
+            $"  Dân {rm.activeCount}/{ResidentManager.MAX_RESIDENTS} · hình {rm.ActiveVisuals.Count} · công trình {contain.buildingManager.activeCount}/{BuildingManager.MAX_BUILDINGS}\n" +
+            $"  FPS TB {fps:0} · khung TB {avg:0.0} ms · khung xấu 1% {worst1:0.0} ms · khung tệ nhất {worst:0.0} ms\n" +
+            $"  Di chuyển {tickNs / n / 1e6:0.00} ms/khung · tìm đường {pathNs / n / 1e6:0.00} ms/khung · GC {gcBytes / n / 1024:0.0} KB/khung · tính 1 tháng {sw.Elapsed.TotalMilliseconds:0.0} ms");
     }
 
     private static bool PlaceInFreeSpot(PlacementManager placement, GridController grid, BuildingType type)

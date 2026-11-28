@@ -30,7 +30,36 @@ public struct GlobalSystemData
     // Chuỗi khủng hoảng (GDD 3.7) — lưu từ save v9
     public int corpsesFresh;       // Thi thể chết trong tháng này, chưa thu gom
     public int corpsesRotting;     // Thi thể đã để quá 1 tháng -> sinh khí độc
-    public float miasma;           // Mức khí độc Miasma: tăng áp lực dịch bệnh
+    public float miasma;           // Số vùng Miasma đang có hiệu lực (GDD 7.4: mỗi xác phân hủy tạo 1 vùng, kéo dài 2 tháng)
+
+    // GDD v0.3 — lưu từ save v12
+    public EntryTaxLevel entryTaxLevel;          // Thuế nhập thành đang áp dụng
+    public EntryTaxLevel pendingEntryTaxLevel;   // Mức vừa chọn — có hiệu lực từ tháng sau
+    public int miasmaZonesPrev;                  // Vùng Miasma sinh ra tháng trước (còn hiệu lực thêm 1 tháng)
+    public bool disasterWaveBoost;               // Bão tuyết trong thành -> đợt di cư kế tiếp đông hơn 50%
+
+    // GDD v0.3 Đợt 2 — lưu từ save v13
+    public int gateClerkResidentID;              // Cư dân đang làm Gate Clerk (0 = chưa có ai)
+
+    // GDD v0.3 Đợt 3 (mục 6.4) — lưu từ save v14. Đổi mức có hiệu lực từ tháng sau (pending*)
+    public WageLevel wageLevel;
+    public WageLevel pendingWageLevel;
+    public EntryTaxLevel incomeTaxLevel;
+    public EntryTaxLevel pendingIncomeTaxLevel;
+    public FeedPolicy feedPolicy;
+
+    // GDD v0.3 Đợt 4 (mục 6.6) — giá thị trường, lưu từ save v15. Hệ số sự kiện 0 = chưa có (coi như 1)
+    public float foodPriceEvent, coalPriceEvent, woodPriceEvent;
+    public MarketEventType marketActiveEvent;
+    public byte marketActiveMonths;
+    public float marketActiveMagnitude;
+    public MarketEventType marketPendingEvent;   // Đã lên lịch, chưa xảy ra
+    public byte marketPendingInMonths;
+    public float marketPendingMagnitude;
+    public MarketEventType rumorEvent;           // Tin đồn qua Cổng (có thể sai)
+    public byte rumorInMonths;
+    public bool rumorTrue;
+    public bool blizzardForecast;                // Bão tuyết đã báo trước cho tháng sau (GDD 9.2)
     public SeasonType CurrentSeason => (currentMonth - 1) switch
     {
         >= 0 and <= 2 => SeasonType.Spring,
